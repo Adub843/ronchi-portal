@@ -84,7 +84,7 @@ auth.post("/register/options", async (c) => {
     : [];
   if (!userId) {
     const taken = await c.env.DB.prepare("SELECT 1 FROM users WHERE email = ?").bind(inv.email).first();
-    if (taken) fail(409, "Someone with this email already has a login.");
+    if (taken) fail(409, "Someone with this email or username already has a login.");
     userId = randomId();
   }
   const options = await generateRegistrationOptions({

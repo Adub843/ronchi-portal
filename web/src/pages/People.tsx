@@ -50,7 +50,7 @@ export function People({ me }: { me: Me }) {
       <PageHead title={t("People")} sub={t("Invite staff, set what they can see, and cut off access.")} />
       <form className="panel grid g2" onSubmit={invite}>
         <div className="field"><label htmlFor="pn">{t("Full name")}</label><input id="pn" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={100} /></div>
-        <div className="field"><label htmlFor="pe">{t("Work email")}</label><input id="pe" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></div>
+        <div className="field"><label htmlFor="pe">{t("Work email or username")}</label><input id="pe" type="text" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></div>
         <div className="field">
           <label htmlFor="pr">{t("Role")}</label>
           <select id="pr" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>

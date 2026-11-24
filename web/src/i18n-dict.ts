@@ -4,6 +4,8 @@
 
 /** Texts shown through a variable (role names, menu tabs) or sent by the server, so the test can't find them in t("...") calls. */
 export const DYNAMIC: string[] = [
+ "Use a work email or a username of 3 to 40 letters or numbers, with no spaces.",
+ "Someone with this email or username already has a login.",
  "Pick someone who isn't in this chat yet.",
  "Only the person who started this chat can remove people.",
  "To take yourself out, leave the chat.",
@@ -79,6 +81,9 @@ export const DYNAMIC: string[] = [
 ];
 
 export const ES: Record<string, string> = {
+ "Work email or username": "Correo del trabajo o nombre de usuario",
+ "Use a work email or a username of 3 to 40 letters or numbers, with no spaces.": "Usa un correo del trabajo o un nombre de usuario de 3 a 40 letras o n\u00fameros, sin espacios.",
+ "Someone with this email or username already has a login.": "Alguien con este correo o nombre de usuario ya tiene acceso.",
  "1 person added": "Se agreg\u00f3 1 persona",
  "Add": "Agregar",
  "Add {n} people": "Agregar {n} personas",
@@ -593,6 +598,9 @@ export const ES: Record<string, string> = {
 };
 
 export const IT: Record<string, string> = {
+ "Work email or username": "Email di lavoro o nome utente",
+ "Use a work email or a username of 3 to 40 letters or numbers, with no spaces.": "Usa un'email di lavoro o un nome utente di 3-40 lettere o numeri, senza spazi.",
+ "Someone with this email or username already has a login.": "Qualcuno con questa email o nome utente ha gi\u00e0 un accesso.",
  "1 person added": "1 persona aggiunta",
  "Add": "Aggiungi",
  "Add {n} people": "Aggiungi {n} persone",

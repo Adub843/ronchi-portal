@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // Makes the very first admin invite (only works while the portal has no users).
 //
-//   npm run invite:first-admin -- --name "Paolo Ferla" --email paolo@ronchiamerica.com            (live)
+//   npm run invite:first-admin -- --name "Aaron Lewis" --username AaronL   # or --email someone@company.com            (live)
 //   npm run invite:first-admin -- --name "Test Admin" --email test@example.com --local             (laptop)
 //
 // It prints a one-time link. Open it on your phone or computer to create your passkey.
 // The link is not saved anywhere; only a hash of it goes into the database.
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 const args = process.argv.slice(2);
 const arg = (name) => {
@@ -16,9 +17,11 @@ const arg = (name) => {
 };
 const local = args.includes("--local");
 const name = arg("name");
-const email = arg("email")?.toLowerCase();
-if (!name || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-  console.error('Usage: npm run invite:first-admin -- --name "Full Name" --email you@company.com [--local]');
+// --email takes a work email or a plain username such as AaronL (same rule as src/shared/login.ts).
+const raw = (arg("email") ?? arg("username"))?.trim();
+const email = !raw ? null : raw.includes("@") ? (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw) ? raw.toLowerCase() : null) : /^[A-Za-z0-9][A-Za-z0-9._-]{2,39}$/.test(raw) ? raw : null;
+if (!name || !email) {
+  console.error('Usage: npm run invite:first-admin -- --name "Full Name" --username AaronL   (or --email you@company.com) [--local]');
   process.exit(1);
 }
 
@@ -44,7 +47,18 @@ d1(
     `)`,
 );
 
-const origin = local ? "http://localhost:8787" : JSON.parse(
-  execFileSync("node", ["-e", "const s=require('fs').readFileSync('wrangler.portal.jsonc','utf8').replace(/\\/\\/.*$/gm,'');console.log(JSON.stringify(JSON.parse(s).env.production.vars.ORIGIN))"], { encoding: "utf8" }),
-);
+// The live address is the ORIGIN on the production vars line (the last ORIGIN in the file).
+// Read with a regex: stripping // comments would also cut the "//" in "https://".
+const origins = [...readFileSync("wrangler.portal.jsonc", "utf8").matchAll(/"ORIGIN":\s*"([^"]+)"/g)].map((m) => m[1]);
+const origin = local ? "http://localhost:8787" : origins.at(-1);
+if (!origin?.startsWith("https://")) {
+  console.error("Couldn't find the live ORIGIN in wrangler.portal.jsonc.");
+  process.exit(1);
+}
 console.log(`\nFirst admin invite for ${name} (${email}). Works once, for 24 hours:\n\n  ${origin}/welcome#${token}\n`);
+// --open: also open the link in this computer's browser, so nobody has to copy it.
+if (args.includes("--open")) {
+  const url = `${origin}/welcome#${token}`;
+  if (process.platform === "win32") execFileSync("rundll32", ["url.dll,FileProtocolHandler", url]);
+  else execFileSync(process.platform === "darwin" ? "open" : "xdg-open", [url]);
+}
