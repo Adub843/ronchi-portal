@@ -6,6 +6,7 @@ import { body, fail, mustStr, requirePerm, requireUser } from "../lib/http";
 import { createInvite } from "../lib/invites";
 import { isRole, ROLES } from "../lib/roles";
 import { endAllSessions } from "../lib/session";
+import { loginId } from "../../shared/login";
 
 export const users = new Hono<AppEnv>();
 
@@ -33,12 +34,13 @@ users.get("/", async (c) => {
 users.post("/invite", async (c) => {
   const admin = requirePerm(c, "users.manage");
   const b = await body(c);
-  const email = mustStr(b.email, 200, "Email").toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, "That email doesn't look right.");
+  // A work email or a plain username (Aaron, 2026-11-24: "just a username").
+  const email = loginId(b.email);
+  if (!email) fail(400, "Use a work email or a username of 3 to 40 letters or numbers, with no spaces.");
   const name = mustStr(b.name, 100, "Name");
   if (!isRole(b.role)) fail(400, "Pick a role.");
   const exists = await c.env.DB.prepare("SELECT 1 FROM users WHERE email = ?").bind(email).first();
-  if (exists) fail(409, "Someone with this email already has a login.");
+  if (exists) fail(409, "Someone with this email or username already has a login.");
   const link = await createInvite(c.env, { email, name, role: b.role, createdBy: admin.id });
   await audit(c.env.DB, { userId: admin.id, action: "invite.create", detail: { email, role: b.role }, ip: c.get("ip") });
   return c.json({ link });

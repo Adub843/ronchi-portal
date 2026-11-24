@@ -90,7 +90,7 @@ Then Dashboard → the zone → Security → WAF → turn on the Cloudflare Mana
 ## 7. First admin
 
 ```bash
-npm run invite:first-admin -- --name "Paolo Ferla" --email paolo@ronchiamerica.com
+npm run invite:first-admin -- --name "Aaron Lewis" --username AaronL   # or --email someone@company.com
 ```
 
 Open the printed link and create a passkey. Paolo then invites everyone else from

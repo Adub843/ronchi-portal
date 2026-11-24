@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Makes the very first admin invite (only works while the portal has no users).
 //
-//   npm run invite:first-admin -- --name "Paolo Ferla" --email paolo@ronchiamerica.com            (live)
+//   npm run invite:first-admin -- --name "Aaron Lewis" --username AaronL   # or --email someone@company.com            (live)
 //   npm run invite:first-admin -- --name "Test Admin" --email test@example.com --local             (laptop)
 //
 // It prints a one-time link. Open it on your phone or computer to create your passkey.
@@ -16,9 +16,11 @@ const arg = (name) => {
 };
 const local = args.includes("--local");
 const name = arg("name");
-const email = arg("email")?.toLowerCase();
-if (!name || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-  console.error('Usage: npm run invite:first-admin -- --name "Full Name" --email you@company.com [--local]');
+// --email takes a work email or a plain username such as AaronL (same rule as src/shared/login.ts).
+const raw = (arg("email") ?? arg("username"))?.trim();
+const email = !raw ? null : raw.includes("@") ? (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw) ? raw.toLowerCase() : null) : /^[A-Za-z0-9][A-Za-z0-9._-]{2,39}$/.test(raw) ? raw : null;
+if (!name || !email) {
+  console.error('Usage: npm run invite:first-admin -- --name "Full Name" --username AaronL   (or --email you@company.com) [--local]');
   process.exit(1);
 }
 

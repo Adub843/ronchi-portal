@@ -44,4 +44,14 @@ describe("deny by default: each role sees only its part", () => {
     const log = await admin.json("/api/users/audit/recent");
     expect(log.data.entries.some((e: any) => e.action === "invite.create")).toBe(true);
   });
+
+  it("a login can be a plain username instead of an email", async () => {
+    const admin = await person("admin");
+    const ok = await admin.fetch("/api/users/invite", { body: { email: "SteveW", name: "Steve Williams", role: "service" } });
+    expect(ok.status).toBe(200);
+    expect((await admin.json("/api/users")).data.invites.some((i: any) => i.email === "SteveW")).toBe(true);
+    for (const bad of ["ab", "steve w", "steve@", "<script>"]) {
+      expect((await admin.fetch("/api/users/invite", { body: { email: bad, name: "X", role: "tech" } })).status, bad).toBe(400);
+    }
+  });
 });
