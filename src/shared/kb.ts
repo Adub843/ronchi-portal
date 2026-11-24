@@ -199,3 +199,24 @@ export function guessCategory(...texts: (string | null | undefined)[]): (typeof 
   if (/\b(electric|electrical|wiring|wire|sensor|servo|drive|encoder|motor|sercos|power|fuse|relay|voltage|cable|connector|flowmeter|io-link|i\/o)\b/.test(t)) return "Electrical";
   return "Mechanical";
 }
+
+/**
+ * The knowledge base machine types that apply to a machine, read from its model in the machine list
+ * ("Monoblock filler and capper" gives Monoblock, Filler and Capper). Documents for every Ronchi machine
+ * (General, Controls and HMI) are added once any type is known. Unknown model: no types.
+ */
+export function machineTypesFor(model: string | null | undefined): string[] {
+  const m = (model ?? "").toLowerCase();
+  const out: string[] = [];
+  const add = (...t: string[]) => { for (const x of t) if (!out.includes(x)) out.push(x); };
+  if (/monoblock|monobloc/.test(m)) add("Monoblock", "Filler", "Capper");
+  if (/filler|filling|exacta|piston|flowmeter|massflow/.test(m)) add("Filler");
+  if (/flowmeter|massflow/.test(m)) add("Flowmeters");
+  if (/capper|capping|ecam/.test(m)) add("Capper");
+  if (/cap sorter|sorter|cap feeder/.test(m)) add("Cap sorter");
+  if (/unscrambler/.test(m)) add("Unscrambler");
+  if (/rotomatic/.test(m)) add("Rotomatic");
+  if (/vision|camera|cognex/.test(m)) add("Vision");
+  if (out.length) add("General", "Controls and HMI");
+  return out;
+}

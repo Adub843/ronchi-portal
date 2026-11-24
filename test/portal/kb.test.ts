@@ -47,15 +47,45 @@ describe("knowledge base", () => {
     expect((await tech.json("/api/kb?q=thread%20lock")).data.customer).toBeNull();
   });
 
+  it("a keyword search brings up every document with any of the words, best matches first", async () => {
+    const admin = await person("admin");
+    await admin.json("/api/kb", { body: { kind: "howto", title: "Adjust the clutch preload", fix: "Turn the clutch nut a quarter turn" } });
+    await admin.json("/api/kb", { body: { kind: "howto", title: "Torque check after a long run", fix: "Measure with the torque tester" } });
+    await admin.json("/api/kb", { body: { kind: "known_issue", title: "Torque drift and clutch wear", issue: "Torque drops after hours", fix: "Re-grease the clutch" } });
+    const titles = (await admin.json("/api/kb?q=torque%20clutch")).data.results.map((r: any) => r.title);
+    expect(titles[0]).toBe("Torque drift and clutch wear");
+    expect(titles).toEqual(expect.arrayContaining(["Adjust the clutch preload", "Torque check after a long run"]));
+  });
+
+  it("a machine number brings up that machine's notes, anything that names it, and the documents for its type", async () => {
+    await env.DB.prepare("INSERT INTO machines (id, serial, model, customer, site, created_at, updated_at) VALUES ('m-mono', '4212MB', 'Monoblock filler and capper', 'Unilever', 'Atlanta', '2026-01-01', '2026-01-01')").run();
+    const admin = await person("admin");
+    const note = await admin.json("/api/kb", { body: { kind: "quick_note", title: "Infeed guide loose", serial: "4212MB", fix: "Tighten the guide" } });
+    const named = await admin.json("/api/kb", { body: { kind: "reference", title: "Line layout", body: "Same layout as 4212MB." } });
+    const filler = await admin.json("/api/kb", { body: { kind: "howto", title: "Filler nozzle cleaning", machine_type: "Filler" } });
+    const general = await admin.json("/api/kb", { body: { kind: "reference", title: "Ronchi lubrication chart", machine_type: "General" } });
+    const vision = await admin.json("/api/kb", { body: { kind: "howto", title: "Camera focus", machine_type: "Vision" } });
+    const r = (await admin.json("/api/kb?q=4212MB")).data;
+    const codes = r.results.map((x: any) => x.code);
+    expect(codes.slice(0, 2)).toEqual([note.data.code, named.data.code]);
+    expect(codes).toEqual(expect.arrayContaining([filler.data.code, general.data.code]));
+    expect(codes).not.toContain(vision.data.code);
+    expect(r.machine).toEqual({ serials: ["4212MB"], types: ["Monoblock", "Filler", "Capper", "General", "Controls and HMI"] });
+    // The company name gives the same list.
+    expect((await admin.json("/api/kb?q=unilever")).data.results.map((x: any) => x.code)).toEqual(codes);
+  });
+
   it("filters by document type, machine and category, and counts what each filter would show", async () => {
     const admin = await person("admin");
     expect((await admin.json("/api/kb/import", { body: { documents: [SPEC, { ...SPEC, code: "RA-HOW-003", type: "HOW", title: "Set the filler recipe", machine: "Filler", meta: {}, issue: "", fix: "", audience: "I" }] } })).data).toEqual({ added: 2, updated: 0, skipped: 0 });
     const r = await admin.json("/api/kb?kind=known_issue");
-    expect(r.data.results.map((x: any) => x.code)).toEqual(["RA-KI-001"]);
+    expect(r.data.results.map((x: any) => x.code)).toContain("RA-KI-001");
+    expect(r.data.results.every((x: any) => x.kind === "known_issue")).toBe(true);
     expect(r.data.facets.kind.howto).toBeGreaterThanOrEqual(1);
     expect(r.data.facets.machine_type.Capper).toBeGreaterThanOrEqual(1);
     const cat = await admin.json("/api/kb?category=Electrical&machine_type=Capper");
-    expect(cat.data.results.map((x: any) => x.code)).toEqual(["RA-KI-001"]);
+    expect(cat.data.results.map((x: any) => x.code)).toContain("RA-KI-001");
+    expect(cat.data.results.every((x: any) => x.category === "Electrical" && x.machine_type === "Capper")).toBe(true);
     // Importing again updates instead of making a copy.
     expect((await admin.json("/api/kb/import", { body: { documents: [SPEC] } })).data).toEqual({ added: 0, updated: 1, skipped: 0 });
   });
@@ -135,7 +165,7 @@ describe("knowledge base", () => {
     const out = await admin.json("/api/kb", { body: { kind: "opl", audience: "customer", title: "Grease the scroll U-joint", fix: "Use food-grade grease weekly" } });
     await admin.json(`/api/kb/${out.data.id}/publish`, { body: {} });
     expect((await admin.json(`/api/kb/${out.data.id}`, { method: "DELETE" })).status).toBe(200);
-    expect((await admin.json("/api/kb?q=scroll%20joint%20grease")).data.results).toEqual([]);
+    expect((await admin.json("/api/kb?q=scroll%20joint%20grease")).data.results.map((r: any) => r.code)).not.toContain(out.data.code);
     expect(await helpPage(`/a/${out.data.code}`)).toContain("Article not found");
   });
 });

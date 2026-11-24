@@ -62,7 +62,7 @@ export function KnowledgeBase({ me }: { me: Me }) {
         <h1>{t("Knowledge base")}</h1>
         <p className="kb-sub">{t("One Point Lessons, how-tos, known issues and quick notes from the field. Search by the problem, the fix, a machine number or a customer.")}</p>
         <form className="search" role="search" onSubmit={(e) => { e.preventDefault(); setQuery(q.trim()); }}>
-          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("for example: capper torque drifting, 3979MB or a customer name")} aria-label={t("Search the knowledge base")} maxLength={200} />
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Type any words, a machine number like 3979MB, or a customer name")} aria-label={t("Search the knowledge base")} maxLength={200} />
           <button className="btn primary" type="submit">{t("Search")}</button>
         </form>
       </section>
@@ -79,12 +79,17 @@ export function KnowledgeBase({ me }: { me: Me }) {
       </div>
 
       <ErrorNote error={error} />
-      {data?.customer && (
+      {data?.machine && (
         <p className="note-inline kb-found">
-          {t("Showing notes from {name}'s machines: {list}", { name: data.customer.name, list: data.customer.serials.join(", ") })}
+          {data.customer
+            ? t("Everything for {name}'s machines ({list}): their notes first, then anything that names them, then documents for their machine types.", { name: data.customer.name, list: data.machine.serials.join(", ") })
+            : t("Everything for machine {serial}: its notes first, then anything that names it, then documents for its machine type.", { serial: data.machine.serials.join(", ") })}
+          {" "}
+          {data.machine.types.length
+            ? t("Machine types: {types}.", { types: data.machine.types.join(", ") })
+            : t("Its model isn't in the machine list yet, so documents for its machine type can't be added. Add the model on the machine's page.")}
         </p>
       )}
-      {data?.serial && !data?.customer && <p className="note-inline kb-found">{t("Showing notes from machine {serial}", { serial: data.serial })}</p>}
 
       <button className="btn touch-filters" aria-expanded={showFilters} onClick={() => setShowFilters(!showFilters)}>
         {t("Filters")}{Object.keys(filters).length ? ` (${Object.keys(filters).length})` : ""}
