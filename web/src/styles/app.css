@@ -62,3 +62,8 @@ a.btn{text-decoration:none;display:inline-block}
   .brand small{display:none}
   .who{font-size:12px;max-width:40%;text-align:right}
 }
+
+/* Clock: break and clock-out buttons sit together once someone is clocked in. */
+.clock .clock-actions{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
+.clock .big.brk{background:var(--warn);color:var(--warn-soft)}
+.clock .out-btn{width:100%;max-width:280px;justify-content:center}

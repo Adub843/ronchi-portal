@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { csvCell, toCsv } from "../../src/shared/csv";
 import { parseServiceReportName } from "../../src/shared/service-report";
 import { scanForCustomerData } from "../../src/shared/privacy";
-import { dailyTotals, localDay, parseRange, toShifts } from "../../src/portal/lib/hours";
+import { allowedNext, dailyTotals, localDay, parseRange, stateAfter, toShifts, type PunchKind } from "../../src/portal/lib/hours";
 import { can, PERMISSIONS } from "../../src/portal/lib/roles";
 import { THEMES } from "../../src/shared/themes";
 
@@ -39,13 +39,42 @@ describe("CSV export", () => {
 });
 
 describe("hours", () => {
+  const p = (id: string, kind: PunchKind, at: string) => ({ id, user_id: "u", kind, at });
   it("pairs punches and splits regular and overtime per local day", () => {
-    const p = (id: string, kind: "in" | "out", at: string) => ({ id, user_id: "u", kind, at });
     const shifts = toShifts([p("1", "in", "2026-11-23T12:00:00Z"), p("2", "out", "2026-11-23T22:30:00Z"), p("3", "in", "2026-11-24T13:00:00Z")]);
     expect(shifts.map((s) => s.hours)).toEqual([10.5, 0]);
     const days = dailyTotals(shifts);
     expect(days[0]).toMatchObject({ day: "2026-11-23", hours: 10.5, regular: 8, overtime: 2.5, open: false });
     expect(days[1]).toMatchObject({ day: "2026-11-24", open: true });
+  });
+  it("takes break time out of worked hours and shows it separately", () => {
+    const shifts = toShifts([
+      p("1", "in", "2026-11-23T12:00:00Z"),
+      p("2", "break_start", "2026-11-23T16:00:00Z"),
+      p("3", "break_end", "2026-11-23T16:30:00Z"),
+      p("4", "break_start", "2026-11-23T19:00:00Z"),
+      p("5", "break_end", "2026-11-23T19:15:00Z"),
+      p("6", "out", "2026-11-23T22:00:00Z"),
+    ]);
+    expect(shifts[0]).toMatchObject({ hours: 9.25, breakHours: 0.75, onBreak: false });
+    expect(dailyTotals(shifts)[0]).toMatchObject({ hours: 9.25, breakHours: 0.75, regular: 8, overtime: 1.25 });
+  });
+  it("clocking out while on break ends the break at the clock-out time", () => {
+    const shifts = toShifts([p("1", "in", "2026-11-23T12:00:00Z"), p("2", "break_start", "2026-11-23T20:00:00Z"), p("3", "out", "2026-11-23T21:00:00Z")]);
+    expect(shifts[0]).toMatchObject({ hours: 8, breakHours: 1 });
+  });
+  it("shows someone still on break, and ignores stray break punches outside a shift", () => {
+    const open = toShifts([p("1", "in", "2026-11-23T12:00:00Z"), p("2", "break_start", "2026-11-23T16:00:00Z")]);
+    expect(dailyTotals(open)[0]).toMatchObject({ open: true, onBreak: true, hours: 0 });
+    expect(toShifts([p("1", "break_start", "2026-11-23T12:00:00Z"), p("2", "break_end", "2026-11-23T13:00:00Z")])).toEqual([]);
+  });
+  it("only allows punches that make sense next", () => {
+    expect(stateAfter(undefined)).toBe("out");
+    expect(stateAfter("break_start")).toBe("on_break");
+    expect(stateAfter("break_end")).toBe("working");
+    expect(allowedNext("out")).toEqual(["in"]);
+    expect(allowedNext("working")).toEqual(["break_start", "out"]);
+    expect(allowedNext("on_break")).toEqual(["break_end", "out"]);
   });
   it("uses Ronchi's local day, not UTC", () => {
     expect(localDay("2026-11-24T03:00:00Z")).toBe("2026-11-23");

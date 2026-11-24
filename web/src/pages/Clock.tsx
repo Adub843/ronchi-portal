@@ -25,7 +25,9 @@ export function Clock({ me }: { me: Me }) {
     return () => clearInterval(t);
   }, []);
 
-  const clockedIn = status.data?.last?.kind === "in";
+  // "out", "working" or "on_break", worked out by the server from the latest punch.
+  const state: "out" | "working" | "on_break" = status.data?.state ?? "out";
+  const clockedIn = state !== "out";
   // Typed-address mode is saved on the server and stays on until turned off with the button.
   const addressMode: boolean = !!status.data?.addressMode;
 
@@ -41,18 +43,19 @@ export function Clock({ me }: { me: Me }) {
     }
   }
 
-  async function punch() {
+  async function punch(kind: "in" | "out" | "break_start" | "break_end") {
     setBusy(true);
     setError(null);
     try {
-      let body: Record<string, unknown> = { kind: clockedIn ? "out" : "in" };
+      let body: Record<string, unknown> = { kind };
       // HARD RULE: in typed-address mode the phone's location is never requested or read.
       if (!addressMode) {
         const pos = await getLocation();
         if (pos) body = { ...body, lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
       }
       const r = await api("/clock/punch", { body });
-      toast(`Clocked ${r.kind} at ${new Date(r.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${r.location === "none" ? " (no location)" : ""}`);
+      const what = { in: "Clocked in", out: "Clocked out", break_start: "Break started", break_end: "Back from break" }[r.kind as string] ?? "Saved";
+      toast(`${what} at ${new Date(r.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${r.location === "none" ? " (no location)" : ""}`);
       status.reload();
       mine.reload();
     } catch (e) {
@@ -80,12 +83,24 @@ export function Clock({ me }: { me: Me }) {
       <div className="grid g2">
         <div className="panel clock">
           <div className="time">{now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}</div>
-          <span className={`pill ${clockedIn ? "p-ok" : "p-info"}`}>
-            {clockedIn ? `Clocked in since ${fmtTime(status.data.last.at)}` : "Clocked out"}
+          <span className={`pill ${state === "working" ? "p-ok" : state === "on_break" ? "p-warn" : "p-info"}`}>
+            {state === "working" ? `Clocked in since ${fmtTime(status.data.shiftStart ?? status.data.last.at)}` : state === "on_break" ? `On break since ${fmtTime(status.data.last.at)}. The clock is stopped.` : "Clocked out"}
           </span>
-          <button className={`big${clockedIn ? " out" : ""}`} onClick={punch} disabled={busy || !status.data}>
-            {busy ? "Saving…" : clockedIn ? "Clock out" : "Clock in"}
-          </button>
+          {state === "out" && (
+            <button className="big" onClick={() => punch("in")} disabled={busy || !status.data}>{busy ? "Saving…" : "Clock in"}</button>
+          )}
+          {state === "working" && (
+            <div className="clock-actions">
+              <button className="big brk" onClick={() => punch("break_start")} disabled={busy}>{busy ? "Saving…" : "Start break"}</button>
+              <button className="btn out-btn" onClick={() => punch("out")} disabled={busy}>Clock out</button>
+            </div>
+          )}
+          {state === "on_break" && (
+            <div className="clock-actions">
+              <button className="big" onClick={() => punch("break_end")} disabled={busy}>{busy ? "Saving…" : "End break"}</button>
+              <button className="btn out-btn" onClick={() => punch("out")} disabled={busy}>Clock out</button>
+            </div>
+          )}
           {addressMode ? (
             <>
               <p className="locnote">
@@ -96,7 +111,7 @@ export function Clock({ me }: { me: Me }) {
             </>
           ) : (
             <>
-              <p className="locnote">Your location is recorded only at the moment you tap Clock in or Clock out, never in between.</p>
+              <p className="locnote">Your location is recorded only at the moment you tap a clock button, never in between.</p>
               {me.canTypeAddress && !typing && <button className="btn" onClick={() => setTyping(true)}>Type the address instead</button>}
               {me.canTypeAddress && typing && (
                 <form className="stack" style={{ width: "100%", maxWidth: 340 }} onSubmit={(e) => { e.preventDefault(); setMode(true); }}>
@@ -117,10 +132,10 @@ export function Clock({ me }: { me: Me }) {
           {mine.data && !mine.data.days.length && <Empty>No hours yet.</Empty>}
           {!!mine.data?.days.length && (
             <table>
-              <thead><tr><th>Day</th><th>Hours</th><th>Overtime</th></tr></thead>
+              <thead><tr><th>Day</th><th>Worked</th><th>Breaks</th><th>Overtime</th></tr></thead>
               <tbody>
                 {[...mine.data.days].reverse().map((d: any) => (
-                  <tr key={d.day}><td>{fmtDate(d.day)}{d.open && <span className="pill p-ok" style={{ marginLeft: 6 }}>open</span>}</td><td className="mono">{d.hours.toFixed(2)}</td><td className="mono">{d.overtime ? d.overtime.toFixed(2) : "–"}</td></tr>
+                  <tr key={d.day}><td>{fmtDate(d.day)}{d.open && <span className="pill p-ok" style={{ marginLeft: 6 }}>open</span>}</td><td className="mono">{d.hours.toFixed(2)}</td><td className="mono">{d.breakHours ? d.breakHours.toFixed(2) : "–"}</td><td className="mono">{d.overtime ? d.overtime.toFixed(2) : "–"}</td></tr>
                 ))}
               </tbody>
             </table>
@@ -132,12 +147,12 @@ export function Clock({ me }: { me: Me }) {
         <p className="muted">Wrong time? Ask for a change. Lola approves it and the original time is kept on record.</p>
         <div className="tbl">
           <table>
-            <thead><tr><th>Time</th><th>In/Out</th><th>Location</th><th /></tr></thead>
+            <thead><tr><th>Time</th><th>Punch</th><th>Location</th><th /></tr></thead>
             <tbody>
               {[...(mine.data?.punches ?? [])].reverse().slice(0, 12).map((p: any) => (
                 <tr key={p.id}>
                   <td>{fmtTime(p.at)}</td>
-                  <td>{p.kind === "in" ? "In" : "Out"}</td>
+                  <td>{PUNCH_LABEL[p.kind] ?? p.kind}</td>
                   <td className="muted">{p.location_source === "typed" ? `Entered by hand: ${p.address}` : p.location_source === "gps" ? "Phone location" : "None"}</td>
                   <td><button className="linkish" onClick={() => setEditing({ id: p.id, newAt: toLocalInput(p.at), reason: "" })}>Ask for a change</button></td>
                 </tr>
@@ -161,6 +176,8 @@ export function Clock({ me }: { me: Me }) {
     </>
   );
 }
+
+const PUNCH_LABEL: Record<string, string> = { in: "In", out: "Out", break_start: "Break start", break_end: "Break end" };
 
 /** ISO time -> the value a datetime-local box expects, in the phone's own time zone. */
 function toLocalInput(iso: string): string {

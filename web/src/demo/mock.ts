@@ -1,7 +1,7 @@
 // DEMO ONLY. Used by `npm run build:demo` (the preview shown inside Claude), never by the real portal.
 // It answers the app's /api calls from example data kept in this browser, so the real screens
 // can be clicked through without a server. Signed in as Aaron Lewis, admin.
-import { dailyTotals, toShifts, type Punch } from "../../../src/portal/lib/hours";
+import { allowedNext, dailyTotals, stateAfter, toShifts, type Punch, type PunchKind } from "../../../src/portal/lib/hours";
 import { PERMISSIONS, ROLES } from "../../../src/portal/lib/roles";
 type Role = keyof typeof ROLES;
 
@@ -72,8 +72,10 @@ function seed(): DB {
     p(eng, steve, "Does anyone have the latest star wheel drawing for the 50 ml bottle?", daysAgo(1, 9, 30)),
   ];
   const punches: DB["punches"] = [];
-  const shift = (user: User, dAgo: number, inH: number, outH: number, typed?: string) => {
-    for (const [kind, h] of [["in", inH], ["out", outH]] as const) {
+  // A shift with a lunch break (lunch starts at lunchH and lasts lunchMin minutes).
+  const shift = (user: User, dAgo: number, inH: number, outH: number, typed?: string, lunchH = 12, lunchMin = 30) => {
+    const steps: [PunchKind, number][] = [["in", inH], ["break_start", lunchH], ["break_end", lunchH + lunchMin / 60], ["out", outH]];
+    for (const [kind, h] of steps) {
       const at = daysAgo(dAgo, Math.floor(h), Math.round((h % 1) * 60));
       punches.push({ id: id(), user_id: user.id, kind, at: iso(at), location_source: typed ? "typed" : "gps", lat: typed ? null : 32.85 + jitter(), lng: typed ? null : -79.97 + jitter(), accuracy_m: typed ? null : 12, address: typed ?? null, note: null });
     }
@@ -82,8 +84,8 @@ function seed(): DB {
     const day = daysAgo(d, 12).getDay();
     if (day === 0 || day === 6) continue;
     shift(aaron, d, 7.5, d % 3 === 0 ? 18 : 16.5, d === 2 ? "Example Foods Inc., Atlanta GA" : undefined);
-    shift(steve, d, 8, 16.75);
-    shift(meagan, d, 8.5, 17);
+    shift(steve, d, 8, 16.75, undefined, 11.5, 45);
+    shift(meagan, d, 8.5, 17, undefined, 12.5, 30);
   }
   // Aaron is clocked in today.
   punches.push({ id: id(), user_id: aaron.id, kind: "in", at: iso(new Date(Date.now() - 2 * 3600000)), location_source: "gps", lat: 32.85, lng: -79.97, accuracy_m: 10, address: null, note: null });
@@ -238,7 +240,12 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   }
   // --- clock & hours ---
   const mine = () => db.punches.filter((p) => p.user_id === u.id).sort((a, b) => a.at.localeCompare(b.at));
-  if (path === "/clock/status") return { last: mine().at(-1) ?? null, canTypeAddress: true, addressMode: !!db.addressMode, typedAddress: db.addressMode ?? null, serverTime: iso(new Date()) };
+  if (path === "/clock/status") {
+    const last = mine().at(-1) ?? null;
+    const state = stateAfter(last?.kind);
+    const shiftStart = state === "out" ? null : mine().filter((p) => p.kind === "in").at(-1)?.at ?? null;
+    return { last, state, shiftStart, canTypeAddress: true, addressMode: !!db.addressMode, typedAddress: db.addressMode ?? null, serverTime: iso(new Date()) };
+  }
   if (path === "/clock/address-mode") {
     if (body.on && !String(body.address ?? "").trim()) throw new Fail(400, "The address is required.");
     db.addressMode = body.on ? String(body.address).trim() : null;
@@ -246,14 +253,16 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     return { addressMode: !!db.addressMode, typedAddress: db.addressMode };
   }
   if (path === "/clock/punch") {
-    const last = mine().at(-1);
-    if (body.kind === "in" && last?.kind === "in") throw new Fail(409, "You're already clocked in.");
-    if (body.kind === "out" && last?.kind !== "in") throw new Fail(409, "You're not clocked in.");
+    const state = stateAfter(mine().at(-1)?.kind);
+    if (!["in", "out", "break_start", "break_end"].includes(body.kind)) throw new Fail(400, "Clock in, clock out, or break?");
+    if (!allowedNext(state).includes(body.kind)) {
+      throw new Fail(409, state === "out" ? "You're not clocked in." : body.kind === "in" ? "You're already clocked in." : state === "working" ? "You're not on break." : "You're already on break.");
+    }
     const typed = db.addressMode ?? null;
     const source = typed ? "typed" : typeof body.lat === "number" ? "gps" : "none";
     const p = { id: id(), user_id: u.id, kind: body.kind, at: iso(new Date()), location_source: source, lat: typed ? null : body.lat ?? null, lng: typed ? null : body.lng ?? null, accuracy_m: typed ? null : body.accuracy ?? null, address: typed, note: null };
     db.punches.push(p);
-    return { id: p.id, at: p.at, kind: p.kind, location: source };
+    return { id: p.id, at: p.at, kind: p.kind, state: stateAfter(p.kind), location: source };
   }
   if (path === "/clock/mine") {
     const h = hours(null, null, u.id);

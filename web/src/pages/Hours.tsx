@@ -83,7 +83,7 @@ export function Hours({ me }: { me: Me }) {
         {!!hours.data?.days.length && (
           <div className="tbl">
             <table>
-              <thead><tr><th>Name</th><th>Day</th><th>Hours</th><th>Regular</th><th>Overtime</th><th>Location</th></tr></thead>
+              <thead><tr><th>Name</th><th>Day</th><th>Worked</th><th>Breaks</th><th>Regular</th><th>Overtime</th><th>Location</th></tr></thead>
               <tbody>
                 {[...hours.data.days].sort((a: any, b: any) => b.day.localeCompare(a.day) || a.name.localeCompare(b.name)).map((d: any) => {
                   const shifts = hours.data.shifts.filter((s: any) => s.userId === d.userId && s.day === d.day);
@@ -92,8 +92,9 @@ export function Hours({ me }: { me: Me }) {
                   return (
                     <tr key={`${d.userId}-${d.day}`}>
                       <td>{d.name}</td>
-                      <td>{fmtDate(d.day)}{d.open && <span className="pill p-ok" style={{ marginLeft: 6 }}>still in</span>}</td>
+                      <td>{fmtDate(d.day)}{d.open && <span className="pill p-ok" style={{ marginLeft: 6 }}>still in</span>}{d.onBreak && <span className="pill p-warn" style={{ marginLeft: 6 }}>on break</span>}</td>
                       <td className="mono">{d.hours.toFixed(2)}</td>
+                      <td className="mono">{d.breakHours ? d.breakHours.toFixed(2) : "–"}</td>
                       <td className="mono">{d.regular.toFixed(2)}</td>
                       <td className="mono">{d.overtime ? d.overtime.toFixed(2) : "–"}</td>
                       <td>{typed ? <span className="pill p-warn">entered by hand</span> : none ? <span className="pill p-acc">no location</span> : <span className="pill p-ok">phone</span>}</td>

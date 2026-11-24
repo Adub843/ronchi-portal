@@ -92,6 +92,31 @@ describe("time clock", () => {
     expect(edit?.status).toBe("approved");
     expect(edit?.old_at).not.toBe(newAt);
   });
+  it("a break stops the clock until the break ends", async () => {
+    const tech = await person("tech");
+    expect((await tech.fetch("/api/clock/punch", { body: { kind: "break_start" } })).status).toBe(409);
+    await tech.json("/api/clock/punch", { body: { kind: "in" } });
+    expect((await tech.fetch("/api/clock/punch", { body: { kind: "break_end" } })).status).toBe(409);
+    const b = await tech.json("/api/clock/punch", { body: { kind: "break_start" } });
+    expect(b.data.state).toBe("on_break");
+    expect((await tech.json("/api/clock/status")).data.state).toBe("on_break");
+    const again = await tech.json("/api/clock/punch", { body: { kind: "break_start" } });
+    expect(again.status).toBe(409);
+    expect(again.data.error).toBe("You're already on break.");
+    expect((await tech.fetch("/api/clock/punch", { body: { kind: "in" } })).status).toBe(409);
+    const e = await tech.json("/api/clock/punch", { body: { kind: "break_end" } });
+    expect(e.data.state).toBe("working");
+    // Put the punches an hour apart so the totals are exact.
+    const ids = (await env.DB.prepare("SELECT id FROM punches WHERE user_id = (SELECT user_id FROM punches WHERE id = ?) ORDER BY at").bind(e.data.id).all<{ id: string }>()).results.map((r) => r.id);
+    const base = Date.parse("2026-11-23T13:00:00Z");
+    for (const [i, pid] of ids.entries()) await env.DB.prepare("UPDATE punches SET at = ? WHERE id = ?").bind(new Date(base + i * 3600000).toISOString(), pid).run();
+    await env.DB.prepare("INSERT INTO punches (id, user_id, kind, at, location_source, created_at) SELECT 'p-out', user_id, 'out', ?1, 'none', ?1 FROM punches WHERE id = ?2").bind(new Date(base + 3 * 3600000).toISOString(), e.data.id).run();
+    const lola = await person("billing");
+    const days = (await lola.json("/api/clock/hours?from=2026-11-23&to=2026-11-23")).data.days;
+    expect(days[0]).toMatchObject({ hours: 2, breakHours: 1 });
+    const csv = await (await lola.fetch("/api/clock/hours/export?format=csv&kind=days&from=2026-11-23&to=2026-11-23")).text();
+    expect(csv).toContain("Break hours");
+  });
 
   it("exports hours as a spreadsheet-safe CSV", async () => {
     const lola = await person("billing");
