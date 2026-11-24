@@ -153,6 +153,24 @@ describe("sign-in and roles", () => {
     expect((await c.signIn()).status).toBe(401);
   });
 
+  it("a machine shows before its catalog is published, but still only to its own company", async () => {
+    const a = await company(["2901AA", "2902AA"]);
+    const b = await company(["2903BB"]);
+    await publish("2901AA");
+    const alice = await customer(a);
+    const list = (await alice.json("/api/machines")).data.machines;
+    expect(list.map((m: any) => [m.serial, m.sheets])).toEqual([["2901AA", 2], ["2902AA", 0]]);
+    const bare = await alice.json("/api/machines/2902AA");
+    expect(bare.status).toBe(200);
+    expect(bare.data.sheets).toEqual([]);
+    expect((await alice.json("/api/machines/2902AA/spares")).status).toBe(200);
+    // Unpublished machines of another company stay "not found".
+    expect((await alice.json("/api/machines/2903BB")).status).toBe(404);
+    const bob = await customer(b);
+    expect((await bob.json("/api/machines")).data.machines.map((m: any) => m.serial)).toEqual(["2903BB"]);
+    expect((await bob.json("/api/machines/2902AA")).status).toBe(404);
+  });
+
   it("removing a machine from a company takes it away at once", async () => {
     const co = await company(["2801AA", "2802AA"]);
     await publish("2801AA");

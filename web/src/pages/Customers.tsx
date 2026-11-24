@@ -82,7 +82,7 @@ function Company({ co, open, onToggle, onChange }: { co: any; open: boolean; onT
             }), t("Saved"))}>{t("Save machines")}</button>
           </div>
           {co.machines.some((m: any) => !m.published_at) && (
-            <p className="note-inline">{t("Some of these machines have no published catalog yet, so the customer sees them empty: {list}", { list: co.machines.filter((m: any) => !m.published_at).map((m: any) => m.serial).join(", ") })}</p>
+            <p className="note-inline">{t("These machines have no published catalog yet. The customer still sees them, with a note that the catalog is being prepared: {list}", { list: co.machines.filter((m: any) => !m.published_at).map((m: any) => m.serial).join(", ") })}</p>
           )}
 
           <h3>{t("People")}</h3>

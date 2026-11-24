@@ -1,5 +1,7 @@
 // THE access rule for customers, in one place: a person sees a machine, its drawings and its
-// parts ONLY when the machine is listed for their company in company_machines.
+// parts ONLY when the machine is listed for their company in company_machines. A listed machine
+// shows even before its catalog is published (Aaron: customers see every machine we have, with
+// whatever information exists), so the access rule is company_machines alone.
 // Every catalog route calls one of these. Anything else gets "Not found", the same answer as a
 // machine that doesn't exist, so nobody can learn which other machine numbers are real.
 import type { Customer } from "../env";
@@ -8,7 +10,7 @@ import { fail } from "./http";
 export async function requireMachine(db: D1Database, u: Customer, serial: string): Promise<{ serial: string; model: string | null; label: string | null }> {
   if (!/^[0-9A-Za-z]{4,12}$/.test(serial)) fail(404, "Not found.");
   const m = await db.prepare(
-    `SELECT m.serial, m.model, cm.label FROM company_machines cm JOIN machines m ON m.serial = cm.serial
+    `SELECT cm.serial, m.model, cm.label FROM company_machines cm LEFT JOIN machines m ON m.serial = cm.serial
       WHERE cm.company_id = ? AND cm.serial = ?`,
   ).bind(u.companyId, serial).first<{ serial: string; model: string | null; label: string | null }>();
   if (!m) fail(404, "Not found.");

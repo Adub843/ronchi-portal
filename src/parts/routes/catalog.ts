@@ -10,11 +10,11 @@ export const catalog = new Hono<PartsApp>();
 catalog.get("/machines", async (c) => {
   const u = requireCustomer(c);
   const { results } = await c.env.PARTS_DB.prepare(
-    `SELECT m.serial, m.model, cm.label, m.published_at,
-            (SELECT COUNT(*) FROM sheets s WHERE s.serial = m.serial) AS sheets,
-            (SELECT COUNT(*) FROM sheets s WHERE s.serial = m.serial AND s.model_size IS NOT NULL) AS models
-       FROM company_machines cm JOIN machines m ON m.serial = cm.serial
-      WHERE cm.company_id = ? ORDER BY m.serial`,
+    `SELECT cm.serial, m.model, cm.label, m.published_at,
+            (SELECT COUNT(*) FROM sheets s WHERE s.serial = cm.serial) AS sheets,
+            (SELECT COUNT(*) FROM sheets s WHERE s.serial = cm.serial AND s.model_size IS NOT NULL) AS models
+       FROM company_machines cm LEFT JOIN machines m ON m.serial = cm.serial
+      WHERE cm.company_id = ? ORDER BY cm.serial`,
   ).bind(u.companyId).all();
   return c.json({ machines: results });
 });
