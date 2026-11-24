@@ -3,6 +3,7 @@
 //   /                 my machines and favorites
 //   /m/<serial>       one machine: its drawings, and suggested spares
 //   /s/<sheet id>     one drawing or 3D assembly with its parts list
+//   /book/<serial>    a parts book: chosen drawings with their parts lists, to print or save as PDF
 //   /p/<part code>    one part: where it's used on my machines
 //   /search?q=        find a part on any of my machines
 //   /cart             my carts; send one to Ronchi America as a quote request
@@ -94,10 +95,11 @@ export function App() {
   if (me === undefined) return <div className="boot" aria-busy="true" />;
   if (me === null) return <SignIn onDone={refresh} />;
 
-  const m = /^\/(m|s|p|lists|quotes)\/([A-Za-z0-9_-]+)$/.exec(route);
+  const m = /^\/(m|s|p|lists|quotes|book)\/([A-Za-z0-9_-]+)$/.exec(route);
   let page: ReactNode;
   if (m?.[1] === "m") page = <Machine key={m[2]} serial={m[2]!} />;
   else if (m?.[1] === "s") page = <Sheet key={m[2]} id={m[2]!} />;
+  else if (m?.[1] === "book") page = <Book key={m[2]} serial={m[2]!} />;
   else if (m?.[1] === "p") page = <Part key={m[2]} code={m[2]!} />;
   else if (m?.[1] === "lists") page = <List key={m[2]} id={m[2]!} />;
   else if (m?.[1] === "quotes") page = <Quote key={m[2]} id={m[2]!} />;
@@ -110,7 +112,7 @@ export function App() {
 
   const section = "/" + (route.split("/")[1] ?? "");
   const nav = [
-    { to: "/", label: t("My machines"), on: section === "/" || section === "/m" || section === "/s" },
+    { to: "/", label: t("My machines"), on: section === "/" || section === "/m" || section === "/s" || section === "/book" },
     { to: "/search", label: t("Search"), on: section === "/search" || section === "/p" },
     { to: "/cart", label: cartCount ? t("Cart ({n})", { n: cartCount }) : t("Cart"), on: section === "/cart" },
     { to: "/lists", label: t("Lists"), on: section === "/lists" },
@@ -299,6 +301,7 @@ function Machine({ serial }: { serial: string }) {
   return (
     <>
       <Head title={m.serial} sub={[m.model, m.label].filter(Boolean).join(" · ") || undefined}>
+        {data.sheets.length > 0 && <Link to={`/book/${m.serial}`} className="btn">{t("Parts book (PDF)")}</Link>}
         <Star kind="machine" refId={m.serial} on={fav.has("machine", m.serial)} onChange={fav.reload} />
       </Head>
       <div className="cv-tabs" role="tablist">
@@ -362,6 +365,94 @@ function Sheet({ id }: { id: string }) {
         partLink={(code) => <Link to={`/p/${code}`}>{code}</Link>}
         action={(r) => <button type="button" className="btn small" onClick={() => addToCart(r.code, s.serial, r.qty && r.unit !== "m" ? r.qty : 1)}>{t("Add to cart")}</button>}
       />
+    </>
+  );
+}
+
+/** A parts book: pick drawings, then print them with their parts lists (or save as PDF from the print window). */
+function Book({ serial }: { serial: string }) {
+  const { data, error } = useLoad(() => api(`/machines/${enc(serial)}`), [serial]);
+  const [chosen, setChosen] = useState<Set<string> | null>(null);
+  const [pages, setPages] = useState<{ sheet: any; rows: Row[] }[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  if (error) return <Err error={error} />;
+  if (!data) return null;
+  const sheets: TreeSheet[] = data.sheets;
+  const pick = chosen ?? new Set(sheets.map((s) => s.id));
+  const build = async () => {
+    const out: { sheet: any; rows: Row[] }[] = [];
+    const ids = sheets.filter((s) => pick.has(s.id)).map((s) => s.id);
+    try {
+      for (const [i, id] of ids.entries()) {
+        setBusy(t("Getting drawing {n} of {total}", { n: i + 1, total: ids.length }));
+        const r = await api(`/sheets/${enc(id)}`);
+        out.push({ sheet: r.sheet, rows: r.rows });
+      }
+      setPages(out);
+    } catch (e) {
+      toast(t((e as Error).message));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const lang = getLang();
+  return (
+    <>
+      <div className="no-print">
+        <nav className="crumbs"><Link to={`/m/${serial}`}>{serial}</Link></nav>
+        <Head title={t("Parts book")} sub={t("Choose the drawings, build the book, then print it or save it as a PDF.")}>
+          {pages ? (
+            <>
+              <button type="button" className="btn" onClick={() => setPages(null)}>{t("Change drawings")}</button>
+              <button type="button" className="btn primary" onClick={() => window.print()}>{t("Print or save as PDF")}</button>
+            </>
+          ) : (
+            <button type="button" className="btn primary" disabled={!pick.size || !!busy} onClick={build}>{busy ?? t("Build the book ({n} drawings)", { n: pick.size })}</button>
+          )}
+        </Head>
+        {!pages && (
+          <div className="panel stack">
+            <div className="row">
+              <button type="button" className="btn small" onClick={() => setChosen(new Set(sheets.map((s) => s.id)))}>{t("All")}</button>
+              <button type="button" className="btn small" onClick={() => setChosen(new Set())}>{t("None")}</button>
+            </div>
+            {sheets.map((s) => (
+              <label key={s.id} className="row book-pick">
+                <input type="checkbox" checked={pick.has(s.id)} onChange={(e) => {
+                  const n = new Set(pick);
+                  e.target.checked ? n.add(s.id) : n.delete(s.id);
+                  setChosen(n);
+                }} />
+                <span className="mono muted">{s.code ?? ""}</span> {s.title}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+      {pages && (
+        <div className="book">
+          <section className="book-cover">
+            <h1>{t("Parts book")}</h1>
+            <p className="mono">{serial}</p>
+            <p>{t("{n} drawings", { n: pages.length })} · {fmtTime(new Date().toISOString())}</p>
+            <ol>{pages.map((p) => <li key={p.sheet.id}><span className="mono">{p.sheet.code ?? ""}</span> {p.sheet.title}</li>)}</ol>
+          </section>
+          {pages.map((p) => (
+            <section key={p.sheet.id} className="book-page">
+              <h2><span className="mono">{p.sheet.code ?? ""}</span> {p.sheet.title} <small className="muted mono">{serial}</small></h2>
+              {p.sheet.drawing && <img src={`/api/sheets/${enc(p.sheet.id)}/drawing`} alt={p.sheet.title} />}
+              <table className="book-rows">
+                <thead><tr><th>{t("Pos.")}</th><th>{t("Part number")}</th><th>{t("Description")}</th><th>{t("Qty")}</th></tr></thead>
+                <tbody>
+                  {p.rows.map((r) => (
+                    <tr key={r.id}><td>{r.pos}</td><td className="mono">{r.code}</td><td>{partName(lang, r)}{r.maker ? ` (${[r.maker, r.maker_pn].filter(Boolean).join(" ")})` : ""}</td><td>{r.qty ?? "–"}{r.unit === "m" ? " m" : ""}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          ))}
+        </div>
+      )}
     </>
   );
 }

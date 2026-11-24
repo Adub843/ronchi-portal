@@ -1,12 +1,16 @@
-// The 3D model of an assembly, CAD-style: turn, move and zoom; click a part to select it (and its
-// row in the parts list); hide it, isolate it, see through everything else, pull the assembly
-// apart (explode), cut it open (section), jump to standard views, and show or hide any part from
-// the model tree. Works with a mouse, a trackpad or fingers.
+// The 3D model of an assembly, CAD-style. Everything the Ronchi Mario (InService) viewer does:
+// home, zoom to fit, zoom window, zoom in and out, zoom to the selected part, named views
+// (Iso 1, Iso 2, front, back, left, right, top, bottom), hide, isolate, show all, move a part
+// out of the way and put it back (one or all), and two-way selection with the parts list.
+// And more: see-through, explode, section cut, model tree, hover labels, double-click to zoom
+// to a part, a part card with quantity, assembly link and "add to cart", saved views, a
+// picture of the current view, full screen and keyboard keys. Works with a mouse, a trackpad
+// or fingers.
 //
 // The model is a GLB file. Each part's node name is matched to a Ronchi part code through the
 // sheet's mesh map (set by staff), or by the name itself when it starts with a part code (that's
 // how SolidWorks and Creo name parts: GF010526, GF010526-1, GF010526_2 ...).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -22,16 +26,35 @@ interface TreeNode {
   children: TreeNode[];
 }
 
-type View = "iso" | "front" | "back" | "left" | "right" | "top" | "bottom";
+type View = "iso" | "iso2" | "front" | "back" | "left" | "right" | "top" | "bottom";
 const VIEWS: Record<View, [number, number, number]> = {
-  iso: [1, 0.8, 1], front: [0, 0, 1], back: [0, 0, -1], left: [-1, 0, 0], right: [1, 0, 0], top: [0, 1, 0.0001], bottom: [0, -1, 0.0001],
+  iso: [1, 0.8, 1], iso2: [-1, 0.8, 1], front: [0, 0, 1], back: [0, 0, -1], left: [-1, 0, 0], right: [1, 0, 0], top: [0, 1, 0.0001], bottom: [0, -1, 0.0001],
 };
-const VIEW_WORDS: Record<View, "Iso" | "Front" | "Back" | "Left" | "Right" | "Top" | "Bottom"> = {
-  iso: "Iso", front: "Front", back: "Back", left: "Left", right: "Right", top: "Top", bottom: "Bottom",
+const VIEW_WORDS: Record<View, "Iso 1" | "Iso 2" | "Front" | "Back" | "Left" | "Right" | "Top" | "Bottom"> = {
+  iso: "Iso 1", iso2: "Iso 2", front: "Front", back: "Back", left: "Left", right: "Right", top: "Top", bottom: "Bottom",
 };
+interface SavedView { name: string; pos: [number, number, number]; target: [number, number, number] }
+type Mode = "turn" | "window" | "move";
+
+/** Saved views live in this browser only, per model. Private windows may refuse storage; that's fine. */
+function loadViews(key: string): SavedView[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) ?? "[]");
+    return Array.isArray(v) ? v.slice(0, 20) : [];
+  } catch {
+    return [];
+  }
+}
+function storeViews(key: string, v: SavedView[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify(v));
+  } catch {
+    /* storage turned off: views last until the page closes */
+  }
+}
 
 export function Model3D({
-  src, meshMap, selected, onPick, lang, knownCodes,
+  src, meshMap, selected, onPick, lang, knownCodes, describe, card, fileName = "model",
 }: {
   src: string;
   meshMap: Record<string, string>;
@@ -39,6 +62,9 @@ export function Model3D({
   onPick: (code: string | null) => void;
   lang: Lang;
   knownCodes: Set<string>;                 // codes in the parts list, to say when a clicked part isn't listed
+  describe?: (code: string) => string | null;   // the part's name, for hover labels
+  card?: (code: string) => ReactNode;      // the selected part's details and actions (quantity, add to cart ...)
+  fileName?: string;                       // for the saved picture
 }) {
   const host = useRef<HTMLDivElement>(null);
   const engine = useRef<Engine | null>(null);
@@ -50,7 +76,12 @@ export function Model3D({
   const [section, setSection] = useState<{ axis: "x" | "y" | "z" | null; at: number }>({ axis: null, at: 0.5 });
   const [showTree, setShowTree] = useState(false);
   const [full, setFull] = useState(false);
+  const [mode, setMode] = useState<Mode>("turn");
+  const [moved, setMoved] = useState(0);   // how many parts have been moved, for the Restore buttons
   const [picked, setPicked] = useState<{ name: string; code: string | null } | null>(null);
+  const [hover, setHover] = useState<{ x: number; y: number; code: string | null; name: string } | null>(null);
+  const viewKey = `ronchi-views:${src.split("?")[0]}`;
+  const [views, setViews] = useState<SavedView[]>(() => loadViews(viewKey));
   const pickRef = useRef(onPick);
   pickRef.current = onPick;
   const mapRef = useRef(meshMap);
@@ -61,9 +92,14 @@ export function Model3D({
     if (!el) return;
     let e: Engine;
     try {
-      e = new Engine(el, (hit) => {
-        setPicked(hit);
-        pickRef.current(hit?.code ?? null);
+      e = new Engine(el, {
+        hit: (hit) => {
+          setPicked(hit);
+          pickRef.current(hit?.code ?? null);
+        },
+        hover: setHover,
+        moved: setMoved,
+        windowDone: () => setMode("turn"),
       });
     } catch {
       setState("nogl");
@@ -86,11 +122,16 @@ export function Model3D({
   }, [src]);
 
   useEffect(() => void (engine.current && (engine.current.known = knownCodes)), [knownCodes, state]);
-  useEffect(() => engine.current?.setSelected(selected), [selected, state]);
+  useEffect(() => {
+    engine.current?.setSelected(selected);
+    if (!selected) setPicked(null);
+    else setPicked((p) => (p?.code === selected ? p : { name: selected, code: selected }));
+  }, [selected, state]);
   useEffect(() => engine.current?.setHidden(hidden), [hidden, state]);
   useEffect(() => engine.current?.setXray(xray), [xray, state]);
   useEffect(() => engine.current?.setExplode(explode), [explode, state]);
   useEffect(() => engine.current?.setSection(section.axis, section.at), [section, state]);
+  useEffect(() => void (engine.current && (engine.current.mode = mode)), [mode, state]);
   useEffect(() => engine.current?.resize(), [full, showTree]);
 
   const selectedIds = () => engine.current?.idsFor(selected) ?? [];
@@ -100,40 +141,115 @@ export function Model3D({
     if (!keep.size || !engine.current) return;
     setHidden(new Set(engine.current.leafIdsExcept(keep)));
   };
+  const showAll = () => setHidden(new Set());
+  const home = () => {
+    setHidden(new Set());
+    setXray(false);
+    setExplode(0);
+    setSection({ axis: null, at: 0.5 });
+    setMode("turn");
+    engine.current?.restoreAll();
+    engine.current?.view("iso");
+  };
+  const saveView = () => {
+    const v = engine.current?.currentView();
+    if (!v) return;
+    const next = [...views, { name: w(lang, "My view {n}", { n: views.length + 1 }), ...v }].slice(-20);
+    setViews(next);
+    storeViews(viewKey, next);
+  };
+  const picture = () => {
+    const url = engine.current?.snapshot();
+    if (!url) return;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${fileName.replace(/[^A-Za-z0-9_-]+/g, "_")}.png`;
+    a.click();
+  };
+
+  // Keys work when the viewer has focus (click it first): the same letters CAD tools use.
+  const onKey = (e: React.KeyboardEvent) => {
+    if ((e.target as HTMLElement).closest("input,select,textarea")) return;
+    const k = e.key.toLowerCase();
+    if (k === "f") engine.current?.fit();
+    else if (k === "s" && selected) engine.current?.zoomTo(selected);
+    else if (k === "h" && selected) hide();
+    else if (k === "i" && selected) isolate();
+    else if (k === "a") showAll();
+    else if (k === "home") home();
+    else if (k === "+" || k === "=") engine.current?.zoom(0.8);
+    else if (k === "-") engine.current?.zoom(1.25);
+    else if (k === "escape") {
+      if (mode !== "turn") setMode("turn");
+      else if (full) setFull(false);
+      else { setPicked(null); onPick(null); }
+    } else return;
+    e.preventDefault();
+  };
+
+  const hint = mode === "window" ? w(lang, "Drag a box around the area to zoom to.")
+    : mode === "move" ? w(lang, "Drag the selected part to move it. Restore puts it back.")
+    : w(lang, "Drag to turn. Right-drag or two fingers to move. Scroll or pinch to zoom. Click a part to select it, double-click to zoom to it.");
 
   return (
-    <div className={`cv-stage${full ? " cv-full" : ""}`}>
+    <div className={`cv-stage${full ? " cv-full" : ""}`} onKeyDown={onKey}>
       <div className="cv-tools" role="toolbar" aria-label="3D">
-        <button type="button" className="cv-btn" onClick={() => engine.current?.fit()}>{w(lang, "Fit")}</button>
-        <label className="cv-select">
-          <span className="sr">{w(lang, "Views")}</span>
-          <select aria-label={w(lang, "Views")} value="" onChange={(e) => { if (e.target.value) engine.current?.view(e.target.value as View); }}>
-            <option value="">{w(lang, "Views")}</option>
-            {(Object.keys(VIEWS) as View[]).map((v) => <option key={v} value={v}>{w(lang, VIEW_WORDS[v])}</option>)}
-          </select>
-        </label>
-        <button type="button" className="cv-btn" onClick={hide} disabled={!selected}>{w(lang, "Hide")}</button>
-        <button type="button" className="cv-btn" onClick={isolate} disabled={!selected}>{w(lang, "Isolate")}</button>
-        <button type="button" className="cv-btn" onClick={() => { setHidden(new Set()); setXray(false); setExplode(0); setSection({ axis: null, at: 0.5 }); }}>{w(lang, "Show all")}</button>
-        <button type="button" className="cv-btn" aria-pressed={xray} onClick={() => setXray(!xray)}>{w(lang, "See-through")}</button>
-        <label className="cv-range">
-          {w(lang, "Explode")}
-          <input type="range" min={0} max={1} step={0.01} value={explode} onChange={(e) => setExplode(Number(e.target.value))} />
-        </label>
-        <label className="cv-select">
-          {w(lang, "Section")}
-          <select value={section.axis ?? ""} onChange={(e) => setSection({ ...section, axis: (e.target.value || null) as "x" | "y" | "z" | null })}>
-            <option value="">{w(lang, "Off")}</option>
-            <option value="x">X</option>
-            <option value="y">Y</option>
-            <option value="z">Z</option>
-          </select>
-        </label>
-        {section.axis && (
-          <input className="cv-slim" type="range" min={0} max={1} step={0.005} value={section.at} aria-label={w(lang, "Section")} onChange={(e) => setSection({ ...section, at: Number(e.target.value) })} />
-        )}
+        <span className="cv-grp">
+          <button type="button" className="cv-btn" onClick={home} title={w(lang, "Home: starting view, everything shown and in place")}>{w(lang, "Home")}</button>
+          <button type="button" className="cv-btn" onClick={() => engine.current?.fit()} title="F">{w(lang, "Fit")}</button>
+          <button type="button" className="cv-btn" aria-pressed={mode === "window"} onClick={() => setMode(mode === "window" ? "turn" : "window")}>{w(lang, "Zoom window")}</button>
+          <button type="button" className="cv-btn" onClick={() => engine.current?.zoom(0.8)} aria-label={w(lang, "Zoom in")} title={w(lang, "Zoom in")}>+</button>
+          <button type="button" className="cv-btn" onClick={() => engine.current?.zoom(1.25)} aria-label={w(lang, "Zoom out")} title={w(lang, "Zoom out")}>−</button>
+          <button type="button" className="cv-btn" onClick={() => selected && engine.current?.zoomTo(selected)} disabled={!selected} title="S">{w(lang, "Zoom to selected")}</button>
+          <label className="cv-select">
+            <span className="sr">{w(lang, "Views")}</span>
+            <select aria-label={w(lang, "Views")} value="" onChange={(e) => {
+              const v = e.target.value;
+              if (v === "+save") saveView();
+              else if (v.startsWith("my:")) { const sv = views[Number(v.slice(3))]; if (sv) engine.current?.goTo(sv); }
+              else if (v.startsWith("del:")) { const next = views.filter((_, i) => i !== Number(v.slice(4))); setViews(next); storeViews(viewKey, next); }
+              else if (v) engine.current?.view(v as View);
+            }}>
+              <option value="">{w(lang, "Views")}</option>
+              {(Object.keys(VIEWS) as View[]).map((v) => <option key={v} value={v}>{w(lang, VIEW_WORDS[v])}</option>)}
+              {views.length > 0 && <optgroup label={w(lang, "My views")}>{views.map((v, i) => <option key={i} value={`my:${i}`}>{v.name}</option>)}</optgroup>}
+              <option value="+save">{w(lang, "Save this view")}</option>
+              {views.length > 0 && <optgroup label={w(lang, "Remove a view")}>{views.map((v, i) => <option key={i} value={`del:${i}`}>× {v.name}</option>)}</optgroup>}
+            </select>
+          </label>
+        </span>
+        <span className="cv-grp">
+          <button type="button" className="cv-btn" onClick={hide} disabled={!selected} title="H">{w(lang, "Hide")}</button>
+          <button type="button" className="cv-btn" onClick={isolate} disabled={!selected} title="I">{w(lang, "Isolate")}</button>
+          <button type="button" className="cv-btn" onClick={showAll} disabled={!hidden.size} title="A">{w(lang, "Show all")}</button>
+        </span>
+        <span className="cv-grp">
+          <button type="button" className="cv-btn" aria-pressed={mode === "move"} onClick={() => setMode(mode === "move" ? "turn" : "move")} disabled={!selected && mode !== "move"}>{w(lang, "Move part")}</button>
+          <button type="button" className="cv-btn" onClick={() => selected && engine.current?.restore(selected)} disabled={!moved || !selected}>{w(lang, "Restore part")}</button>
+          <button type="button" className="cv-btn" onClick={() => engine.current?.restoreAll()} disabled={!moved}>{w(lang, "Restore all")}</button>
+        </span>
+        <span className="cv-grp">
+          <button type="button" className="cv-btn" aria-pressed={xray} onClick={() => setXray(!xray)}>{w(lang, "See-through")}</button>
+          <label className="cv-range">
+            {w(lang, "Explode")}
+            <input type="range" min={0} max={1} step={0.01} value={explode} onChange={(e) => setExplode(Number(e.target.value))} />
+          </label>
+          <label className="cv-select">
+            {w(lang, "Section")}
+            <select value={section.axis ?? ""} onChange={(e) => setSection({ ...section, axis: (e.target.value || null) as "x" | "y" | "z" | null })}>
+              <option value="">{w(lang, "Off")}</option>
+              <option value="x">X</option>
+              <option value="y">Y</option>
+              <option value="z">Z</option>
+            </select>
+          </label>
+          {section.axis && (
+            <input className="cv-slim" type="range" min={0} max={1} step={0.005} value={section.at} aria-label={w(lang, "Section")} onChange={(e) => setSection({ ...section, at: Number(e.target.value) })} />
+          )}
+        </span>
         <span className="cv-gap" />
         <button type="button" className="cv-btn" aria-pressed={showTree} onClick={() => setShowTree(!showTree)}>{w(lang, "Model tree")}</button>
+        <button type="button" className="cv-btn" onClick={picture}>{w(lang, "Picture")}</button>
         <button type="button" className="cv-btn" aria-pressed={full} onClick={() => setFull(!full)}>{w(lang, full ? "Exit full screen" : "Full screen")}</button>
       </div>
       <div className="cv-body">
@@ -153,20 +269,29 @@ export function Model3D({
             lang={lang}
           />
         )}
-        <div ref={host} className="cv-canvas cv-3d">
+        <div ref={host} className={`cv-canvas cv-3d cv-mode-${mode}`} tabIndex={0} aria-label={w(lang, "3D model")}>
           {state === "loading" && <p className="cv-msg">{w(lang, "Loading the 3D model…")}</p>}
           {state === "error" && <p className="cv-msg">{w(lang, "The 3D model couldn't be loaded.")}</p>}
           {state === "nogl" && <p className="cv-msg">{w(lang, "This browser can't show 3D. Use the drawing instead.")}</p>}
+          {hover && state === "ready" && mode === "turn" && (
+            <span className="cv-tip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+              <b>{hover.code ?? hover.name}</b>{hover.code && describe?.(hover.code) ? ` ${describe(hover.code)}` : ""}
+            </span>
+          )}
           {picked && state === "ready" && (
-            <p className="cv-picked">
-              {w(lang, "Selected: {name}", { name: picked.code ?? picked.name })}
-              {picked.code && !knownCodes.has(picked.code) && <em> · {w(lang, "Not in the parts list")}</em>}
-              <button type="button" className="cv-x" aria-label={w(lang, "Clear selection")} onClick={() => { setPicked(null); onPick(null); }}>×</button>
-            </p>
+            <div className="cv-card">
+              <div className="cv-card-head">
+                <b className="mono">{picked.code ?? picked.name}</b>
+                {picked.code && describe?.(picked.code) && <span>{describe(picked.code)}</span>}
+                <button type="button" className="cv-x" aria-label={w(lang, "Clear selection")} onClick={() => { setPicked(null); onPick(null); }}>×</button>
+              </div>
+              {picked.code && !knownCodes.has(picked.code) && <em className="cv-warn">{w(lang, "Not in the parts list")}</em>}
+              {picked.code && knownCodes.has(picked.code) && card?.(picked.code)}
+            </div>
           )}
         </div>
       </div>
-      <p className="cv-hint">{w(lang, "Drag to turn. Right-drag or two fingers to move. Scroll or pinch to zoom. Click a part to select it.")}</p>
+      <p className="cv-hint">{hint}</p>
     </div>
   );
 }
@@ -209,6 +334,13 @@ function ModelTree({ tree, hidden, selected, onToggle, onPick, lang }: {
 // ---------------------------------------------------------------------------------------------
 // The three.js side, kept apart from React so a re-render never rebuilds the scene.
 
+interface Events {
+  hit: (hit: { name: string; code: string | null } | null) => void;
+  hover: (h: { x: number; y: number; code: string | null; name: string } | null) => void;
+  moved: (n: number) => void;
+  windowDone: () => void;
+}
+
 class Engine {
   renderer: THREE.WebGLRenderer;
   scene = new THREE.Scene();
@@ -219,27 +351,41 @@ class Engine {
   base = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
   codes = new Map<string, string | null>(); // node uuid -> code
   pieces: { obj: THREE.Object3D; home: THREE.Vector3; dir: THREE.Vector3 }[] = [];
+  pieceSet = new Set<THREE.Object3D>();
+  offsets = new Map<THREE.Object3D, { orig: THREE.Vector3; off: THREE.Vector3 }>(); // parts moved by hand
+  explodeK = 0;
   box = new THREE.Box3();
   sphere = new THREE.Sphere();
   plane = new THREE.Plane();
   selectedIds = new Set<string>();
+  selectedCode: string | null = null;
+  hoverMesh: THREE.Mesh | null = null;
   known = new Set<string>();
   hidden = new Set<string>();
   xray = false;
+  mode: Mode = "turn";
   hl = new THREE.MeshStandardMaterial({ color: 0xe30613, emissive: 0x7a0008, metalness: 0.2, roughness: 0.45 });
+  hov = new THREE.MeshStandardMaterial({ color: 0x3a8dde, emissive: 0x0b2a4a, metalness: 0.2, roughness: 0.45 });
   ghost = new THREE.MeshStandardMaterial({ color: 0x9aa4ad, transparent: true, opacity: 0.12, depthWrite: false });
   glass = new THREE.MeshStandardMaterial({ color: 0xb8c2cc, transparent: true, opacity: 0.32, depthWrite: false, metalness: 0.1, roughness: 0.3 });
   ro: ResizeObserver;
   frame = 0;
+  hoverFrame = 0;
   down: { x: number; y: number } | null = null;
+  drag: { plane: THREE.Plane; start: THREE.Vector3; objs: { obj: THREE.Object3D; startLocal: THREE.Vector3; startWorld: THREE.Vector3 }[] } | null = null;
+  box2d: HTMLDivElement;
 
-  constructor(private el: HTMLElement, private onHit: (hit: { name: string; code: string | null } | null) => void) {
+  constructor(private el: HTMLElement, private on: Events) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.localClippingEnabled = true;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     el.appendChild(this.renderer.domElement);
+    this.box2d = document.createElement("div");
+    this.box2d.className = "cv-zbox";
+    this.box2d.hidden = true;
+    el.appendChild(this.box2d);
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     pmrem.dispose();
@@ -251,10 +397,16 @@ class Engine {
     this.controls.screenSpacePanning = true;
     this.controls.addEventListener("change", () => this.render());
     const c = this.renderer.domElement;
-    c.addEventListener("pointerdown", (e) => (this.down = { x: e.clientX, y: e.clientY }));
-    c.addEventListener("pointerup", (e) => {
-      if (this.down && Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y) < 5 && e.button === 0) this.pick(e);
-      this.down = null;
+    c.addEventListener("pointerdown", (e) => this.pointerDown(e));
+    c.addEventListener("pointermove", (e) => this.pointerMove(e));
+    c.addEventListener("pointerup", (e) => this.pointerUp(e));
+    c.addEventListener("pointerleave", () => this.setHover(null, null));
+    c.addEventListener("dblclick", (e) => {
+      const hit = this.hitPart(e);
+      if (hit?.code) {
+        this.on.hit(hit);
+        this.zoomTo(hit.code);
+      }
     });
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(el);
@@ -310,14 +462,23 @@ class Engine {
       const local = dir.clone().applyMatrix4(new THREE.Matrix4().extractRotation(inv)).divideScalar(obj.parent!.getWorldScale(new THREE.Vector3()).x || 1);
       return { obj, home: obj.position.clone(), dir: local };
     });
+    this.pieceSet = new Set(this.pieces.map((p) => p.obj));
   }
 
-  idsFor(code: string | null): string[] {
+  /** The outermost nodes carrying this code (a part used twice has two). */
+  nodesFor(code: string | null): THREE.Object3D[] {
     if (!code || !this.root) return [];
+    const out: THREE.Object3D[] = [];
+    const walk = (o: THREE.Object3D) => {
+      if (this.codes.get(o.uuid) === code) out.push(o);
+      else o.children.forEach(walk);
+    };
+    walk(this.root);
+    return out;
+  }
+  idsFor(code: string | null): string[] {
     const out: string[] = [];
-    this.root.traverse((o) => {
-      if (this.codes.get(o.uuid) === code) o.traverse((x) => (x as THREE.Mesh).isMesh && out.push(x.uuid));
-    });
+    for (const n of this.nodesFor(code)) n.traverse((x) => (x as THREE.Mesh).isMesh && out.push(x.uuid));
     return out;
   }
   leafIdsUnder(id: string): string[] {
@@ -331,6 +492,7 @@ class Engine {
   }
 
   setSelected(code: string | null) {
+    this.selectedCode = code;
     this.selectedIds = new Set(this.idsFor(code));
     this.paint();
   }
@@ -347,16 +509,38 @@ class Engine {
     const any = this.selectedIds.size > 0;
     for (const m of this.meshes) {
       if (this.selectedIds.has(m.uuid)) m.material = this.hl;
+      else if (this.hoverMesh === m) m.material = this.hov;
       else if (this.xray) m.material = any ? this.ghost : this.glass;
       else m.material = this.base.get(m)!;
     }
     this.render();
   }
-  setExplode(f: number) {
-    const k = f * 1.2;
+
+  // ---- positions: explode, and parts moved by hand ----
+  place() {
+    const k = this.explodeK * 1.2;
     for (const p of this.pieces) p.obj.position.copy(p.home).addScaledVector(p.dir, k);
+    for (const [obj, o] of this.offsets) {
+      if (!this.pieceSet.has(obj)) obj.position.copy(o.orig);
+      obj.position.add(o.off);
+    }
     this.render();
   }
+  setExplode(f: number) {
+    this.explodeK = f;
+    this.place();
+  }
+  restore(code: string) {
+    for (const n of this.nodesFor(code)) this.offsets.delete(n);
+    this.on.moved(this.offsets.size);
+    this.place();
+  }
+  restoreAll() {
+    this.offsets.clear();
+    this.on.moved(0);
+    this.place();
+  }
+
   setSection(axis: "x" | "y" | "z" | null, at: number) {
     if (!axis) {
       this.renderer.clippingPlanes = [];
@@ -370,50 +554,203 @@ class Engine {
     this.render();
   }
 
-  view(v: View) {
-    const [x, y, z] = VIEWS[v];
-    const dir = new THREE.Vector3(x, y, z).normalize();
-    const dist = this.sphere.radius / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2)) * 1.2;
-    this.camera.position.copy(this.sphere.center).addScaledVector(dir, dist);
-    this.camera.near = dist / 100;
-    this.camera.far = dist * 100;
+  // ---- camera ----
+  distFor(radius: number) {
+    return radius / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2)) * 1.2;
+  }
+  aim(center: THREE.Vector3, dir: THREE.Vector3, dist: number) {
+    this.camera.position.copy(center).addScaledVector(dir, dist);
+    this.camera.near = Math.max(dist / 1000, this.sphere.radius / 10000);
+    this.camera.far = dist * 100 + this.sphere.radius * 10;
     this.camera.updateProjectionMatrix();
-    this.controls.target.copy(this.sphere.center);
+    this.controls.target.copy(center);
     this.controls.update();
     this.render();
   }
+  view(v: View) {
+    const [x, y, z] = VIEWS[v];
+    this.aim(this.sphere.center, new THREE.Vector3(x, y, z).normalize(), this.distFor(this.sphere.radius));
+  }
+  dir() {
+    return this.camera.position.clone().sub(this.controls.target).normalize();
+  }
+  fitBox(b: THREE.Box3) {
+    if (b.isEmpty()) return;
+    const s = b.getBoundingSphere(new THREE.Sphere());
+    this.aim(s.center, this.dir(), this.distFor(Math.max(s.radius, this.sphere.radius / 200)));
+  }
   fit() {
-    const dir = this.camera.position.clone().sub(this.controls.target).normalize();
     // Fit to what's showing, not to hidden parts.
     const vis = new THREE.Box3();
     for (const m of this.meshes) if (m.visible) vis.expandByObject(m);
-    const s = vis.isEmpty() ? this.sphere : vis.getBoundingSphere(new THREE.Sphere());
-    const dist = s.radius / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2)) * 1.2;
-    this.camera.position.copy(s.center).addScaledVector(dir, dist);
-    this.controls.target.copy(s.center);
-    this.controls.update();
-    this.render();
+    this.fitBox(vis.isEmpty() ? this.box : vis);
+  }
+  zoomTo(code: string) {
+    const b = new THREE.Box3();
+    for (const n of this.nodesFor(code)) b.expandByObject(n);
+    this.fitBox(b);
+  }
+  zoom(f: number) {
+    const t = this.controls.target;
+    const d = this.camera.position.distanceTo(t) * f;
+    this.aim(t.clone(), this.dir(), d);
+  }
+  currentView(): { pos: [number, number, number]; target: [number, number, number] } {
+    return { pos: this.camera.position.toArray() as [number, number, number], target: this.controls.target.toArray() as [number, number, number] };
+  }
+  goTo(v: { pos: [number, number, number]; target: [number, number, number] }) {
+    const t = new THREE.Vector3(...v.target);
+    const p = new THREE.Vector3(...v.pos);
+    this.aim(t, p.clone().sub(t).normalize(), p.distanceTo(t));
+  }
+  /** Zoom to a rectangle drawn on screen (pixels inside the canvas). */
+  zoomWindow(x0: number, y0: number, x1: number, y1: number) {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const bw = Math.abs(x1 - x0), bh = Math.abs(y1 - y0);
+    if (bw < 6 || bh < 6) return;
+    const cx = ((x0 + x1) / 2 / r.width) * 2 - 1;
+    const cy = -((y0 + y1) / 2 / r.height) * 2 + 1;
+    // The point under the box's middle, on the plane through the current target facing the camera.
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(cx, cy), this.camera);
+    const facing = new THREE.Plane().setFromNormalAndCoplanarPoint(this.dir(), this.controls.target);
+    const centre = ray.ray.intersectPlane(facing, new THREE.Vector3()) ?? this.controls.target.clone();
+    const d = this.camera.position.distanceTo(this.controls.target) * Math.max(bw / r.width, bh / r.height);
+    this.aim(centre, this.dir(), d);
   }
 
-  pick(e: PointerEvent) {
+  snapshot(): string | null {
+    // Draw now and read the pixels in the same task, before the browser clears the canvas.
+    this.renderer.render(this.scene, this.camera);
+    try {
+      return this.renderer.domElement.toDataURL("image/png");
+    } catch {
+      return null;
+    }
+  }
+
+  // ---- pointer ----
+  ndc(e: { clientX: number; clientY: number }) {
     const r = this.renderer.domElement.getBoundingClientRect();
-    const p = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    return new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  }
+  raycast(e: { clientX: number; clientY: number }) {
     const ray = new THREE.Raycaster();
-    ray.setFromCamera(p, this.camera);
+    ray.setFromCamera(this.ndc(e), this.camera);
     const clip = this.renderer.clippingPlanes[0];
-    const hit = ray.intersectObjects(this.meshes.filter((m) => m.visible), false)
-      .find((h) => !clip || clip.distanceToPoint(h.point) >= 0);
-    if (!hit) return this.onHit(null);
-    // Walk up from the mesh: the first part that's on this sheet's parts list wins (a clutch disc
-    // selects the clutch on the capping head's list); otherwise the deepest part with a code.
+    return { ray, hit: ray.intersectObjects(this.meshes.filter((m) => m.visible), false).find((h) => !clip || clip.distanceToPoint(h.point) >= 0) };
+  }
+  /** The part under the pointer: the first part on this sheet's list going up from the mesh, else the deepest coded part. */
+  hitPart(e: { clientX: number; clientY: number }): { name: string; code: string | null; mesh: THREE.Mesh; point: THREE.Vector3 } | null {
+    const { hit } = this.raycast(e);
+    if (!hit) return null;
     let deepest: THREE.Object3D | null = null;
     for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) {
       const code = this.codes.get(o.uuid);
       if (!code) continue;
-      if (this.known.has(code)) return this.onHit({ name: o.name, code });
+      if (this.known.has(code)) return { name: o.name, code, mesh: hit.object as THREE.Mesh, point: hit.point };
       deepest ??= o;
     }
-    this.onHit(deepest ? { name: deepest.name, code: this.codes.get(deepest.uuid)! } : { name: hit.object.name || "–", code: null });
+    return deepest
+      ? { name: deepest.name, code: this.codes.get(deepest.uuid)!, mesh: hit.object as THREE.Mesh, point: hit.point }
+      : { name: hit.object.name || "–", code: null, mesh: hit.object as THREE.Mesh, point: hit.point };
+  }
+
+  pointerDown(e: PointerEvent) {
+    this.down = { x: e.clientX, y: e.clientY };
+    this.setHover(null, null);
+    if (e.button !== 0) return;
+    if (this.mode === "window") {
+      this.controls.enabled = false;
+      this.renderer.domElement.setPointerCapture(e.pointerId);
+      return;
+    }
+    if (this.mode === "move" && this.selectedCode) {
+      const hit = this.hitPart(e);
+      if (hit?.code === this.selectedCode) {
+        this.controls.enabled = false;
+        this.renderer.domElement.setPointerCapture(e.pointerId);
+        this.drag = {
+          plane: new THREE.Plane().setFromNormalAndCoplanarPoint(this.dir(), hit.point),
+          start: hit.point.clone(),
+          objs: this.nodesFor(this.selectedCode).map((obj) => ({ obj, startLocal: obj.position.clone(), startWorld: obj.getWorldPosition(new THREE.Vector3()) })),
+        };
+      }
+    }
+  }
+  pointerMove(e: PointerEvent) {
+    if (this.mode === "window" && this.down) {
+      const r = this.renderer.domElement.getBoundingClientRect();
+      const x0 = this.down.x - r.left, y0 = this.down.y - r.top, x1 = e.clientX - r.left, y1 = e.clientY - r.top;
+      Object.assign(this.box2d.style, { left: `${Math.min(x0, x1)}px`, top: `${Math.min(y0, y1)}px`, width: `${Math.abs(x1 - x0)}px`, height: `${Math.abs(y1 - y0)}px` });
+      this.box2d.hidden = false;
+      return;
+    }
+    if (this.drag) {
+      const { ray } = this.raycast(e);
+      const p = ray.ray.intersectPlane(this.drag.plane, new THREE.Vector3());
+      if (!p) return;
+      const delta = p.sub(this.drag.start);
+      for (const d of this.drag.objs) {
+        const parent = d.obj.parent!;
+        const a = parent.worldToLocal(d.startWorld.clone());
+        const b = parent.worldToLocal(d.startWorld.clone().add(delta));
+        // Remember where the CAD put it the first time it's moved, so Restore can put it back.
+        if (!this.offsets.has(d.obj)) this.offsets.set(d.obj, { orig: d.startLocal.clone(), off: new THREE.Vector3() });
+        d.obj.position.copy(d.startLocal).add(b.sub(a));
+      }
+      this.render();
+      return;
+    }
+    if (e.buttons || e.pointerType !== "mouse") return;
+    // Hover label, at most once a frame.
+    if (this.hoverFrame) return;
+    const pt = { clientX: e.clientX, clientY: e.clientY };
+    this.hoverFrame = requestAnimationFrame(() => {
+      this.hoverFrame = 0;
+      const hit = this.hitPart(pt);
+      const r = this.el.getBoundingClientRect();
+      this.setHover(hit ? hit.mesh : null, hit ? { x: pt.clientX - r.left, y: pt.clientY - r.top, code: hit.code, name: hit.name } : null);
+    });
+  }
+  pointerUp(e: PointerEvent) {
+    const down = this.down;
+    this.down = null;
+    if (this.mode === "window" && down) {
+      const r = this.renderer.domElement.getBoundingClientRect();
+      this.box2d.hidden = true;
+      this.controls.enabled = true;
+      this.zoomWindow(down.x - r.left, down.y - r.top, e.clientX - r.left, e.clientY - r.top);
+      this.on.windowDone();
+      return;
+    }
+    if (this.drag) {
+      this.drag = null;
+      this.controls.enabled = true;
+      this.fixOffsets();
+      this.on.moved(this.offsets.size);
+      return;
+    }
+    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 5 && e.button === 0) {
+      const hit = this.hitPart(e);
+      this.on.hit(hit ? { name: hit.name, code: hit.code } : null);
+    }
+  }
+  /** After a drag, store each moved part's offset from where explode (or the CAD) would put it. */
+  fixOffsets() {
+    const k = this.explodeK * 1.2;
+    for (const [obj, o] of this.offsets) {
+      const piece = this.pieces.find((p) => p.obj === obj);
+      const basePos = piece ? piece.home.clone().addScaledVector(piece.dir, k) : o.orig;
+      o.off.copy(obj.position).sub(basePos);
+    }
+  }
+  setHover(mesh: THREE.Mesh | null, label: { x: number; y: number; code: string | null; name: string } | null) {
+    if (this.hoverMesh !== mesh) {
+      this.hoverMesh = mesh;
+      this.paint();
+    }
+    this.on.hover(label);
   }
 
   resize() {
@@ -433,6 +770,7 @@ class Engine {
   }
   dispose() {
     cancelAnimationFrame(this.frame);
+    cancelAnimationFrame(this.hoverFrame);
     this.ro.disconnect();
     this.controls.dispose();
     this.scene.traverse((o) => {
@@ -443,11 +781,10 @@ class Engine {
         (Array.isArray(mats) ? mats : [mats]).forEach((x) => x.dispose());
       }
     });
-    this.hl.dispose();
-    this.ghost.dispose();
-    this.glass.dispose();
+    for (const m of [this.hl, this.hov, this.ghost, this.glass]) m.dispose();
     this.scene.environment?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
+    this.box2d.remove();
   }
 }

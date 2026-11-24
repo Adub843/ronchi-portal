@@ -46,3 +46,21 @@ a.btn{text-decoration:none;display:inline-block}
   .pp-search input{width:38vw}
   .who{display:none}
 }
+
+/* Parts book: on screen a long page, on paper one drawing per page. */
+.book-pick{gap:8px;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--line)}
+.book{display:flex;flex-direction:column;gap:24px}
+.book-cover,.book-page{background:var(--solid);border:1px solid var(--line);border-radius:10px;padding:20px}
+.book-page h2{margin:0 0 12px}
+.book-page img{display:block;max-width:100%;max-height:70vh;margin:0 auto 12px}
+.book-rows{width:100%;border-collapse:collapse;font-size:12.5px}
+.book-rows th,.book-rows td{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top}
+@media print{
+  header.top,nav.side,nav.tabs,.no-print,.toast{display:none!important}
+  body,main{background:#fff!important}
+  .book{gap:0}
+  .book-cover,.book-page{border:0;border-radius:0;padding:0;break-after:page}
+  .book-page img{max-height:60vh}
+  .book-page:last-child{break-after:auto}
+  .book-rows tr{break-inside:avoid}
+}
