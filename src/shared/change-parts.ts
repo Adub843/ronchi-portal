@@ -4,7 +4,7 @@
 
 /** Every field of an order that people can type, in the order they appear on screen and in exports. */
 export const CP_FIELDS = [
-  "customer", "machine", "part", "status", "customer_po", "ra_po", "aa",
+  "customer", "machine", "part", "status", "salesperson", "quote", "customer_po", "ra_po", "aa",
   "samples_received", "samples_shipped", "fill_test", "ship_date", "folder_url", "notes",
 ] as const;
 export type CpField = (typeof CP_FIELDS)[number];
@@ -16,6 +16,8 @@ export const CP_LABELS: Record<CpField, string> = {
   machine: "Machine",
   part: "Part",
   status: "Status",
+  salesperson: "Salesperson",
+  quote: "Quote #",
   customer_po: "Customer PO",
   ra_po: "RA PO",
   aa: "AA",
@@ -27,17 +29,18 @@ export const CP_LABELS: Record<CpField, string> = {
   notes: "Notes",
 };
 
-/** Fields that hold a date (stored as YYYY-MM-DD). */
-export const CP_DATES: ReadonlySet<CpField> = new Set(["samples_received", "samples_shipped", "ship_date"]);
+// Samples and ship date are free text, as the sheets use them: "Yes", "No", "Mid Nov 2026",
+// "Delivered 08/10/2026". When the ship date reads as a real date, the tracker uses it to flag late jobs.
 
 /** Longest text each field may hold. */
 export const CP_MAX: Record<CpField, number> = {
-  customer: 200, machine: 20, part: 300, status: 60, customer_po: 80, ra_po: 80, aa: 80,
-  samples_received: 10, samples_shipped: 10, fill_test: 200, ship_date: 10, folder_url: 1000, notes: 5000,
+  customer: 200, machine: 60, part: 300, status: 60, salesperson: 80, quote: 80, customer_po: 80, ra_po: 120, aa: 80,
+  samples_received: 300, samples_shipped: 300, fill_test: 300, ship_date: 200, folder_url: 1000, notes: 5000,
 };
 
 /** The usual steps of a change-part job. People can also type their own status. */
 export const CP_STATUSES = [
+  "Open",
   "Quote",
   "Waiting on PO",
   "Waiting on samples",
@@ -48,13 +51,16 @@ export const CP_STATUSES = [
   "Shipped",
   "On hold",
   "Cancelled",
+  "Completed",
 ] as const;
 
 /** Statuses that mean the job is finished, so it drops off the Open list. */
-const DONE = /^(shipped|delivered|closed|complete[d]?|cancel+ed|invoiced|done)\b/i;
+const DONE = /^(shipped|delivered|closed|complete[d]?|cancel+ed|canceled|invoiced|done)\b/i;
 export const isOpen = (status: string | null | undefined) => !DONE.test((status ?? "").trim());
 
-/** Turn 2026-11-24, 11/24/2026, 11/24/26 or 11-24-2026 into 2026-11-24. Anything else gives null. */
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+/** Turn 2026-11-24, 11/24/2026, 11/24/26 or December 11, 2026 into 2026-11-24. Anything else gives null. */
 export function normalDate(value: string | null | undefined): string | null {
   const v = (value ?? "").trim();
   if (!v) return null;
@@ -64,6 +70,8 @@ export function normalDate(value: string | null | undefined): string | null {
   else if ((mt = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/.exec(v))) {
     [m, d, y] = [+mt[1]!, +mt[2]!, +mt[3]!];
     if (y < 100) y += 2000;
+  } else if ((mt = /^([a-z]{3})[a-z]*\.? (\d{1,2}),? (\d{4})$/i.exec(v)) && MONTHS.includes(mt[1]!.toLowerCase())) {
+    [m, d, y] = [MONTHS.indexOf(mt[1]!.toLowerCase()) + 1, +mt[2]!, +mt[3]!];
   } else return null;
   const dt = new Date(Date.UTC(y, m - 1, d));
   if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
@@ -104,32 +112,40 @@ export function parseCsv(text: string): string[][] {
 const ALIASES: Record<CpField, string[]> = {
   customer: ["customer", "customername", "client", "company", "account"],
   machine: ["machine", "machineno", "machinenumber", "serial", "serialno", "serialnumber", "machineserial", "sn", "mfgno"],
-  part: ["part", "parts", "changepart", "changeparts", "description", "partdescription", "item", "project", "format", "bottle", "container"],
-  status: ["status", "stage", "state", "projectstatus"],
-  customer_po: ["customerpo", "custpo", "customerpono", "custpono", "po", "pono", "ponumber", "customerponumber"],
-  ra_po: ["rapo", "rapono", "ronchipo", "ronchiamericapo", "internalpo"],
-  aa: ["aa", "aano", "aanumber"],
-  samples_received: ["samplesreceived", "samplereceived", "samplesrec", "samplesrcvd", "samplesin", "receivedsamples"],
+  part: ["part", "parts", "changepart", "changeparts", "description", "partdescription", "item", "project", "projectname", "format", "bottle", "container"],
+  status: ["status", "stage", "state", "projectstatus", "openorcompleted"],
+  salesperson: ["salesperson", "sales", "salesrep", "rep", "owner", "accountmanager"],
+  quote: ["quote", "quoteno", "quotenumber", "quotation"],
+  customer_po: ["customerpo", "custpo", "customerpono", "custpono", "po", "pono", "ponumber", "customerponumber", "poreceived"],
+  ra_po: ["rapo", "rapono", "ronchipo", "ronchiamericapo", "internalpo", "morpo", "morpono"],
+  aa: ["aa", "aano", "aanumber", "projectaa", "projectnoaano", "projectno"],
+  samples_received: ["samplesreceived", "samplereceived", "samplesrec", "samplesrcvd", "samplesin", "receivedsamples", "samplesrecived"],
   samples_shipped: ["samplesshipped", "sampleshipped", "samplesout", "samplessent", "samplessenttoitaly", "samplestoitaly"],
   fill_test: ["filltest", "filltrial", "test", "trial", "filltestresult", "filltestdate"],
-  ship_date: ["shipdate", "shipped", "shippingdate", "dateshipped", "eta", "deliverydate", "estshipdate"],
-  folder_url: ["folder", "folderlink", "link", "folderurl", "sharepoint", "sharepointlink", "url"],
+  ship_date: ["shipdate", "shippingdate", "dateshipped", "eta", "deliverydate", "estshipdate", "estimatedshipdate"],
+  folder_url: ["folder", "folderlink", "link", "folderurl", "sharepoint", "sharepointlink", "url", "linktofolder"],
   notes: ["notes", "note", "comments", "comment", "remarks"],
 };
 const key = (h: string) => h.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 /** Which column of the sheet feeds which field. Columns nobody recognises are listed so they can go into Notes. */
-export function mapHeader(header: string[]): { map: Partial<Record<CpField, number>>; unknown: { index: number; name: string }[] } {
+export function mapHeader(header: string[]): { map: Partial<Record<CpField, number>>; unknown: { index: number; name: string }[]; extraPart: number[] } {
   const map: Partial<Record<CpField, number>> = {};
+  let extraPart: number[] | undefined;
   const unknown: { index: number; name: string }[] = [];
   header.forEach((h, index) => {
     const k = key(h);
     if (!k) return;
+    // A second "part" column (sheets with both Project Name and Part Description) joins the first.
+    if (map.part !== undefined && ALIASES.part.includes(k)) {
+      (extraPart ??= []).push(index);
+      return;
+    }
     const field = CP_FIELDS.find((f) => map[f] === undefined && (key(CP_LABELS[f]) === k || ALIASES[f].includes(k)));
     if (field) map[field] = index;
     else unknown.push({ index, name: h.trim() });
   });
-  return { map, unknown };
+  return { map, unknown, extraPart: extraPart ?? [] };
 }
 
 export interface ImportResult {
@@ -148,7 +164,7 @@ export function readOrdersCsv(text: string): ImportResult {
   const problems: string[] = [];
   if (rows.length < 2) return { orders: [], matched: [], extra: [], skipped: 0, problems: ["The file needs a header row and at least one order."] };
   const header = rows[0]!;
-  const { map, unknown } = mapHeader(header);
+  const { map, unknown, extraPart } = mapHeader(header);
   if (map.customer === undefined && map.part === undefined) problems.push("No Customer or Part column found. Check the first row has column names.");
   const body = rows.slice(1, IMPORT_MAX_ROWS + 1);
   if (rows.length - 1 > IMPORT_MAX_ROWS) problems.push(`Only the first ${IMPORT_MAX_ROWS} rows are read.`);
@@ -161,12 +177,8 @@ export function readOrdersCsv(text: string): ImportResult {
       const i = map[f];
       if (i === undefined) continue;
       let v = (r[i] ?? "").trim();
+      if (f === "part") v = [v, ...extraPart.map((j) => (r[j] ?? "").trim())].filter(Boolean).join(": ");
       if (!v) continue;
-      if (CP_DATES.has(f)) {
-        const d = normalDate(v);
-        if (!d) { extraNotes.push(`${CP_LABELS[f]}: ${v}`); continue; }
-        v = d;
-      }
       if (f === "folder_url" && !FOLDER_LINK.test(v)) { extraNotes.push(`${CP_LABELS[f]}: ${v}`); continue; }
       if (f === "machine") v = v.toUpperCase();
       o[f] = v.slice(0, CP_MAX[f]);

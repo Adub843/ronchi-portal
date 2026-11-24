@@ -38,7 +38,7 @@ export function Home({ me, unread }: { me: Me; unread: Unread }) {
         {can(me, "orders.view") && (
           <Link to="/change-parts" className="panel tile">
             <h2>{t("Change-part orders")}</h2>
-            <span className="stat"><span className="n">{orders.data ? orders.data.orders.filter((o: any) => o.open).length : "–"}</span><span className="l">{t("Open jobs")}</span></span>
+            <span className="stat"><span className="n">{orders.data ? orders.data.orders.filter((o: any) => o.open && o.status !== "Folder only").length : "–"}</span><span className="l">{t("Open jobs")}</span></span>
             <span className="muted">{t("Every change-part job, from quote to shipped.")}</span>
           </Link>
         )}

@@ -62,7 +62,15 @@ export const DYNAMIC: string[] = [
  "That file is too big (limit 3 MB).",
  "The file needs a header row and at least one order.",
  "No Customer or Part column found. Check the first row has column names.",
- "The folder link must start with https://<company>.sharepoint.com/"
+ "The folder link must start with https://<company>.sharepoint.com/",
+ "Salesperson",
+ "Quote #",
+ "Open",
+ "Completed",
+ "Delivered",
+ "Closed",
+ "Samples sent to Italy",
+ "Folder only"
 ];
 
 export const ES: Record<string, string> = {
@@ -540,7 +548,18 @@ export const ES: Record<string, string> = {
   "That file is too big (limit 3 MB).": "Ese archivo es demasiado grande (límite 3 MB).",
   "The file needs a header row and at least one order.": "El archivo necesita una fila de encabezados y al menos un pedido.",
   "No Customer or Part column found. Check the first row has column names.": "No se encontró columna de Cliente ni de Pieza. Verifique que la primera fila tenga nombres de columnas.",
-  "The folder link must start with https://<company>.sharepoint.com/": "El enlace a la carpeta debe empezar con https://<company>.sharepoint.com/"
+  "The folder link must start with https://<company>.sharepoint.com/": "El enlace a la carpeta debe empezar con https://<company>.sharepoint.com/",
+  "e.g. Needed, Not needed, Passed 11/12": "p. ej. Necesaria, No necesaria, Aprobada 11/12",
+  "Yes, No, or a date": "Sí, No o una fecha",
+  "e.g. 12/11/2026 or Mid Nov 2026": "p. ej. 12/11/2026 o mediados de nov 2026",
+  "Salesperson": "Vendedor",
+  "Quote #": "N.º de cotización",
+  "Open": "Abierto",
+  "Completed": "Completado",
+  "Delivered": "Entregado",
+  "Samples sent to Italy": "Muestras enviadas a Italia",
+  "Folder only": "Solo carpeta",
+  "Folders not on the master sheet": "Carpetas que no están en la hoja maestra"
 };
 
 export const IT: Record<string, string> = {
@@ -1018,5 +1037,16 @@ export const IT: Record<string, string> = {
   "That file is too big (limit 3 MB).": "Il file è troppo grande (limite 3 MB).",
   "The file needs a header row and at least one order.": "Il file deve avere una riga di intestazione e almeno un ordine.",
   "No Customer or Part column found. Check the first row has column names.": "Nessuna colonna Cliente o Parte trovata. Controlla che la prima riga abbia i nomi delle colonne.",
-  "The folder link must start with https://<company>.sharepoint.com/": "Il link alla cartella deve iniziare con https://<company>.sharepoint.com/"
+  "The folder link must start with https://<company>.sharepoint.com/": "Il link alla cartella deve iniziare con https://<company>.sharepoint.com/",
+  "e.g. Needed, Not needed, Passed 11/12": "es. Necessaria, Non necessaria, Superata 11/12",
+  "Yes, No, or a date": "Sì, No o una data",
+  "e.g. 12/11/2026 or Mid Nov 2026": "es. 12/11/2026 o metà nov 2026",
+  "Salesperson": "Venditore",
+  "Quote #": "N. preventivo",
+  "Open": "Aperto",
+  "Completed": "Completato",
+  "Delivered": "Consegnato",
+  "Samples sent to Italy": "Campioni inviati in Italia",
+  "Folder only": "Solo cartella",
+  "Folders not on the master sheet": "Cartelle non presenti nel foglio principale"
 };

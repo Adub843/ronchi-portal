@@ -1,7 +1,7 @@
 // Change-part orders: the sales side's tracker (replaces the old Change Parts Console).
 // List with search, filters and export; one page per order with its history; CSV import.
 import { useMemo, useState } from "react";
-import { CP_DATES, CP_FIELDS, CP_LABELS, CP_STATUSES, type CpField } from "../../../src/shared/change-parts";
+import { CP_FIELDS, CP_LABELS, CP_STATUSES, normalDate, type CpField } from "../../../src/shared/change-parts";
 import { toCsv } from "../../../src/shared/csv";
 import { api, can, fmtTime, type Me } from "../api";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad } from "../components/ui";
@@ -18,7 +18,10 @@ function shortDate(iso: string | null): string {
   return new Date(`${iso}T12:00:00`).toLocaleDateString(loc(), { month: "short", day: "numeric", year: "numeric" });
 }
 
-const late = (o: Order) => o.open && !!o.ship_date && o.ship_date < today();
+/** The ship date as YYYY-MM-DD when it reads as a real date ("Mid Nov 2026" doesn't). */
+const shipDay = (o: Order) => normalDate(o.ship_date);
+const late = (o: Order) => { const d = shipDay(o); return o.open && !!d && d < today(); };
+const soon = (o: Order) => { const d = shipDay(o); return o.open && !!d && d >= today() && d <= inDays(30); };
 
 export function StatusPill({ status, isLate }: { status: string | null; isLate?: boolean }) {
   const s = (status ?? "").toLowerCase();
@@ -29,7 +32,10 @@ export function StatusPill({ status, isLate }: { status: string | null; isLate?:
 /** Labels shown on screen, in the chosen language. */
 const label = (f: CpField) => t(CP_LABELS[f]);
 
-type View = "open" | "late" | "soon" | "done" | "all";
+type View = "open" | "late" | "soon" | "done" | "folder" | "all";
+
+/** Jobs found only as a SharePoint project folder, not on the master sheet. Kept apart until someone checks them. */
+const folderOnly = (o: Order) => (o.status ?? "").toLowerCase() === "folder only";
 
 export function ChangeParts({ me }: { me: Me }) {
   const { data, error, reload } = useLoad<{ orders: Order[] }>(() => api("/change-parts"));
@@ -42,9 +48,10 @@ export function ChangeParts({ me }: { me: Me }) {
 
   const all = data?.orders ?? [];
   const counts = useMemo(() => ({
-    open: all.filter((o) => o.open).length,
+    open: all.filter((o) => o.open && !folderOnly(o)).length,
+    folder: all.filter(folderOnly).length,
     late: all.filter(late).length,
-    soon: all.filter((o) => o.open && !!o.ship_date && o.ship_date >= today() && o.ship_date <= inDays(30)).length,
+    soon: all.filter(soon).length,
     done: all.filter((o) => !o.open).length,
   }), [all]);
   const statuses = useMemo(() => [...new Set(all.map((o) => o.status ?? ""))].sort((a, b) => {
@@ -55,16 +62,17 @@ export function ChangeParts({ me }: { me: Me }) {
   const shown = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     const rows = all.filter((o) => {
-      if (view === "open" && !o.open) return false;
+      if (view === "open" && (!o.open || folderOnly(o))) return false;
+      if (view === "folder" && !folderOnly(o)) return false;
       if (view === "done" && o.open) return false;
       if (view === "late" && !late(o)) return false;
-      if (view === "soon" && !(o.open && o.ship_date && o.ship_date >= today() && o.ship_date <= inDays(30))) return false;
+      if (view === "soon" && !soon(o)) return false;
       if (status && (o.status ?? "") !== status) return false;
       if (!words.length) return true;
       const text = CP_FIELDS.map((f) => o[f] ?? "").join(" ").toLowerCase();
       return words.every((w) => text.includes(w));
     });
-    const by = sort === "ship" ? (o: Order) => o.ship_date || "9999" : sort === "customer" ? (o: Order) => (o.customer ?? "").toLowerCase() : null;
+    const by = sort === "ship" ? (o: Order) => shipDay(o) || "9999" : sort === "customer" ? (o: Order) => (o.customer ?? "").toLowerCase() : null;
     return by ? rows.sort((a, b) => by(a).localeCompare(by(b))) : rows;
   }, [all, view, status, q, sort]);
 
@@ -82,6 +90,7 @@ export function ChangeParts({ me }: { me: Me }) {
     { v: "soon", n: counts.soon, l: t("Ship in the next 30 days") },
     { v: "late", n: counts.late, l: t("Past ship date") },
     { v: "done", n: counts.done, l: t("Shipped or closed") },
+    ...(counts.folder ? [{ v: "folder" as View, n: counts.folder, l: t("Folders not on the master sheet") }] : []),
   ];
 
   return (
@@ -94,7 +103,7 @@ export function ChangeParts({ me }: { me: Me }) {
       {panel === "new" && <OrderForm onSaved={(id) => navigate(`/change-parts/${id}`)} onCancel={() => setPanel(null)} />}
       {panel === "import" && <ImportPanel onDone={() => { setPanel(null); reload(); }} />}
       <ErrorNote error={error} />
-      <div className="cp-tiles">
+      <div className={`cp-tiles${counts.folder ? " five" : ""}`}>
         {tiles.map((x) => (
           <button key={x.v} type="button" className={`panel cp-tile${view === x.v ? " on" : ""}${x.v === "late" && x.n ? " warn" : ""}`} aria-pressed={view === x.v} onClick={() => setView(view === x.v ? "all" : x.v)}>
             <span className="n">{data ? x.n : "–"}</span><span className="l">{x.l}</span>
@@ -120,7 +129,7 @@ export function ChangeParts({ me }: { me: Me }) {
         {!!shown.length && (
           <table className="cp-table">
             <thead>
-              <tr><th>{label("customer")}</th><th>{label("machine")}</th><th>{label("part")}</th><th>{label("status")}</th><th>{label("customer_po")}</th><th>{label("ship_date")}</th></tr>
+              <tr><th>{label("customer")}</th><th>{label("machine")}</th><th>{label("part")}</th><th>{label("status")}</th><th>{label("salesperson")}</th><th>{label("aa")}</th><th>{label("ship_date")}</th></tr>
             </thead>
             <tbody>
               {shown.map((o) => (
@@ -129,8 +138,9 @@ export function ChangeParts({ me }: { me: Me }) {
                   <td className="mono">{o.machine ?? "–"}</td>
                   <td>{o.part ?? "–"}</td>
                   <td><StatusPill status={o.status} isLate={late(o)} /></td>
-                  <td className="mono">{o.customer_po ?? "–"}</td>
-                  <td className="nowrap">{shortDate(o.ship_date)}</td>
+                  <td>{o.salesperson ?? "–"}</td>
+                  <td className="mono nowrap">{o.aa ?? "–"}</td>
+                  <td>{shipDay(o) ? shortDate(shipDay(o)) : o.ship_date ?? "–"}</td>
                 </tr>
               ))}
             </tbody>
@@ -170,7 +180,7 @@ function OrderForm({ order, onSaved, onCancel }: { order?: Order; onSaved: (id: 
   const input = (k: CpField, extra: Partial<React.InputHTMLAttributes<HTMLInputElement>> = {}) => (
     <div className="field" key={k}>
       <label htmlFor={`cp-${k}`}>{label(k)}</label>
-      <input id={`cp-${k}`} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} type={CP_DATES.has(k) ? "date" : "text"} {...extra} />
+      <input id={`cp-${k}`} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} type="text" {...extra} />
     </div>
   );
 
@@ -184,13 +194,15 @@ function OrderForm({ order, onSaved, onCancel }: { order?: Order; onSaved: (id: 
         <input id="cp-status" list="cp-statuses" value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })} placeholder={t("Pick or type")} />
         <datalist id="cp-statuses">{CP_STATUSES.map((s) => <option key={s} value={s} />)}</datalist>
       </div>
+      {input("salesperson")}
+      {input("quote")}
       {input("customer_po")}
       {input("ra_po")}
       {input("aa")}
-      {input("fill_test", { placeholder: t("e.g. Passed 11/12") })}
-      {input("samples_received")}
-      {input("samples_shipped")}
-      {input("ship_date")}
+      {input("fill_test", { placeholder: t("e.g. Needed, Not needed, Passed 11/12") })}
+      {input("samples_received", { placeholder: t("Yes, No, or a date") })}
+      {input("samples_shipped", { placeholder: t("Yes, No, or a date") })}
+      {input("ship_date", { placeholder: t("e.g. 12/11/2026 or Mid Nov 2026") })}
       {input("folder_url", { placeholder: "https://…sharepoint.com/…", type: "url" })}
       <div className="field" style={{ gridColumn: "1 / -1" }}>
         <label htmlFor="cp-notes">{label("notes")}</label>
@@ -289,7 +301,6 @@ export function ChangePartPage({ id, me }: { id: string; me: Me }) {
   const show = (k: CpField) => {
     const v = o[k];
     if (!v) return <span className="muted">–</span>;
-    if (CP_DATES.has(k)) return shortDate(v);
     if (k === "folder_url") return <a href={v} target="_blank" rel="noopener noreferrer">{t("Open the SharePoint folder")}</a>;
     if (k === "machine") return o.machine_id ? <Link to={`/machines/${o.machine_id}`} className="mono">{v}</Link> : <span className="mono">{v}</span>;
     return v;
@@ -309,7 +320,7 @@ export function ChangePartPage({ id, me }: { id: string; me: Me }) {
           <div className="panel">
             <h2>{t("Order")}</h2>
             <dl className="cp-dl">
-              {(["customer_po", "ra_po", "aa", "machine", "part", "status"] as CpField[]).map((k) => <div key={k}><dt>{label(k)}</dt><dd>{show(k)}</dd></div>)}
+              {(["salesperson", "quote", "customer_po", "ra_po", "aa", "machine", "part", "status"] as CpField[]).map((k) => <div key={k}><dt>{label(k)}</dt><dd>{show(k)}</dd></div>)}
             </dl>
           </div>
           <div className="panel">
