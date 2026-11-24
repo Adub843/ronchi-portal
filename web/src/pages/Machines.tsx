@@ -3,6 +3,7 @@ import { api, can, fmtTime, type Me } from "../api";
 import { t } from "../i18n";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad } from "../components/ui";
 import { navigate } from "../router";
+import { StatusPill } from "./ChangeParts";
 
 export function Machines({ me }: { me: Me }) {
   const [q, setQ] = useState("");
@@ -118,6 +119,22 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
             {data.boards.length ? data.boards.map((b: any) => <p key={b.id}><Link to={`/boards/${b.id}`}>{b.name}</Link></p>) : <Empty>{t("No boards for this machine yet.")}</Empty>}
             <p className="muted">{t("Manuals, service reports, history and remote sessions attach here in later steps.")}</p>
           </div>
+          {data.orders && (
+            <div className="panel" style={{ gridColumn: "1 / -1" }}>
+              <h2>{t("Change-part orders")}</h2>
+              {data.orders.length ? (
+                <div className="tbl">
+                  <table>
+                    <tbody>
+                      {data.orders.map((o: any) => (
+                        <tr key={o.id}><td><Link to={`/change-parts/${o.id}`}>{o.part || t("Order")}</Link></td><td><StatusPill status={o.status} /></td><td className="muted">{o.ship_date ?? ""}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <Empty>{t("No change-part orders for this machine.")}</Empty>}
+            </div>
+          )}
         </div>
       )}
     </>
