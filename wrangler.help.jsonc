@@ -1,0 +1,28 @@
+// Ronchi Help Center: the CUSTOMER side. Open link, no login.
+// THE WALL: this Worker has exactly one database binding, help-db, which holds only
+// published customer-safe articles. It has no binding, URL or key for portal-db.
+// test/wall.test.ts fails the build if that ever changes.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ronchi-help",
+  "main": "src/help/index.ts",
+  "compatibility_date": "2026-11-01",
+  "d1_databases": [
+    { "binding": "HELP_DB", "database_name": "help-db", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations/help" }
+  ],
+  "ratelimits": [
+    { "name": "SEARCH_LIMIT", "namespace_id": "2001", "simple": { "limit": 120, "period": 60 } }
+  ],
+  "observability": { "enabled": true },
+  "env": {
+    "production": {
+      "name": "ronchi-help",
+      "d1_databases": [
+        { "binding": "HELP_DB", "database_name": "help-db", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations/help" }
+      ],
+      "ratelimits": [
+        { "name": "SEARCH_LIMIT", "namespace_id": "2001", "simple": { "limit": 120, "period": 60 } }
+      ]
+    }
+  }
+}
