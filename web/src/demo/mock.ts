@@ -23,6 +23,7 @@ interface DB {
   posts: any[];
   audit: any[];
   prefs: any;
+  reads: Record<string, string>; // board id -> when Aaron last read it
 }
 
 function seed(): DB {
@@ -55,7 +56,7 @@ function seed(): DB {
   const p = (board: any, user: User, body: string, at: Date, parent_id: string | null = null, pinned = 0) =>
     ({ id: id(), board_id: board.id, parent_id, user_id: user.id, body, pinned, created_at: iso(at), edited_at: null, deleted_at: null });
   const t1 = p(torque, aaron, "Torque drops about 10% after two hours on line 3. Clutch looks dry.", daysAgo(4, 10, 12));
-  const s1 = p(service, paolo, "Reminder: service reports go in by Friday so Lola can close the week.", daysAgo(9, 8, 30), null, 1);
+  const s1 = p(service, paolo, "Reminder: service reports go in by Friday so I can review them before the weekly call.", daysAgo(9, 8, 30), null, 1);
   const posts = [
     s1,
     p(service, aaron, "Heading to Atlanta Thursday for the 4222TP changeover.", daysAgo(2, 7, 45)),
@@ -66,12 +67,22 @@ function seed(): DB {
     p(sales, andrew, "Quote for two change-part sets on 4212MB sent today.", daysAgo(1, 14, 0)),
     p(eng, steve, "Does anyone have the latest star wheel drawing for the 50 ml bottle?", daysAgo(1, 9, 30)),
   ];
+  // A live-looking conversation from the last hour on the service board.
+  const ago = (min: number) => new Date(Date.now() - min * 60000);
+  const q1 = p(service, steve, "On site at Example Foods. Line 2 filler is short-filling on heads 7 and 8.", ago(52));
+  posts.push(
+    q1,
+    p(service, aaron, "Check the nozzle O-rings on 7 and 8 first. We saw the same thing on the 3958MB.", ago(47), q1.id),
+    p(service, steve, "O-rings were flat. Swapped both, running a test batch now.", ago(31)),
+    p(service, steve, "Fill weights are back in spec. Leaving it running for an hour before I sign off.", ago(9)),
+    p(service, paolo, "Good work. Put the O-ring part number in the service report please.", ago(4)),
+  );
   const audit = [
     { at: iso(daysAgo(0, 7, 30)), action: "login", who: "Aaron Lewis", ip: "your phone" },
     { at: iso(daysAgo(1, 9, 0)), action: "invite.create", who: "Paolo Ferla", ip: "office" },
   ];
   void lola;
-  return { users, invites: [], machines, boards: [service, torque, sales, eng], posts, audit, prefs: null };
+  return { users, invites: [], machines, boards: [service, torque, sales, eng], posts, audit, prefs: null, reads: { [torque.id]: iso(new Date()) } };
 }
 
 // Example data lives in memory only. Nothing is written to the browser's storage,
@@ -166,7 +177,12 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     return {
       boards: db.boards
         .filter((b) => !b.archived_at)
-        .map((b) => ({ ...b, post_count: live(b.id).length, last_post_at: live(b.id).map((p) => p.created_at).sort().at(-1) ?? null }))
+        .map((b) => {
+          const posts = live(b.id).sort((x, y) => x.created_at.localeCompare(y.created_at));
+          const last = posts.at(-1);
+          const unread = posts.filter((p) => p.user_id !== u.id && p.created_at > (db.reads[b.id] ?? "")).length;
+          return { ...b, post_count: posts.length, last_post_at: last?.created_at ?? null, unread, last_message: last ? `${name(last.user_id)}: ${last.body.slice(0, 120)}` : null };
+        })
         .sort((a, b) => (b.last_post_at ?? b.created_at).localeCompare(a.last_post_at ?? a.created_at)),
     };
   }
@@ -180,6 +196,10 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   if (seg[0] === "boards") {
     const b = db.boards.find((x) => x.id === seg[1]);
     if (!b) throw new Fail(404, "Not found.");
+    if (seg[2] === "read") {
+      db.reads[b.id] = iso(new Date());
+      return { ok: true };
+    }
     if (seg[2] === "archive") {
       b.archived_at = iso(new Date());
       return { ok: true };

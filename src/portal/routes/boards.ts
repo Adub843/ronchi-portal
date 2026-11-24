@@ -1,6 +1,8 @@
 // Message boards. Anyone on staff can create one (for a team, a machine, a site or an order).
 // A board can be open to all staff, or only to some roles. Posts are plain text: the app
 // never renders them as HTML, so nothing anyone types can run as code.
+// On screen a board works like a phone chat: newest message at the bottom, unread counts,
+// replies that quote the message they answer.
 import { Hono } from "hono";
 import { randomId } from "../../shared/crypto";
 import type { AppEnv, SessionUser } from "../env";
@@ -34,10 +36,14 @@ boards.get("/", async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT b.*, (SELECT COUNT(*) FROM posts p WHERE p.board_id = b.id AND p.deleted_at IS NULL) AS post_count,
             (SELECT MAX(created_at) FROM posts p WHERE p.board_id = b.id AND p.deleted_at IS NULL) AS last_post_at,
-            m.serial AS machine_serial
+            m.serial AS machine_serial,
+            (SELECT COUNT(*) FROM posts p WHERE p.board_id = b.id AND p.deleted_at IS NULL AND p.user_id != ?1
+                AND p.created_at > COALESCE((SELECT last_read_at FROM board_reads r WHERE r.user_id = ?1 AND r.board_id = b.id), '')) AS unread,
+            (SELECT u.name || ': ' || substr(p.body, 1, 120) FROM posts p JOIN users u ON u.id = p.user_id
+              WHERE p.board_id = b.id AND p.deleted_at IS NULL ORDER BY p.created_at DESC LIMIT 1) AS last_message
        FROM boards b LEFT JOIN machines m ON m.id = b.machine_id
       WHERE b.archived_at IS NULL ORDER BY COALESCE(last_post_at, b.created_at) DESC`,
-  ).all<BoardRow & { post_count: number; last_post_at: string | null; machine_serial: string | null }>();
+  ).bind(u.id).all<BoardRow & { post_count: number; last_post_at: string | null; machine_serial: string | null; unread: number; last_message: string | null }>();
   return c.json({ boards: results.filter((b) => canSee(u, b)) });
 });
 
@@ -75,6 +81,16 @@ boards.get("/:id", async (c) => {
       WHERE p.board_id = ? AND p.deleted_at IS NULL ORDER BY p.created_at DESC LIMIT 300`,
   ).bind(board.id).all();
   return c.json({ board, posts: results, canModerate: can(u.role, "boards.moderate") || board.created_by === u.id });
+});
+
+/** Mark the board read up to now (the chat screen calls this when it shows new messages). */
+boards.post("/:id/read", async (c) => {
+  const u = requirePerm(c, "boards.use");
+  const board = await loadBoard(c.env.DB, u, c.req.param("id"));
+  await c.env.DB.prepare(
+    "INSERT INTO board_reads (user_id, board_id, last_read_at) VALUES (?,?,?) ON CONFLICT (user_id, board_id) DO UPDATE SET last_read_at = excluded.last_read_at",
+  ).bind(u.id, board.id, now()).run();
+  return c.json({ ok: true });
 });
 
 boards.post("/:id/posts", async (c) => {
