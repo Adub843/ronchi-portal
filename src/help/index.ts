@@ -4,7 +4,7 @@
 // help-db, which holds nothing but published customer-safe articles. test/wall.test.ts
 // checks both rules on every build.
 import { Hono } from "hono";
-import { sha256Hex } from "../shared/crypto";
+import { sameText, sha256Hex } from "../shared/crypto";
 import { KB_CODE, toFtsQuery } from "../shared/kb";
 import { HELP_CSP, securityHeaders, withHeaders } from "../shared/security-headers";
 import { page, articlePage, resultsHtml, type ArticleRow } from "./html";
@@ -13,7 +13,7 @@ import { LOGO_PNG_BASE64 } from "./logo";
 interface HelpEnv {
   HELP_DB: D1Database;
   SEARCH_LIMIT?: RateLimit;
-  // SHA-256 of the staff portal's publish key (a secret, set by scripts/set-publish-keys.mjs).
+  // SHA-256 of the staff portal's publish key (a secret, set by scripts/set-help-key.mjs).
   // With no secret set, the /admin publish door is switched off.
   ADMIN_KEY_HASH?: string;
 }
@@ -32,15 +32,9 @@ app.use("*", async (c, next) => {
 export { toFtsQuery };
 
 // ---------- The publish door: the staff portal's one way in ----------
-// The portal reaches it only through its HELP service binding, with the publish key. It can put an
-// article in or take one out, nothing else: there is no way to read anything back or reach the portal.
-
-function sameText(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
+// The portal calls it through its HELP service binding with the publish key. The door is also on the
+// public address, but without the key it answers "not found". With the key it can put an article in
+// or take one out, nothing else: there is no way to read anything back or reach the portal.
 
 const HELP_KINDS = new Set(["opl", "howto", "issue_fix", "training"]);
 const text = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : "");
@@ -48,7 +42,11 @@ const text = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, ma
 app.use("/admin/*", async (c, next) => {
   const want = c.env.ADMIN_KEY_HASH;
   const got = /^Bearer (.{32,200})$/.exec(c.req.header("authorization") ?? "")?.[1];
-  if (!want || !got || !sameText(await sha256Hex(got), want.toLowerCase())) return c.json({ error: "Not found." }, 404);
+  if (!want || !got || !sameText(await sha256Hex(got), want.toLowerCase())) {
+    // The help center keeps no database of its own besides articles, so refusals go to the Workers log.
+    console.warn("Publish door refused", { ip: c.req.header("cf-connecting-ip") ?? "unknown", path: c.req.path });
+    return c.json({ error: "Not found." }, 404);
+  }
   await next();
 });
 
@@ -66,6 +64,7 @@ app.put("/admin/articles/:number", async (c) => {
 });
 
 app.delete("/admin/articles/:number", async (c) => {
+  if (!KB_CODE.test(c.req.param("number"))) return c.json({ error: "That isn't an article." }, 400);
   await c.env.HELP_DB.prepare("DELETE FROM articles WHERE number = ?").bind(c.req.param("number")).run();
   return c.json({ ok: true });
 });

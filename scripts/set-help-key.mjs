@@ -1,6 +1,6 @@
 // Makes a new random publish key for the customer help center and sets it on both Workers without
 // ever printing or saving it: the help center gets only its SHA-256 hash (ADMIN_KEY_HASH), the
-// portal gets the key (HELP_ADMIN_KEY). Same as docs/REBUILD.md step 4c, but runs on Windows.
+// portal gets the key (HELP_ADMIN_KEY). docs/REBUILD.md step 4c runs it; it needs no shell quoting, so it works on Windows.
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 

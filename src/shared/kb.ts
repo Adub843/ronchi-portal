@@ -1,6 +1,8 @@
 // The knowledge base's shared rules: document types, the article layout, search words and the
 // customer-data scan. Used by the staff portal (which owns the articles) and the help center
 // (which only ever receives a published, customer-safe copy).
+import { scanForCustomerData as privacyScan, type PrivacyFinding, type PrivateTerms } from "./privacy";
+export type { PrivateTerms };
 
 /** Document types, in the order the filters show them. The code prefix matches the Training Center (RA-OPL-001...). */
 export const KB_KINDS = {
@@ -133,48 +135,53 @@ export function toFtsQuery(input: string): string {
 
 // ---------- The customer-data scan ----------
 
+
 export interface ScanHit { what: string; found: string; field: string }
 
 /** Hits a publisher may confirm are not a customer's details (a customer named "Method", Ronchi's own service line).
  *  A machine number or a password can never be waved through. */
 export const CONFIRMABLE = new Set(["Customer or site", "Email address", "Phone number"]);
 
-/** Ronchi and RA machine numbers: 3069MB, 4222TP, RA1018. The letter endings are the ones in Ronchi's machine list,
- *  so a speed or a voltage ("1500V", "2400RPM") is not mistaken for a machine. */
-const MACHINE_NUMBER = /\b(\d{4}(MB|TP|RI|RM|RB|RR|BR|LC|SI|TD|MM|LS|MZ)|RA-?\d{4}[A-Z]{0,2})\b/g;
+/** Units that follow a 4-digit number in manuals ("2400RPM", "1500V"). Privacy's generic machine-number rule
+ *  (four digits then letters) would otherwise refuse them, and a machine number can never be waved through. */
+const UNIT = /^\d{4}\s?(V|VAC|VDC|A|MA|W|KW|HZ|RPM|BPM|CPM|MM|CM|M|NM|PSI|BAR|KG|G|MS|S|L|ML|LB|LBS|IN|FT)$/i;
+
+/** True for a Ronchi or RA machine number on its own: 3069MB, 4222TP, RA1018. */
+export function isMachineNumber(text: string): boolean {
+  const s = text.trim();
+  return (/^\d{4}[A-Z]{1,3}$/i.test(s) && !UNIT.test(s)) || /^RA-?\d{4}[A-Z]{0,2}$/i.test(s);
+}
+
+const RA_NUMBER = /\bRA-?\d{4}[A-Z]{0,2}\b/gi;
 const EMAIL = /[^\s@<>()]{1,64}@[^\s@<>()]{1,190}\.[a-z]{2,24}/gi;
 const PHONE = /(\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}\b/g;
 const SECRET = /\b(password|passwd|pwd|passcode|pin code)\s*(:|=|\bis\b)\s*\S+/gi;
 
-const norm = (t: string) => t.toLowerCase().replace(/\s+/g, " ");
+const WHAT: Record<PrivacyFinding["kind"], string> = { customer: "Customer or site", site: "Customer or site", machine_number: "Machine number" };
 
 /**
- * Look for anything that must never reach a customer: a customer or site name from the machine list,
- * a machine number, an email, a phone number, or a password.
- * `names` is every customer and site name the portal knows. Returns every hit; publish is refused if any.
+ * Look for anything that must never reach a customer. Names, sites and machine numbers go through the
+ * wall's own check (src/shared/privacy.ts) with every customer, site and machine number the portal knows;
+ * this adds RA machine numbers, emails, phone numbers and written-down passwords.
+ * Returns every hit; publish is refused while any is left.
  */
-export function scanForCustomerData(fields: Record<string, string>, names: string[]): ScanHit[] {
+export function scanForCustomerData(fields: Record<string, string>, terms: PrivateTerms): ScanHit[] {
   const hits: ScanHit[] = [];
   const seen = new Set<string>();
   const add = (what: string, found: string, field: string) => {
     const key = `${found.toLowerCase()}|${field}`;
     if (!seen.has(key)) { seen.add(key); hits.push({ what, found, field }); }
   };
-  const wanted = [...new Set(names.map((n) => n.trim()).filter((n) => n.length >= 3))];
   for (const [field, text] of Object.entries(fields)) {
     if (!text) continue;
-    const low = ` ${norm(text)} `;
-    for (const m of text.matchAll(MACHINE_NUMBER)) add("Machine number", m[0], field);
+    // Machine numbers first, so one that is also a name in the list stays a machine number (never confirmable).
+    const found = privacyScan(text, terms).filter((f) => !(f.kind === "machine_number" && UNIT.test(f.match) && !terms.serials.some((s) => s.toLowerCase() === f.match.toLowerCase())));
+    for (const f of found) if (f.kind === "machine_number") add(WHAT[f.kind], f.match, field);
+    for (const m of text.matchAll(RA_NUMBER)) add("Machine number", m[0], field);
     for (const m of text.matchAll(EMAIL)) add("Email address", m[0], field);
     for (const m of text.matchAll(PHONE)) add("Phone number", m[0].trim(), field);
     for (const m of text.matchAll(SECRET)) add("Password", m[0].split(/\s/)[0]!, field);
-    // Names last, so a machine number that is also in the machine list stays a machine number (never confirmable).
-    for (const name of wanted) {
-      const n = norm(name);
-      // Whole words only, so "ALPLA" is found but "Al" inside "Alarm" is not.
-      const re = new RegExp(`[^\\p{L}\\p{N}]${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^\\p{L}\\p{N}]`, "u");
-      if (re.test(low)) add("Customer or site", name, field);
-    }
+    for (const f of found) if (f.kind !== "machine_number") add(WHAT[f.kind], f.match, field);
   }
   return hits;
 }

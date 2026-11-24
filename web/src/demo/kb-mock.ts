@@ -1,7 +1,7 @@
 // DEMO ONLY. The knowledge base in the preview: the 128 Training Center documents, a few example
 // quick notes, and Publish that runs the same customer-data scan as the real portal.
 import docs from "./kb-docs.json";
-import { cleanContent, CONFIRMABLE, contentText, FIRST_TEAM_NUMBER, guessCategory, KB_KINDS, KIND_FROM_CODE, scanForCustomerData, type KbKind } from "../../../src/shared/kb";
+import { cleanContent, CONFIRMABLE, contentText, FIRST_TEAM_NUMBER, guessCategory, isMachineNumber, KB_KINDS, KIND_FROM_CODE, scanForCustomerData, type KbKind } from "../../../src/shared/kb";
 
 export class KbFail extends Error {
   constructor(public status: number, message: string) {
@@ -63,8 +63,9 @@ export function kbRoute(method: string, seg: string[], q: URLSearchParams, body:
   const canEdit = (a: Article) => can("kb.publish") || (can("kb.write") && a.created_by === ctx.me.id);
   const find = (id: string) => { const a = live().find((x) => x.id === id); if (!a) throw new KbFail(404, "Not found."); return a; };
   const now = () => new Date().toISOString();
-  const names = () => ctx.machines.flatMap((m) => [m.customer, m.site, m.serial]).filter((x): x is string => !!x);
-  const pub = (a: Article) => ({ title: a.title, summary: a.summary, issue: a.issue, fix: a.fix, body: a.body_text });
+  const list = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))];
+  const names = () => ({ customers: list(ctx.machines.map((m) => m.customer)), sites: list(ctx.machines.map((m) => m.site)), serials: list(ctx.machines.map((m) => m.serial)) });
+  const pub = (a: Article) => ({ title: a.title, summary: a.summary, issue: a.issue, fix: a.fix, body: a.body_text, machine_type: a.machine_type ?? "", category: a.category ?? "" });
   const scan = (a: Article, ok: string[]) => {
     const okl = new Set(ok.map((w) => w.toLowerCase()));
     return scanForCustomerData(pub(a), names()).filter((h) => !(CONFIRMABLE.has(h.what) && okl.has(h.found.toLowerCase()))).map((h) => ({ ...h, canConfirm: CONFIRMABLE.has(h.what) }));
@@ -76,7 +77,7 @@ export function kbRoute(method: string, seg: string[], q: URLSearchParams, body:
     let serials: Set<string> | null = q.get("serial") ? new Set([q.get("serial")!.toUpperCase()]) : null;
     let serial: string | null = q.get("serial")?.toUpperCase() ?? null;
     let customer: { name: string; serials: string[] } | null = null;
-    if (/^\d{4}[A-Z]{1,3}$/i.test(text)) { serial = text.toUpperCase(); serials = new Set([serial]); text = ""; }
+    if (isMachineNumber(text)) { serial = text.toUpperCase(); serials = new Set([serial]); text = ""; }
     if (!serials && text.length >= 3) {
       const ms = ctx.machines.filter((m) => m.customer?.toLowerCase() === text.toLowerCase() || m.site?.toLowerCase() === text.toLowerCase());
       if (ms.length) { customer = { name: ms[0]!.customer ?? ms[0]!.site!, serials: ms.map((m) => m.serial) }; serials = new Set(customer.serials); text = ""; }

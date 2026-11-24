@@ -38,6 +38,8 @@ describe("customer help center", () => {
     const html = await (await get("/?q=3979MB")).text();
     expect(html).toContain("Sign in to Ronchi Parts");
     expect(html).toContain("https://ronchi-parts.business-console.workers.dev/");
+    // A speed is a normal search, not a machine number.
+    expect(await (await get("/?q=2400RPM")).text()).not.toContain("Looking for machine");
   });
 
   it("search input can't break the query", () => {

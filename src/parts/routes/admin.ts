@@ -5,20 +5,13 @@
 // logins, and reading quote requests. Every call needs the publish key (Authorization: Bearer ...),
 // whose SHA-256 is the ADMIN_KEY_HASH secret. With no secret set, all of /admin is switched off.
 import { Hono } from "hono";
-import { randomId, sha256Hex } from "../../shared/crypto";
+import { randomId, sameText, sha256Hex } from "../../shared/crypto";
 import { cleanPartCode, SECTIONS } from "../../shared/catalog/model";
 import type { PartsApp } from "../env";
 import { audit, body, fail, mustStr, now, str } from "../lib/http";
 import { createCustomerInvite } from "./auth";
 
 export const admin = new Hono<PartsApp>();
-
-function sameText(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
 
 admin.use("*", async (c, next) => {
   const want = c.env.ADMIN_KEY_HASH;

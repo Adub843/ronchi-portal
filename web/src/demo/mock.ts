@@ -62,6 +62,7 @@ function seed(): DB {
     u("Lola Parker", "billing", "lola@ronchiamerica.com"),
     u("Meagan Hooper", "scheduling", "meagan@ronchiamerica.com"),
     u("Patrick Morgan", "tech", "PatrickM"),
+    u("Steve Williams", "service", "steve@ronchiamerica.com"),
     u("Andrew Yang", "sales", "andrew@ronchiamerica.com"),
     u("Michele Falsini", "sales", "michele@ronchiamerica.com"),
     // The rest of the field team (Aaron, 2026-11-24), and the visiting techs from Erre Enne in Italy.

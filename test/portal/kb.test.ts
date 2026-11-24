@@ -94,6 +94,21 @@ describe("knowledge base", () => {
     expect(await helpPage(`/a/${a.data.code}`)).toContain("copy the project to a USB stick");
   });
 
+  it("checks the machine type too, and a re-import that makes a document staff only takes it off the help center", async () => {
+    connectHelpSite();
+    const admin = await person("admin");
+    const a = await admin.json("/api/kb", { body: { kind: "howto", audience: "customer", title: "Clean the cap chute", machine_type: "Henkel capper", fix: "Wipe the rails" } });
+    expect((await admin.json(`/api/kb/${a.data.id}/publish`, { body: {} })).data.hits).toEqual([{ what: "Customer or site", found: "Henkel", field: "machine_type", canConfirm: true }]);
+
+    const doc = { ...SPEC, code: "RA-HOW-040", type: "HOW", title: "Set the infeed scroll height", issue: "", fix: "Raise the scroll to the bottle shoulder", meta: {} };
+    await admin.json("/api/kb/import", { body: { documents: [doc] } });
+    const id = (await admin.json("/api/kb?q=infeed%20scroll%20height")).data.results[0].id;
+    expect((await admin.json(`/api/kb/${id}/publish`, { body: {} })).status).toBe(200);
+    expect(await helpPage("/a/RA-HOW-040")).toContain("bottle shoulder");
+    await admin.json("/api/kb/import", { body: { documents: [{ ...doc, audience: "I" }] } });
+    expect(await helpPage("/a/RA-HOW-040")).toContain("Article not found");
+  });
+
   it("a clean customer article reaches the help center without its machine number, and can be taken down", async () => {
     connectHelpSite();
     const service = await person("service");

@@ -1,5 +1,6 @@
 // The help center's pages, written as plain HTML strings.
 // Everything that came from the database goes through esc() so it shows as text, never as code.
+import { isMachineNumber } from "../shared/kb";
 
 export interface ArticleRow {
   number: string; kind: string; title: string; machine_type: string | null; category: string | null; issue: string; fix: string;
@@ -9,10 +10,10 @@ export function esc(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
 }
 
-// Customers who search by their company name or machine number are sent to their own parts account,
-// which knows the machines on their account. The help center itself never knows who owns what.
+// The help center never knows who owns what, so it can't search by company name or machine number.
+// Someone who types a machine number is pointed to their parts account, which knows their machines,
+// and the search page says the same for company names.
 export const PARTS_SITE = "https://ronchi-parts.business-console.workers.dev/";
-const MACHINE_NUMBER = /^\s*(\d{4}[A-Z]{1,3}|RA-?\d{4}[A-Z]{0,2})\s*$/i;
 
 const KIND_LABEL: Record<string, string> = { opl: "One Point Lesson", howto: "How-to", issue_fix: "Issue and fix", training: "Training" };
 
@@ -62,7 +63,7 @@ ${body}`);
 }
 
 function machineHint(q: string): string {
-  return MACHINE_NUMBER.test(q)
+  return isMachineNumber(q)
     ? `<div class="panel hint"><p><strong>Looking for machine ${esc(q.trim().toUpperCase())}?</strong> Sign in to Ronchi Parts to see the manuals, parts and documents for the machines on your account. <a href="${PARTS_SITE}">Sign in to Ronchi Parts</a></p></div>`
     : "";
 }

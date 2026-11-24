@@ -4,10 +4,9 @@
 import { Hono, type Context } from "hono";
 import { randomId } from "../../shared/crypto";
 import {
-  cleanContent, CONFIRMABLE, contentText, FIRST_TEAM_NUMBER, guessCategory, HELP_KIND, isKbKind, KB_CATEGORIES, KB_CODE, KB_KINDS,
-  KIND_FROM_CODE, scanForCustomerData, toFtsQuery, type KbContent, type KbKind,
+  cleanContent, CONFIRMABLE, contentText, FIRST_TEAM_NUMBER, guessCategory, HELP_KIND, isKbKind, isMachineNumber, KB_CATEGORIES, KB_CODE, KB_KINDS,
+  KIND_FROM_CODE, scanForCustomerData, toFtsQuery, type KbContent, type KbKind, type PrivateTerms,
 } from "../../shared/kb";
-import { MACHINE_SERIAL } from "../../shared/service-report";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
 import { helpCall } from "../lib/help-site";
@@ -24,7 +23,6 @@ interface Row {
 
 const LIST_FIELDS = "a.id, a.code, a.kind, a.title, a.summary, a.machine_type, a.category, a.serial, a.issue, a.fix, a.audience, a.published_at, a.updated_at";
 const FACETS = ["kind", "machine_type", "category"] as const;
-const SERIAL_ONLY = new RegExp(`^${MACHINE_SERIAL.source.replace(/\\b/g, "")}$`, "i");
 
 // ---------- Search ----------
 
@@ -41,17 +39,19 @@ kb.get("/", async (c) => {
   // A machine number typed in the box is a machine filter, not a word search.
   let words = q.trim();
   let bySerial = serial;
-  if (!bySerial && SERIAL_ONLY.test(words)) { bySerial = words.toUpperCase(); words = ""; }
+  if (!bySerial && isMachineNumber(words)) { bySerial = words.toUpperCase().replace("-", ""); words = ""; }
 
   // A customer's company or site name finds the notes from that customer's machines.
   let customer: { name: string; serials: string[] } | null = null;
   let serials: Set<string> | null = bySerial ? new Set([bySerial]) : null;
   if (!serials && words.length >= 3) {
     const { results: ms } = await c.env.DB.prepare(
-      "SELECT serial, customer, site FROM machines WHERE lower(trim(customer)) = lower(?1) OR lower(trim(site)) = lower(?1) ORDER BY serial LIMIT 200",
-    ).bind(words).all<{ serial: string; customer: string | null; site: string | null }>();
+      `SELECT serial, customer, site FROM machines
+        WHERE lower(trim(customer)) = lower(?1) OR lower(trim(site)) = lower(?1) OR (length(?1) >= 4 AND lower(customer) LIKE lower(?2) ESCAPE '\\')
+        ORDER BY serial LIMIT 200`,
+    ).bind(words, `${words.replace(/[%_\\]/g, (m) => "\\" + m)}%`).all<{ serial: string; customer: string | null; site: string | null }>();
     if (ms.length) {
-      const name = ms.find((m) => m.customer?.trim().toLowerCase() === words.toLowerCase())?.customer?.trim() ?? ms[0]!.site!.trim();
+      const name = (ms.find((m) => m.customer?.trim().toLowerCase() === words.toLowerCase()) ?? ms.find((m) => m.customer) ?? ms[0]!)?.customer?.trim() ?? ms[0]!.site!.trim();
       customer = { name, serials: ms.map((m) => m.serial.toUpperCase()) };
       serials = new Set(customer.serials);
       words = "";
@@ -124,7 +124,7 @@ function fields(b: Record<string, unknown>) {
   }
   if ("serial" in b) {
     const s = str(b.serial, 12)?.toUpperCase() ?? null;
-    if (s && !SERIAL_ONLY.test(s) && !/^RA\d{4}[A-Z]{0,2}$/.test(s)) fail(400, "Use a machine number like 3069MB.");
+    if (s && !isMachineNumber(s)) fail(400, "Use a machine number like 3069MB.");
     out.serial = s;
   }
   if ("audience" in b) {
@@ -184,11 +184,13 @@ kb.patch("/:id", async (c) => {
     await helpCall(c.env, a.code);
     next.published_at = null;
   }
+  // Words a publisher confirmed earlier were checked against the old text, so new text is checked afresh.
+  const textChanged = (["title", "summary", "issue", "fix", "machine_type", "category"] as const).some((k) => next[k] !== a[k]) || contentText(content) !== a.body_text;
   await c.env.DB.prepare(
     `UPDATE kb_articles SET title = ?, summary = ?, machine_type = ?, category = ?, serial = ?, issue = ?, fix = ?, content = ?, body_text = ?, audience = ?,
-       published_at = ?, updated_by = ?, updated_at = ? WHERE id = ?`,
+       published_at = ?, scan_ok = ?, updated_by = ?, updated_at = ? WHERE id = ?`,
   ).bind(next.title, next.summary, next.machine_type, next.category, next.serial, next.issue, next.fix, JSON.stringify(content), contentText(content),
-    next.audience, next.published_at, user.id, now(), a.id).run();
+    next.audience, next.published_at, textChanged ? "[]" : a.scan_ok, user.id, now(), a.id).run();
   await audit(c.env.DB, { userId: user.id, action: "kb.edit", targetType: "kb", targetId: a.code, ip: c.get("ip") });
   return c.json({ ok: true });
 });
@@ -205,16 +207,18 @@ kb.delete("/:id", async (c) => {
 
 // ---------- The one-way Publish to the customer help center ----------
 
-/** Customer and site names, and lettered machine numbers, the portal knows about. */
-async function knownNames(db: D1Database): Promise<string[]> {
+/** Every customer, site and lettered machine number in the machine list, for the wall's check. */
+async function knownTerms(db: D1Database): Promise<PrivateTerms> {
   const { results } = await db.prepare("SELECT customer, site, serial FROM machines").all<{ customer: string | null; site: string | null; serial: string }>();
-  return results.flatMap((m) => [m.customer, m.site, /[A-Z]/i.test(m.serial) ? m.serial : null]).filter((x): x is string => !!x);
+  const list = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x && x.trim().length >= 3))];
+  // A bare number (1022) would also match ordinary numbers in an article, so only lettered ones are listed.
+  return { customers: list(results.map((m) => m.customer)), sites: list(results.map((m) => m.site)), serials: list(results.map((m) => (/[A-Z]/i.test(m.serial) ? m.serial : null))) };
 }
 
 /** The scan, less anything a publisher already confirmed for this article. */
 async function scan(db: D1Database, a: Row, confirmed: string[]) {
   const ok = new Set(confirmed.map((w) => w.toLowerCase()));
-  return scanForCustomerData(publicFields(a), await knownNames(db))
+  return scanForCustomerData(publicFields(a), await knownTerms(db))
     .filter((h) => !(CONFIRMABLE.has(h.what) && ok.has(h.found.toLowerCase())))
     .map((h) => ({ ...h, canConfirm: CONFIRMABLE.has(h.what) }));
 }
@@ -227,7 +231,7 @@ kb.post("/:id/scan", async (c) => {
 
 /** Exactly what the help center receives. The machine number and who wrote it never leave the portal. */
 function publicFields(a: Row) {
-  return { title: a.title, summary: a.summary, issue: a.issue, fix: a.fix, body: a.body_text };
+  return { title: a.title, summary: a.summary, issue: a.issue, fix: a.fix, body: a.body_text, machine_type: a.machine_type ?? "", category: a.category ?? "" };
 }
 
 kb.post("/:id/publish", async (c) => {
@@ -246,7 +250,7 @@ kb.post("/:id/publish", async (c) => {
     return c.json({ error: "Take out the customer details below, then publish again.", hits }, 409);
   }
   await helpCall(c.env, a.code, {
-    kind: HELP_KIND[a.kind], title: pub.title, machine_type: a.machine_type, category: a.category,
+    kind: HELP_KIND[a.kind], title: pub.title, machine_type: pub.machine_type || null, category: pub.category || null,
     issue: pub.issue, fix: pub.fix, body: [pub.summary, pub.body].filter(Boolean).join("\n\n"),
   });
   const at = now();
@@ -273,7 +277,9 @@ kb.post("/import", async (c) => {
   let added = 0, updated = 0, skipped = 0;
   const at = now();
   const stmts: D1PreparedStatement[] = [];
-  const existing = new Set((await c.env.DB.prepare("SELECT upper(code) AS code FROM kb_articles").all<{ code: string }>()).results.map((r) => r.code));
+  const rows = (await c.env.DB.prepare("SELECT upper(code) AS code, published_at FROM kb_articles").all<{ code: string; published_at: string | null }>()).results;
+  const existing = new Set(rows.map((r) => r.code));
+  const published = new Set(rows.filter((r) => r.published_at).map((r) => r.code));
   for (const raw of docs as Record<string, any>[]) {
     const code = String(raw?.code ?? "").toUpperCase();
     const kind = KIND_FROM_CODE[String(raw?.type ?? code.split("-")[1] ?? "").toUpperCase()];
@@ -288,9 +294,14 @@ kb.post("/import", async (c) => {
     const audience = raw.audience === "C" || raw.audience === "customer" ? "customer" : "internal";
     const values = [kind, title, summary, machine, category, s(raw.issue, 8000), s(raw.fix, 8000), JSON.stringify(content), contentText(content), audience] as const;
     if (existing.has(code)) {
+      // A published document that is now staff only comes off the help center first.
+      if (audience === "internal" && published.has(code)) {
+        await helpCall(c.env, code);
+        stmts.push(c.env.DB.prepare("UPDATE kb_articles SET published_at = NULL WHERE code = ?").bind(code));
+      }
       stmts.push(c.env.DB.prepare(
         `UPDATE kb_articles SET kind = ?, title = ?, summary = ?, machine_type = ?, category = ?, issue = ?, fix = ?, content = ?, body_text = ?, audience = ?,
-           updated_by = ?, updated_at = ?, archived_at = NULL WHERE code = ?`,
+           scan_ok = '[]', updated_by = ?, updated_at = ?, archived_at = NULL WHERE code = ?`,
       ).bind(...values, user.id, at, code));
       updated++;
     } else {

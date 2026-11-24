@@ -165,7 +165,8 @@ The help center:
 - `wrangler.help.jsonc` binds only `help-db`. It has no binding, URL or key for `portal-db`.
 - `help-db` holds only published, customer-safe articles (`migrations/help`).
 - Code in `src/help` may import only from `src/help` and `src/shared`.
-- `src/shared/privacy.ts` refuses any text with a customer name, site or machine number.
+- `src/shared/privacy.ts` refuses any text with a customer name, site or machine number. The knowledge
+  base's Publish runs it (through `src/shared/kb.ts`, which also checks emails, phone numbers and passwords).
   Step 2's Publish button runs it before copying an article across.
 
 The parts site:
