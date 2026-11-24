@@ -24,7 +24,8 @@ if (!name || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
 
 const where = local ? ["--local"] : ["--remote", "--env", "production"];
 const d1 = (sql) =>
-  JSON.parse(execFileSync("npx", ["wrangler", "d1", "execute", "portal-db", ...where, "-c", "wrangler.portal.jsonc", "--json", "--command", sql], { encoding: "utf8", shell: process.platform === "win32" }));
+  // Run wrangler's own JS with node (no shell), so the SQL reaches it as one argument on Windows too.
+  JSON.parse(execFileSync(process.execPath, ["node_modules/wrangler/bin/wrangler.js", "d1", "execute", "portal-db", ...where, "-c", "wrangler.portal.jsonc", "--json", "--command", sql], { encoding: "utf8" }));
 
 const users = d1("SELECT COUNT(*) AS n FROM users")[0].results[0].n;
 if (users > 0) {

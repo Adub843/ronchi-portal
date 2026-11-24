@@ -1,7 +1,8 @@
 // THE WALL, enforced by the build. These checks fail if anyone ever connects the
 // customer help center to the business data, by config or by code.
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { posix } from "node:path";
+const { join } = posix;
 import { describe, expect, it } from "vitest";
 
 function files(dir: string): string[] {
