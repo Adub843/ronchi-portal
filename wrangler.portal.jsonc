@@ -38,7 +38,7 @@
   "env": {
     "production": {
       "name": "ronchi-portal",
-      "vars": { "ORIGIN": "https://portal.ronchiamerica.com", "RP_ID": "portal.ronchiamerica.com", "RP_NAME": "Ronchi Portal" },
+      "vars": { "ORIGIN": "https://ronchi-portal.business-console.workers.dev", "RP_ID": "ronchi-portal.business-console.workers.dev", "RP_NAME": "Ronchi Portal" },
       "d1_databases": [
         { "binding": "DB", "database_name": "portal-db", "database_id": "17153d9d-8595-4dbb-83f9-66515cbdceea", "migrations_dir": "migrations/portal" }
       ],

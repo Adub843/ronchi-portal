@@ -35,7 +35,7 @@
   "env": {
     "production": {
       "name": "ronchi-parts",
-      "vars": { "ORIGIN": "https://parts.ronchiamerica.com", "RP_ID": "parts.ronchiamerica.com", "RP_NAME": "Ronchi Parts" },
+      "vars": { "ORIGIN": "https://ronchi-parts.business-console.workers.dev", "RP_ID": "ronchi-parts.business-console.workers.dev", "RP_NAME": "Ronchi Parts" },
       "d1_databases": [
         { "binding": "PARTS_DB", "database_name": "parts-db", "database_id": "70f3ba7c-e3da-48dd-a86f-9f585f2a15d0", "migrations_dir": "migrations/parts" }
       ],
