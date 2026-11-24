@@ -16,9 +16,12 @@ const arg = (name) => {
 };
 const local = args.includes("--local");
 const name = arg("name");
-const email = arg("email")?.toLowerCase();
-if (!name || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-  console.error('Usage: npm run invite:first-admin -- --name "Full Name" --email you@company.com [--local]');
+// --username works instead of --email: the login ID only has to be unique (the portal sends no email).
+const username = arg("username");
+const email = (arg("email") ?? username)?.toLowerCase();
+const okId = username ? /^[a-z0-9._-]{3,40}$/.test(email ?? "") : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email ?? "");
+if (!name || !email || !okId) {
+  console.error('Usage: npm run invite:first-admin -- --name "Full Name" (--email you@company.com | --username YourName) [--local]');
   process.exit(1);
 }
 
@@ -48,3 +51,9 @@ const origin = local ? "http://localhost:8787" : JSON.parse(
   execFileSync("node", ["-e", "const s=require('fs').readFileSync('wrangler.portal.jsonc','utf8').replace(/\\/\\/.*$/gm,'');console.log(JSON.stringify(JSON.parse(s).env.production.vars.ORIGIN))"], { encoding: "utf8" }),
 );
 console.log(`\nFirst admin invite for ${name} (${email}). Works once, for 24 hours:\n\n  ${origin}/welcome#${token}\n`);
+// --open: also open the link in this computer's browser, so nobody has to copy it.
+if (args.includes("--open")) {
+  const url = `${origin}/welcome#${token}`;
+  if (process.platform === "win32") execFileSync("rundll32", ["url.dll,FileProtocolHandler", url]);
+  else execFileSync(process.platform === "darwin" ? "open" : "xdg-open", [url]);
+}
