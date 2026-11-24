@@ -29,6 +29,13 @@ export class Browser {
     return res;
   }
 
+  /** Send a form with files, the way the chat sends photos and documents. */
+  async form(path: string, form: FormData, headers: Record<string, string> = {}) {
+    const h: Record<string, string> = { "cf-connecting-ip": this.ip, origin: env.ORIGIN, "x-ronchi": "1", ...headers };
+    if (this.cookie) h.cookie = this.cookie;
+    return app.request(`${env.ORIGIN}${path}`, { method: "POST", headers: h, body: form }, env);
+  }
+
   async json<T = any>(path: string, init: Parameters<Browser["fetch"]>[1] = {}): Promise<{ status: number; data: T }> {
     const res = await this.fetch(path, init);
     return { status: res.status, data: (await res.json()) as T };

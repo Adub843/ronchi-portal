@@ -73,3 +73,20 @@ describe("audit log", () => {
     await expect(env.DB.prepare("UPDATE audit_log SET action = 'x'").run()).rejects.toThrow(/append-only/);
   });
 });
+
+describe("chat-style boards", () => {
+  it("counts unread messages per person and clears them when read", async () => {
+    const a = await person("tech");
+    const b = await person("service");
+    const { data } = await a.json("/api/boards", { body: { name: "Line 3 chat" } });
+    await a.json(`/api/boards/${data.id}/posts`, { body: { body: "First" } });
+    await a.json(`/api/boards/${data.id}/posts`, { body: { body: "Second" } });
+    const row = (await b.json("/api/boards")).data.boards.find((x: any) => x.id === data.id);
+    expect(row.unread).toBe(2);
+    expect(row.last_body).toBe("Second");
+    // Your own messages never count as unread.
+    expect((await a.json("/api/boards")).data.boards.find((x: any) => x.id === data.id).unread).toBe(0);
+    await b.json(`/api/boards/${data.id}/read`, { body: {} });
+    expect((await b.json("/api/boards")).data.boards.find((x: any) => x.id === data.id).unread).toBe(0);
+  });
+});

@@ -1,7 +1,7 @@
 // Applies a person's chosen theme to the page by setting CSS variables on <html>.
 import { THEMES } from "../../src/shared/themes";
 
-export interface Prefs { theme: string; mode: "auto" | "light" | "dark"; layout: string; tiles: string[] | null }
+export interface Prefs { theme: string; mode: "auto" | "light" | "dark"; layout: string; tiles: string[] | null; lang?: "en" | "es" | "it"; popups?: boolean }
 
 const VARS = ["--bg", "--panel", "--solid", "--ink", "--muted", "--line", "--accent", "--accent-soft", "--ok", "--ok-soft", "--steel", "--steel-ink"];
 

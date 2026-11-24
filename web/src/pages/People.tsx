@@ -1,6 +1,7 @@
 // Paolo's page: invite people, set roles, and cut off access.
 import { useState } from "react";
 import { api, fmtTime, type Me } from "../api";
+import { t } from "../i18n";
 import { ErrorNote, PageHead, toast, useLoad } from "../components/ui";
 
 export function People({ me }: { me: Me }) {
@@ -26,7 +27,7 @@ export function People({ me }: { me: Me }) {
   async function update(id: string, body: Record<string, unknown>) {
     try {
       await api(`/users/${encodeURIComponent(id)}`, { method: "PATCH", body });
-      toast("Saved. They've been signed out so the change applies right away.");
+      toast(t("Saved. They've been signed out so the change applies right away."));
       reload();
     } catch (x) {
       toast((x as Error).message);
@@ -35,7 +36,7 @@ export function People({ me }: { me: Me }) {
   async function signOutAll(id: string) {
     try {
       const r = await api(`/users/${encodeURIComponent(id)}/sign-out-everywhere`, { body: {} });
-      toast(`Signed out of ${r.sessions} device(s)`);
+      toast(t("Signed out of {n} device(s)", { n: r.sessions }));
       reload();
     } catch (x) {
       toast((x as Error).message);
@@ -46,49 +47,49 @@ export function People({ me }: { me: Me }) {
 
   return (
     <>
-      <PageHead title="People" sub="Invite staff, set what they can see, and cut off access." />
+      <PageHead title={t("People")} sub={t("Invite staff, set what they can see, and cut off access.")} />
       <form className="panel grid g2" onSubmit={invite}>
-        <div className="field"><label htmlFor="pn">Full name</label><input id="pn" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={100} /></div>
-        <div className="field"><label htmlFor="pe">Work email</label><input id="pe" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></div>
+        <div className="field"><label htmlFor="pn">{t("Full name")}</label><input id="pn" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={100} /></div>
+        <div className="field"><label htmlFor="pe">{t("Work email")}</label><input id="pe" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></div>
         <div className="field">
-          <label htmlFor="pr">Role</label>
+          <label htmlFor="pr">{t("Role")}</label>
           <select id="pr" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
             {Object.entries(roleNames).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </div>
         <ErrorNote error={err} />
-        <div><button className="btn primary" type="submit">Create invite link</button></div>
+        <div><button className="btn primary" type="submit">{t("Create invite link")}</button></div>
       </form>
       {link && (
         <div className="panel stack">
-          <b>Invite link (shown once, works for 3 days)</b>
+          <b>{t("Invite link (shown once, works for 3 days)")}</b>
           <code className="mono" style={{ overflowWrap: "anywhere" }}>{link}</code>
           <div className="row">
-            <button className="btn" onClick={() => navigator.clipboard.writeText(link).then(() => toast("Copied"))}>Copy</button>
-            <button className="btn" onClick={() => setLink(null)}>Done</button>
+            <button className="btn" onClick={() => navigator.clipboard.writeText(link).then(() => toast(t("Copied")))}>{t("Copy")}</button>
+            <button className="btn" onClick={() => setLink(null)}>{t("Done")}</button>
           </div>
-          <span className="muted">Send it to them directly (Teams or text). Anyone with the link can create this login, so don't post it anywhere public.</span>
+          <span className="muted">{t("Send it to them directly (Teams or text). Anyone with the link can create this login, so don't post it anywhere public.")}</span>
         </div>
       )}
       <ErrorNote error={error} />
       <div className="panel tbl">
         <table>
-          <thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Devices</th><th /></tr></thead>
+          <thead><tr><th>{t("Name")}</th><th>{t("Role")}</th><th>{t("Status")}</th><th>{t("Devices")}</th><th /></tr></thead>
           <tbody>
             {data?.users.map((u: any) => (
               <tr key={u.id}>
                 <td><b>{u.name}</b><div className="muted">{u.email}</div></td>
                 <td>
-                  <select value={u.role} onChange={(e) => update(u.id, { role: e.target.value })} disabled={u.id === me.id} aria-label={`Role for ${u.name}`}>
+                  <select value={u.role} onChange={(e) => update(u.id, { role: e.target.value })} disabled={u.id === me.id} aria-label={t("Role for {name}", { name: u.name })}>
                     {Object.entries(roleNames).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </td>
-                <td><span className={`pill ${u.status === "active" ? "p-ok" : "p-acc"}`}>{u.status}</span></td>
-                <td className="muted">{u.passkeys} passkey(s), {u.sessions} signed in</td>
+                <td><span className={`pill ${u.status === "active" ? "p-ok" : "p-acc"}`}>{u.status === "active" ? t("active") : t("disabled")}</span></td>
+                <td className="muted">{t("{p} passkey(s), {s} signed in", { p: u.passkeys, s: u.sessions })}</td>
                 <td className="row" style={{ gap: 6 }}>
-                  <button className="btn small" onClick={() => signOutAll(u.id)}>Sign out everywhere</button>
+                  <button className="btn small" onClick={() => signOutAll(u.id)}>{t("Sign out everywhere")}</button>
                   {u.id !== me.id && (
-                    <button className="btn small danger" onClick={() => update(u.id, { status: u.status === "active" ? "disabled" : "active" })}>{u.status === "active" ? "Disable" : "Re-enable"}</button>
+                    <button className="btn small danger" onClick={() => update(u.id, { status: u.status === "active" ? "disabled" : "active" })}>{u.status === "active" ? t("Disable") : t("Re-enable")}</button>
                   )}
                 </td>
               </tr>
@@ -97,20 +98,20 @@ export function People({ me }: { me: Me }) {
         </table>
         {!!data?.invites.length && (
           <>
-            <h2 style={{ marginTop: 16 }}>Invites not used yet</h2>
+            <h2 style={{ marginTop: 16 }}>{t("Invites not used yet")}</h2>
             {data.invites.map((i: any) => (
               <div key={i.id} className="row" style={{ padding: "4px 0" }}>
-                <span>{i.name} ({i.email}), expires {fmtTime(i.expires_at)}</span>
-                <button className="linkish" onClick={async () => { await api(`/users/invites/${encodeURIComponent(i.id)}`, { method: "DELETE" }); reload(); }}>Cancel</button>
+                <span>{t("{name} ({email}), expires {when}", { name: i.name, email: i.email, when: fmtTime(i.expires_at) })}</span>
+                <button className="linkish" onClick={async () => { await api(`/users/invites/${encodeURIComponent(i.id)}`, { method: "DELETE" }); reload(); }}>{t("Cancel")}</button>
               </div>
             ))}
           </>
         )}
       </div>
       <div className="panel tbl">
-        <h2>Recent activity (audit log)</h2>
+        <h2 id="audit">{t("Recent activity (audit log)")}</h2>
         <table>
-          <thead><tr><th>When</th><th>Who</th><th>What</th><th>From</th></tr></thead>
+          <thead><tr><th>{t("When")}</th><th>{t("Who")}</th><th>{t("What")}</th><th>{t("From")}</th></tr></thead>
           <tbody>
             {audit.data?.entries.slice(0, 50).map((a: any, i: number) => (
               <tr key={i}><td>{fmtTime(a.at)}</td><td>{a.who ?? "–"}</td><td className="mono">{a.action}</td><td className="mono muted">{a.ip}</td></tr>

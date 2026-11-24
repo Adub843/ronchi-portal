@@ -1,31 +1,43 @@
 import logoUrl from "./assets/ronchi-logo.png";
-// The staff app shell: top bar, the L2 menu (a bar under the header; a bottom tab bar on phones),
-// and the page for the current address.
+// The staff app shell: top bar with the account menu, the L2 menu (a bar under the header; a bottom
+// tab bar on phones), new-message alerts, and the page for the current address.
 import { useEffect, useState } from "react";
 import { api, can, type Me } from "./api";
-import { Link } from "./components/ui";
-import { goBack, usePath } from "./router";
+import { Alerts, initials, setSound, soundOn, type Unread } from "./components/Alerts";
+import { Chevron } from "./components/icons";
+import { Menu, type MenuItem } from "./components/Menu";
+import { Link, toast } from "./components/ui";
+import { isLang, LANGS, setLang, t, useLang } from "./i18n";
+import { goBack, navigate, usePath } from "./router";
 import { applyTheme, type Prefs } from "./theme";
 import { SignIn } from "./pages/SignIn";
 import { Welcome } from "./pages/Welcome";
 import { Home } from "./pages/Home";
-import { Boards, BoardPage } from "./pages/Boards";
+import { Boards, BoardPage, Chats } from "./pages/Boards";
 import { Machines, MachinePage } from "./pages/Machines";
 import { People } from "./pages/People";
 import { Settings } from "./pages/Settings";
 
-const NAV: { to: string; label: string; perm?: string }[] = [
+const NAV: { to: string; label: string; perm?: string; count?: keyof Unread; phone?: boolean }[] = [
   { to: "/", label: "Home" },
-  { to: "/boards", label: "Boards", perm: "boards.use" },
+  { to: "/chats", label: "Chats", perm: "boards.use", count: "chats" },
+  { to: "/boards", label: "Boards", perm: "boards.use", count: "boards" },
   { to: "/machines", label: "Machines", perm: "machines.view" },
   { to: "/people", label: "People", perm: "users.manage" },
-  { to: "/settings", label: "Settings" },
+  // On phones Settings lives in the account menu (top right), so the tab bar keeps room for the rest.
+  { to: "/settings", label: "Settings", phone: false },
 ];
+
+const ROLE_NAMES: Record<string, string> = { admin: "Admin", billing: "Billing", scheduling: "Scheduling", service: "Service", sales: "Sales", engineering: "Engineering", tech: "Field technician" };
+export const DEFAULT_PREFS: Prefs = { theme: "ronchi", mode: "auto", layout: "L2", tiles: null, lang: "en", popups: true };
 
 export function App() {
   const path = usePath();
+  const lang = useLang();
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [prefs, setPrefs] = useState<Prefs | null>(null);
+  const [unread, setUnread] = useState<Unread>({ boards: 0, chats: 0 });
+  const [sound, setSoundState] = useState(soundOn);
 
   const refresh = () => api<{ user: Me | null }>("/auth/me").then((r) => setMe(r.user), () => setMe(null));
   useEffect(() => void refresh(), []);
@@ -34,8 +46,28 @@ export function App() {
     api<Prefs>("/prefs").then((p) => {
       setPrefs(p);
       applyTheme(p);
+      if (isLang(p.lang)) setLang(p.lang);
     });
   }, [me]);
+
+  async function savePrefs(next: Partial<Prefs> | { reset: true }) {
+    try {
+      const p = await api<Prefs>("/prefs", { method: "PUT", body: "reset" in next ? next : { ...(prefs ?? DEFAULT_PREFS), ...next } });
+      setPrefs(p);
+      applyTheme(p);
+      if (isLang(p.lang)) setLang(p.lang);
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  }
+  async function signOut() {
+    try {
+      await api("/auth/logout", { body: {} });
+      refresh();
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  }
 
   if (path === "/welcome") return <Welcome onDone={refresh} />;
   if (me === undefined) return <div className="boot" aria-busy="true" />;
@@ -43,16 +75,33 @@ export function App() {
 
   const items = NAV.filter((n) => !n.perm || can(me, n.perm));
   const section = "/" + (path.split("/")[1] ?? "");
+  const popups = prefs?.popups !== false;
 
   let page;
-  const m = /^\/(boards|machines)\/([A-Za-z0-9_-]+)$/.exec(path);
-  if (m?.[1] === "boards") page = <BoardPage id={m[2]!} me={me} />;
+  const m = /^\/(boards|machines|chats)\/([A-Za-z0-9_-]+)$/.exec(path);
+  if (m?.[1] === "boards" || m?.[1] === "chats") page = <BoardPage key={m[2]} id={m[2]!} me={me} />;
   else if (m?.[1] === "machines") page = <MachinePage id={m[2]!} me={me} />;
+  else if (section === "/chats") page = <Chats me={me} />;
   else if (section === "/boards") page = <Boards me={me} />;
   else if (section === "/machines") page = <Machines me={me} />;
   else if (section === "/people") page = <People me={me} />;
-  else if (section === "/settings") page = <Settings me={me} prefs={prefs} onPrefs={(p) => { setPrefs(p); applyTheme(p); }} onSignOut={refresh} />;
-  else page = <Home me={me} />;
+  else if (section === "/settings") page = <Settings me={me} prefs={prefs} onPrefs={savePrefs} onSignOut={signOut} sound={sound} onSound={(on) => { setSound(on); setSoundState(on); }} />;
+  else page = <Home me={me} unread={unread} />;
+
+  const account: MenuItem[] = [
+    { heading: me.name, sub: me.email },
+    ...LANGS.map((l): MenuItem => ({ label: l.name, role: "radio", checked: lang === l.id, onSelect: () => savePrefs({ lang: l.id }) })),
+    "sep",
+    { label: t("Pop-up alerts on this computer"), role: "checkbox", checked: popups, onSelect: () => savePrefs({ popups: !popups }) },
+    { label: t("Alert sound"), role: "checkbox", checked: sound, onSelect: () => { setSound(!sound); setSoundState(!sound); } },
+    { label: t("Mark all chats and boards read"), onSelect: async () => { await api("/boards/read-all", { body: {} }).catch(() => undefined); setUnread({ boards: 0, chats: 0 }); toast(t("All marked as read")); }, hidden: !can(me, "boards.use") },
+    "sep",
+    { label: t("Settings"), onSelect: () => navigate("/settings") },
+    { label: t("People and access"), hint: t("Admin"), onSelect: () => navigate("/people"), hidden: !can(me, "users.manage") },
+    { label: t("Archived boards"), hint: t("Admin"), onSelect: () => navigate("/boards"), hidden: !can(me, "boards.moderate") || !can(me, "users.manage") },
+    "sep",
+    { label: t("Sign out"), danger: true, onSelect: signOut },
+  ];
 
   return (
     <>
@@ -65,39 +114,52 @@ export function App() {
             </span>
           </Link>
           <span className="spacer" />
-          <span className="who">
-            {me.name}
-            <small>{me.role}</small>
-          </span>
+          <Menu
+            label={t("Account menu")}
+            className="who"
+            trigger={
+              <>
+                <span className="avatar person sm" aria-hidden="true">{initials(me.name)}</span>
+                <span className="who-text">{me.name}<small>{t(ROLE_NAMES[me.role] ?? me.role)}</small></span>
+                <Chevron />
+              </>
+            }
+            items={account}
+          />
         </div>
       </header>
       {import.meta.env.MODE === "demo" && (
         <div className="note">
           <div className="wrap row">
-            <span>Preview with example data, signed in as you. Customers, sites and messages shown are examples. Changes are not saved and reset when you reload.</span>
-            <button className="linkish" onClick={() => { location.hash = "#home"; location.reload(); }}>Reset examples</button>
+            <span>{t("Preview with example data, signed in as you. People, customers and messages shown are examples. Changes are not saved and reset when you reload.")}</span>
+            <button className="linkish" onClick={() => { location.hash = "#home"; location.reload(); }}>{t("Reset examples")}</button>
           </div>
         </div>
       )}
-      <div className="wrap">
+      <div className="wrap" key={lang}>
         <div className="shell">
-          <nav className="side" aria-label="Main">
-            {items.map((n) => (
-              <Link key={n.to} to={n.to} current={n.to === "/" ? path === "/" : section === n.to}>
-                {n.label}
-              </Link>
-            ))}
+          <nav className="side" aria-label={t("Main")}>
+            {items.map((n) => {
+              const count = n.count ? unread[n.count] : 0;
+              return (
+                <Link key={n.to} to={n.to} current={n.to === "/" ? path === "/" : section === n.to} className={n.phone === false ? "desk-only" : undefined}>
+                  {t(n.label)}
+                  {count > 0 && <span className="navcount" aria-label={t("{n} unread", { n: count })}>{count > 99 ? "99+" : count}</span>}
+                </Link>
+              );
+            })}
           </nav>
           <main>
             {path !== "/" && (
               <button type="button" className="back" onClick={goBack}>
-                <span aria-hidden="true">←</span> Back
+                <span aria-hidden="true">←</span> {t("Back")}
               </button>
             )}
             {page}
           </main>
         </div>
       </div>
+      {can(me, "boards.use") && <Alerts me={me} path={path} popups={popups} onUnread={setUnread} />}
     </>
   );
 }
