@@ -21,7 +21,19 @@ export default defineConfig({
         plugins: [
           cloudflareTest(async () => ({
             wrangler: { configPath: "./wrangler.portal.jsonc" },
-            miniflare: { bindings: { TEST_MIGRATIONS: await readD1Migrations("migrations/portal") } },
+            miniflare: {
+              bindings: {
+                TEST_MIGRATIONS: await readD1Migrations("migrations/portal"),
+                TEST_PARTS_MIGRATIONS: await readD1Migrations("migrations/parts"),
+                TEST_ADMIN_KEY,
+                TEST_ADMIN_KEY_HASH: createHash("sha256").update(TEST_ADMIN_KEY).digest("hex"),
+              },
+              // The real parts site isn't running in portal tests. test/portal/parts-site.ts swaps in
+              // the parts site's code with its own test database, so publish runs end to end.
+              serviceBindings: { PARTS: () => Response.json({ error: "Parts site not running in tests." }, { status: 503 }) },
+              d1Databases: { DB: "portal-db-test", TEST_PARTS_DB: "parts-db-test" },
+              r2Buckets: { FILES: "portal-files-test", TEST_PARTS_FILES: "parts-files-test" },
+            },
           })),
         ],
         test: { name: "portal", include: ["test/portal/**/*.test.ts"], setupFiles: ["test/portal/setup.ts"] },

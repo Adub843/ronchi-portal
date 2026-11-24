@@ -4,7 +4,7 @@ import type { AppEnv, SessionUser } from "../env";
 import { can, type Permission } from "./roles";
 
 /** Stop with a plain error the app can show. */
-export function fail(status: 400 | 401 | 403 | 404 | 409 | 410 | 429, message: string): never {
+export function fail(status: 400 | 401 | 403 | 404 | 409 | 410 | 413 | 429 | 502 | 503, message: string): never {
   throw new HTTPException(status, { res: Response.json({ error: message }, { status }) });
 }
 

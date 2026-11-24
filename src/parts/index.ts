@@ -13,7 +13,7 @@
 //   4. /admin is the staff portal's publish door, locked by a key (routes/admin.ts)
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { PORTAL_CSP, securityHeaders, withHeaders } from "../shared/security-headers";
+import { PARTS_CSP, securityHeaders, withHeaders } from "../shared/security-headers";
 import type { PartsApp } from "./env";
 import { fail } from "./lib/http";
 import { loadSession } from "./lib/session";
@@ -22,7 +22,7 @@ import { auth } from "./routes/auth";
 import { catalog } from "./routes/catalog";
 import { shop } from "./routes/shop";
 
-const HEADERS = securityHeaders({ csp: PORTAL_CSP });
+const HEADERS = securityHeaders({ csp: PARTS_CSP });
 const SAFE = new Set(["GET", "HEAD", "OPTIONS"]);
 
 export const app = new Hono<PartsApp>();

@@ -12,6 +12,11 @@ export interface Env {
   ORIGIN: string;          // for example https://portal.ronchiamerica.com
   RP_ID: string;           // passkey domain, for example portal.ronchiamerica.com
   RP_NAME: string;
+  // The customer parts site (Worker ronchi-parts), reached only through this service binding.
+  // The portal publishes into it; the parts site has no way to call back. PARTS_ADMIN_KEY is a
+  // secret (`wrangler secret put PARTS_ADMIN_KEY`); its SHA-256 is the parts site's ADMIN_KEY_HASH.
+  PARTS?: Fetcher;
+  PARTS_ADMIN_KEY?: string;
 }
 
 export interface SessionUser {

@@ -13,6 +13,8 @@ import { fail } from "./lib/http";
 import { loadSession } from "./lib/session";
 import { auth } from "./routes/auth";
 import { boards } from "./routes/boards";
+import { catalog } from "./routes/catalog";
+import { customers, quotes } from "./routes/customers";
 import { files } from "./routes/files";
 import { machines } from "./routes/machines";
 import { prefs } from "./routes/prefs";
@@ -27,8 +29,9 @@ app.use("*", async (c, next) => {
   c.set("ip", c.req.header("cf-connecting-ip") ?? "unknown");
   c.set("user", null);
   await next();
-  // A file from a chat keeps its own, stricter Content-Security-Policy (see routes/files.ts).
-  const own = c.req.path.startsWith("/api/files/") ? c.res.headers.get("Content-Security-Policy") : null;
+  // A file from a chat or a catalog drawing keeps its own, stricter Content-Security-Policy.
+  const fileRoute = c.req.path.startsWith("/api/files/") || /^\/api\/catalog\/sheets\/[^/]+\/(drawing|model)$/.test(c.req.path);
+  const own = fileRoute ? c.res.headers.get("Content-Security-Policy") : null;
   c.res = withHeaders(c.res, HEADERS);
   if (own) c.res.headers.set("Content-Security-Policy", own);
 });
@@ -55,6 +58,9 @@ app.route("/api/machines", machines);
 app.route("/api/boards", boards);
 app.route("/api/prefs", prefs);
 app.route("/api/files", files);
+app.route("/api/catalog", catalog);
+app.route("/api/customers", customers);
+app.route("/api/quotes", quotes);
 
 app.all("/api/*", () => fail(404, "Not found."));
 

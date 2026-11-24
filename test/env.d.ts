@@ -10,6 +10,10 @@ declare global {
       PARTS_FILES: R2Bucket;
       ADMIN_KEY_HASH?: string;
       TEST_ADMIN_KEY: string;
+      TEST_ADMIN_KEY_HASH: string;
+      TEST_PARTS_DB: D1Database;
+      TEST_PARTS_FILES: R2Bucket;
+      TEST_PARTS_MIGRATIONS: D1Migration[];
     }
   }
 }
