@@ -6,3 +6,4 @@ web/dist/
 coverage/
 .DS_Store
 web/dist-demo/
+web-parts/dist/

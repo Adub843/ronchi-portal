@@ -57,3 +57,12 @@ export function fmtTime(iso: string): string {
 export function fmtDate(iso: string): string {
   return new Date(`${iso}T12:00:00`).toLocaleDateString(loc(), { weekday: "short", month: "short", day: "numeric" });
 }
+
+/** Upload one file as the whole request body (catalog drawings and 3D models). Same protections as api(). */
+export async function apiPut<T = any>(path: string, file: Blob, type: string): Promise<T> {
+  if (!path.startsWith("/") || path.startsWith("//") || /(^|\/)\.\.(\/|$)|[\\#\s]/.test(path)) throw new ApiError(400, "Bad request.");
+  const res = await fetch(`/api${path}`, { method: "PUT", credentials: "same-origin", headers: { "Content-Type": type, "X-Ronchi": "1" }, body: file });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, (data as { error?: string }).error ?? "Something went wrong.");
+  return data as T;
+}

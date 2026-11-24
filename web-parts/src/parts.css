@@ -1,0 +1,48 @@
+/* Customer parts app, on top of the Ronchi theme (web/src/styles/base.css). Ronchi theme only. */
+body{margin:0}
+a{color:var(--info)}
+.boot{min-height:100vh}
+.brand{color:var(--ink);text-decoration:none}
+.brand span{display:flex;flex-direction:column}
+.who{font:600 13px var(--body);color:var(--ink);text-decoration:none;padding:6px 10px;border:1px solid var(--line);border-radius:20px}
+.pp-search input{padding:7px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--solid);color:var(--ink);width:min(260px,40vw)}
+nav.side a{padding:7px 14px;border-radius:6px;font:600 14px var(--body);color:var(--muted);white-space:nowrap;text-decoration:none}
+nav.side a:hover{color:var(--ink)}
+nav.side a[aria-current="page"]{background:var(--solid);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.14)}
+nav.side a[aria-current="page"]::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:7px;vertical-align:middle;transform:translateY(-1px)}
+.pagehead{align-items:flex-end;flex-wrap:wrap}
+.err{background:var(--accent-soft);color:var(--accent);padding:8px 12px;border-radius:6px;margin:0;font-weight:500}
+.empty{color:var(--muted);margin:6px 0}
+.toast[hidden]{display:none}
+.stack{display:flex;flex-direction:column;gap:12px}
+.field textarea{min-height:84px;resize:vertical}
+.btn:disabled{opacity:.55;cursor:default}
+.btn.small{padding:4px 10px;font-size:12.5px}
+.btn.danger{color:var(--accent);border-color:var(--accent)}
+.btn[aria-pressed="true"]{border-color:var(--ink)}
+a.btn{text-decoration:none;display:inline-block}
+.linkish{background:none;border:0;padding:0;color:var(--info);font:inherit;cursor:pointer;text-decoration:underline}
+.linkish[aria-checked="true"]{color:var(--ink);font-weight:700;text-decoration:none}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono)}
+.tiles{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.tile{display:flex;flex-direction:column;gap:4px;text-decoration:none;color:var(--ink)}
+.tile:hover{border-color:var(--muted)}
+.tile h2{margin:0}
+.center{min-height:100vh;display:grid;place-items:center;padding:16px;position:relative;z-index:1}
+.signin{max-width:420px;width:100%;display:flex;flex-direction:column;gap:14px;text-align:left}
+.signin img{height:30px;width:auto;align-self:flex-start}
+.crumbs{font-size:13px;color:var(--muted);margin:0 0 4px}
+.crumbs a{font-weight:600}
+.pp-qty{width:80px}
+.tbl input,.tbl select{font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--solid);color:var(--ink)}
+@media (max-width:640px){
+  .shell{padding-bottom:calc(76px + env(safe-area-inset-bottom,0px))}
+  nav.side{position:fixed;left:0;right:0;bottom:0;z-index:6;border-radius:0;border-width:1px 0 0;padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));background:var(--solid);justify-content:flex-start;overflow-x:auto}
+  nav.side a{padding:9px 10px;font-size:13px}
+  .top .wrap{flex-wrap:nowrap;gap:10px}
+  .brand img{height:22px}
+  .brand small{display:none}
+  .pp-search input{width:38vw}
+  .who{display:none}
+}

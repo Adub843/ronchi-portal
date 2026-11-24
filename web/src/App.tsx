@@ -17,6 +17,8 @@ import { Boards, BoardPage, Chats } from "./pages/Boards";
 import { ChangePartPage, ChangeParts } from "./pages/ChangeParts";
 import { Machines, MachinePage } from "./pages/Machines";
 import { People } from "./pages/People";
+import { Catalog } from "./pages/Catalog";
+import { Customers, Quotes } from "./pages/Customers";
 import { Settings } from "./pages/Settings";
 
 const NAV: { to: string; label: string; perm?: string; count?: keyof Unread; phone?: boolean }[] = [
@@ -24,6 +26,8 @@ const NAV: { to: string; label: string; perm?: string; count?: keyof Unread; pho
   { to: "/chats", label: "Chats", perm: "boards.use", count: "chats" },
   { to: "/boards", label: "Boards", perm: "boards.use", count: "boards" },
   { to: "/machines", label: "Machines", perm: "machines.view" },
+  { to: "/catalog", label: "Parts catalog", perm: "catalog.view" },
+  { to: "/customers", label: "Customers", perm: "customers.manage" },
   { to: "/change-parts", label: "Change parts", perm: "orders.view" },
   { to: "/people", label: "People", perm: "users.manage" },
   // On phones Settings lives in the account menu (top right), so the tab bar keeps room for the rest.
@@ -83,6 +87,9 @@ export function App() {
   const m = /^\/(boards|machines|chats|change-parts)\/([A-Za-z0-9_-]+)$/.exec(path);
   if (m?.[1] === "boards" || m?.[1] === "chats") page = <BoardPage key={m[2]} id={m[2]!} me={me} />;
   else if (m?.[1] === "machines") page = <MachinePage id={m[2]!} me={me} />;
+  else if (section === "/catalog") page = <Catalog me={me} path={path} />;
+  else if (section === "/customers") page = <Customers me={me} />;
+  else if (section === "/quotes") page = <Quotes key={path} id={/^\/quotes\/([A-Za-z0-9_-]+)$/.exec(path)?.[1]} />;
   else if (m?.[1] === "change-parts") page = <ChangePartPage key={m[2]} id={m[2]!} me={me} />;
   else if (section === "/chats") page = <Chats me={me} />;
   else if (section === "/boards") page = <Boards me={me} />;

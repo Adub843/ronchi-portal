@@ -227,6 +227,15 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     log("user.update");
     return { ok: true };
   }
+  // --- parts catalog (the preview has no manuals or customer parts site, so it starts empty) ---
+  if (path === "/catalog/machines") return { machines: db.machines.map((m) => ({ id: m.id, serial: m.serial, model: m.model, sheets: 0, models: 0, catalog_published_at: null })), partsSite: false };
+  if (path === "/catalog/search") return { results: [] };
+  if (seg[0] === "catalog" && seg[1] === "machines" && seg[2] && method === "GET") {
+    const m = db.machines.find((x) => x.id === seg[2]);
+    if (!m) throw new Fail(404, "Not found.");
+    return { machine: { id: m.id, serial: m.serial, model: m.model, catalog_published_at: null }, sheets: [], imports: [] };
+  }
+  if (seg[0] === "catalog" || seg[0] === "customers" || seg[0] === "quotes") throw new Fail(400, "The parts catalog needs the real portal; it isn't part of this preview.");
   // --- machines ---
   if (path === "/machines" && method === "GET") {
     const s = (q.get("q") ?? "").toLowerCase();
