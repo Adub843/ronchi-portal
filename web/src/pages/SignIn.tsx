@@ -1,3 +1,4 @@
+import logoUrl from "../assets/ronchi-logo.png";
 import { useState } from "react";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { api } from "../api";
@@ -26,7 +27,7 @@ export function SignIn({ onDone }: { onDone: () => void }) {
   return (
     <div className="center">
       <div className="panel signin">
-        <img src="/ronchi-logo.png" alt="Ronchi" />
+        <img src={logoUrl} alt="Ronchi" />
         <div>
           <h1>Ronchi Portal</h1>
           <p className="sub">Staff sign-in. Use Face ID, your fingerprint, Windows Hello or your device PIN.</p>

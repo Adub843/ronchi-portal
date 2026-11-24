@@ -1,6 +1,6 @@
 // Who can do what. Deny by default: anything not listed here is refused.
 // To change what a role can do, edit this one table (and its test in test/roles.test.ts).
-import type { Role } from "../env";
+export type Role = "admin" | "billing" | "scheduling" | "service" | "sales" | "engineering" | "tech";
 
 export const ROLES: Record<Role, string> = {
   admin: "Admin: everything (Paolo, Aaron)",

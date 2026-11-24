@@ -47,6 +47,12 @@ describe("customer / business wall", () => {
     }
   });
 
+  it("customers only ever see the Ronchi workbook theme", () => {
+    // The help center has its own fixed Ronchi stylesheet and never loads the staff theme list.
+    for (const f of files("src/help")) expect(readFileSync(f, "utf8"), f).not.toMatch(/themes|data-theme|user_prefs/);
+    expect(readFileSync("src/help/html.ts", "utf8")).toContain("--accent:#e30613");
+  });
+
   it("shared code never reaches into either side", () => {
     for (const f of files("src/shared")) {
       expect(readFileSync(f, "utf8"), f).not.toMatch(/from\s+["']\.\.\/(portal|help)/);

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { api, can, fmtDate, fmtTime, type Me } from "../api";
 import { Empty, ErrorNote, PageHead, toast, useLoad } from "../components/ui";
+import { DEMO } from "../router";
 
 function isoDay(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -62,9 +63,13 @@ export function Hours({ me }: { me: Me }) {
           <span className="spacer" />
           {can(me, "hours.export") && (
             <>
-              <a className="btn small" href={exportUrl("days", "csv")}>Days, Excel (CSV)</a>
-              <a className="btn small" href={exportUrl("punches", "csv")}>Every punch, Excel (CSV)</a>
-              <a className="btn small" href={exportUrl("days", "json")}>JSON</a>
+              {([["days", "csv", "Days, Excel (CSV)"], ["punches", "csv", "Every punch, Excel (CSV)"], ["days", "json", "JSON"]] as const).map(([k, f, label]) =>
+                DEMO ? (
+                  <button key={label} className="btn small" onClick={() => toast("In the live portal this downloads the file. Downloads are off in this preview.")}>{label}</button>
+                ) : (
+                  <a key={label} className="btn small" href={exportUrl(k, f)}>{label}</a>
+                ),
+              )}
             </>
           )}
         </div>
@@ -74,7 +79,7 @@ export function Hours({ me }: { me: Me }) {
             <table>
               <thead><tr><th>Name</th><th>Day</th><th>Hours</th><th>Regular</th><th>Overtime</th><th>Location</th></tr></thead>
               <tbody>
-                {hours.data.days.map((d: any) => {
+                {[...hours.data.days].sort((a: any, b: any) => b.day.localeCompare(a.day) || a.name.localeCompare(b.name)).map((d: any) => {
                   const shifts = hours.data.shifts.filter((s: any) => s.userId === d.userId && s.day === d.day);
                   const typed = shifts.some((s: any) => byPunch.get(s.inId)?.location_source === "typed" || byPunch.get(s.outId)?.location_source === "typed");
                   const none = shifts.some((s: any) => byPunch.get(s.inId)?.location_source === "none");

@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { navigate } from "../router";
+import { hrefFor, navigate } from "../router";
 
 export function Link({ to, children, className, current }: { to: string; children: ReactNode; className?: string; current?: boolean }) {
   return (
     <a
-      href={to}
+      href={hrefFor(to)}
       className={className}
       aria-current={current ? "page" : undefined}
       onClick={(e) => {

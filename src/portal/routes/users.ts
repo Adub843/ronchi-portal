@@ -63,7 +63,10 @@ users.patch("/:id", async (c) => {
     if (b.status !== "active" && b.status !== "disabled") fail(400, "Unknown status.");
     changes.status = b.status;
   }
-  if (b.canTypeAddress !== undefined) changes.can_type_address = b.canTypeAddress === true ? 1 : 0;
+  if (b.canTypeAddress !== undefined) {
+    changes.can_type_address = b.canTypeAddress === true ? 1 : 0;
+    if (!changes.can_type_address) changes.address_mode = 0; // taking the option away also ends the mode
+  }
   if (!Object.keys(changes).length) fail(400, "Nothing to change.");
   const cols = Object.keys(changes);
   await c.env.DB.prepare(`UPDATE users SET ${cols.map((k) => `${k} = ?`).join(", ")}, updated_at = ? WHERE id = ?`)

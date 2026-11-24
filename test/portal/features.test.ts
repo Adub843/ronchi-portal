@@ -124,3 +124,35 @@ describe("audit log", () => {
     await expect(env.DB.prepare("UPDATE audit_log SET action = 'x'").run()).rejects.toThrow(/append-only/);
   });
 });
+
+describe("typed-address mode (hard rule)", () => {
+  it("while on, every punch uses the typed address and coordinates are never stored, until turned off", async () => {
+    const aaron = await person("admin", { canTypeAddress: true });
+    const on = await aaron.json("/api/clock/address-mode", { method: "PUT", body: { on: true, address: "Example Foods, Atlanta GA" } });
+    expect(on.data).toEqual({ addressMode: true, typedAddress: "Example Foods, Atlanta GA" });
+    expect((await aaron.json("/api/clock/status")).data).toMatchObject({ addressMode: true, typedAddress: "Example Foods, Atlanta GA" });
+    // Even if a phone sends coordinates, they're thrown away.
+    const a = await aaron.json("/api/clock/punch", { body: { kind: "in", lat: 33.7, lng: -84.4, accuracy: 5 } });
+    expect(a.data.location).toBe("typed");
+    const b = await aaron.json("/api/clock/punch", { body: { kind: "out", lat: 33.7, lng: -84.4 } });
+    for (const pid of [a.data.id, b.data.id]) {
+      const row = await env.DB.prepare("SELECT lat, lng, accuracy_m, address, location_source FROM punches WHERE id = ?").bind(pid).first();
+      expect(row).toEqual({ lat: null, lng: null, accuracy_m: null, address: "Example Foods, Atlanta GA", location_source: "typed" });
+    }
+    // Off again: phone location is used.
+    await aaron.json("/api/clock/address-mode", { method: "PUT", body: { on: false } });
+    const c = await aaron.json("/api/clock/punch", { body: { kind: "in", lat: 32.7, lng: -79.9 } });
+    expect(c.data.location).toBe("gps");
+  });
+
+  it("needs the option, and removing the option ends the mode", async () => {
+    const tech = await person("tech");
+    expect((await tech.fetch("/api/clock/address-mode", { method: "PUT", body: { on: true, address: "x street" } })).status).toBe(403);
+    const admin = await person("admin");
+    const p = await person("tech", { canTypeAddress: true });
+    await p.json("/api/clock/address-mode", { method: "PUT", body: { on: true, address: "Plant 2" } });
+    await admin.json(`/api/users/${p.id}`, { method: "PATCH", body: { canTypeAddress: false } });
+    const row = await env.DB.prepare("SELECT address_mode FROM users WHERE id = ?").bind(p.id).first<{ address_mode: number }>();
+    expect(row?.address_mode).toBe(0);
+  });
+});
