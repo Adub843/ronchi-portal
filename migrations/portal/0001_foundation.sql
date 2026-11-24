@@ -1,6 +1,6 @@
 -- Ronchi Portal business store (portal-db), Step 1.
 -- Every id is a random string made by the app (never a counting number),
--- so nobody can guess the next record. Times are ISO 8601 UTC text from the server clock.
+-- so nobody can guess the next record. Times are ISO 8601 UTC text from the server.
 
 -- People who can sign in. role decides what they can see (src/portal/lib/roles.ts).
 CREATE TABLE users (
@@ -9,7 +9,6 @@ CREATE TABLE users (
   name             TEXT NOT NULL,
   role             TEXT NOT NULL CHECK (role IN ('admin','billing','scheduling','service','sales','engineering','tech')),
   status           TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','disabled')),
-  can_type_address INTEGER NOT NULL DEFAULT 0,   -- may type an address at clock in/out instead of phone location
   created_at       TEXT NOT NULL,
   updated_at       TEXT NOT NULL
 );
@@ -20,7 +19,6 @@ CREATE TABLE invites (
   email       TEXT NOT NULL COLLATE NOCASE,
   name        TEXT NOT NULL,
   role        TEXT NOT NULL,
-  can_type_address INTEGER NOT NULL DEFAULT 0,
   token_hash  TEXT NOT NULL UNIQUE,
   created_by  TEXT,                -- NULL only for the first-admin invite made from the command line
   created_at  TEXT NOT NULL,
@@ -115,37 +113,6 @@ CREATE TABLE posts (
   deleted_at TEXT
 );
 CREATE INDEX posts_board ON posts(board_id, created_at);
-
--- Time clock. at is always the server's clock, never the phone's.
-CREATE TABLE punches (
-  id              TEXT PRIMARY KEY,
-  user_id         TEXT NOT NULL REFERENCES users(id),
-  kind            TEXT NOT NULL CHECK (kind IN ('in','out')),
-  at              TEXT NOT NULL,
-  location_source TEXT NOT NULL CHECK (location_source IN ('gps','typed','none')),
-  lat             REAL,
-  lng             REAL,
-  accuracy_m      REAL,
-  address         TEXT,      -- only when typed by hand (shown as "entered by hand")
-  note            TEXT,
-  created_at      TEXT NOT NULL
-);
-CREATE INDEX punches_user_at ON punches(user_id, at);
-
--- Requests to change a punch time. Billing (Lola) or admin approves. The original time is kept.
-CREATE TABLE punch_edits (
-  id           TEXT PRIMARY KEY,
-  punch_id     TEXT NOT NULL REFERENCES punches(id),
-  requested_by TEXT NOT NULL REFERENCES users(id),
-  old_at       TEXT NOT NULL,
-  new_at       TEXT NOT NULL,
-  reason       TEXT NOT NULL,
-  status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-  decided_by   TEXT REFERENCES users(id),
-  decided_at   TEXT,
-  created_at   TEXT NOT NULL
-);
-CREATE INDEX punch_edits_status ON punch_edits(status);
 
 -- Each person's look: theme, layout and home tiles. Saved to their login.
 CREATE TABLE user_prefs (

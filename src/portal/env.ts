@@ -18,7 +18,6 @@ export interface SessionUser {
   email: string;
   name: string;
   role: Role;
-  can_type_address: number;
   sessionHash: string;
 }
 

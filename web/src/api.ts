@@ -28,7 +28,6 @@ export interface Me {
   name: string;
   email: string;
   role: string;
-  canTypeAddress: boolean;
   permissions: string[];
 }
 

@@ -18,7 +18,7 @@ users.get("/roles", (c) => {
 users.get("/", async (c) => {
   requirePerm(c, "users.manage");
   const { results } = await c.env.DB.prepare(
-    `SELECT u.id, u.email, u.name, u.role, u.status, u.can_type_address, u.created_at,
+    `SELECT u.id, u.email, u.name, u.role, u.status, u.created_at,
             (SELECT COUNT(*) FROM passkeys p WHERE p.user_id = u.id) AS passkeys,
             (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id) AS sessions
        FROM users u ORDER BY u.name`,
@@ -39,17 +39,17 @@ users.post("/invite", async (c) => {
   if (!isRole(b.role)) fail(400, "Pick a role.");
   const exists = await c.env.DB.prepare("SELECT 1 FROM users WHERE email = ?").bind(email).first();
   if (exists) fail(409, "Someone with this email already has a login.");
-  const link = await createInvite(c.env, { email, name, role: b.role, canTypeAddress: b.canTypeAddress === true, createdBy: admin.id });
+  const link = await createInvite(c.env, { email, name, role: b.role, createdBy: admin.id });
   await audit(c.env.DB, { userId: admin.id, action: "invite.create", detail: { email, role: b.role }, ip: c.get("ip") });
   return c.json({ link });
 });
 
-/** Change a person's role, typed-address option, or disable them. */
+/** Change a person's role, or disable them. */
 users.patch("/:id", async (c) => {
   const admin = requirePerm(c, "users.manage");
   const id = c.req.param("id");
   const b = await body(c);
-  const target = await c.env.DB.prepare("SELECT id, role, status, can_type_address FROM users WHERE id = ?").bind(id).first<{ id: string; role: string; status: string; can_type_address: number }>();
+  const target = await c.env.DB.prepare("SELECT id, role, status FROM users WHERE id = ?").bind(id).first<{ id: string; role: string; status: string }>();
   if (!target) fail(404, "Not found.");
   if (id === admin.id && (b.status === "disabled" || (b.role !== undefined && b.role !== "admin"))) {
     fail(400, "You can't remove your own admin access. Ask another admin.");
@@ -62,10 +62,6 @@ users.patch("/:id", async (c) => {
   if (b.status !== undefined) {
     if (b.status !== "active" && b.status !== "disabled") fail(400, "Unknown status.");
     changes.status = b.status;
-  }
-  if (b.canTypeAddress !== undefined) {
-    changes.can_type_address = b.canTypeAddress === true ? 1 : 0;
-    if (!changes.can_type_address) changes.address_mode = 0; // taking the option away also ends the mode
   }
   if (!Object.keys(changes).length) fail(400, "Nothing to change.");
   const cols = Object.keys(changes);

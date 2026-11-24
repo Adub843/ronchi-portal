@@ -4,7 +4,7 @@ The control hub for Ronchi America: one sign-in for staff (computer or phone), p
 separate public help center for customers. Written so any web developer can pick it up.
 
 - **Staff portal** (`portal.ronchiamerica.com`): sign-in with passkeys, message boards,
-  machine registry, time clock and hours. Later steps add the knowledge base, training,
+  and the machine registry. Later steps add the knowledge base, training,
   orders, the schedule and remote support (see the plan).
 - **Help center** (`help.ronchiamerica.com`): an open search of Ronchi-made articles.
   No login, and no way to reach business data (see "The wall" below).
@@ -32,7 +32,7 @@ src/portal/          staff portal Worker
   env.ts             what Cloudflare gives the Worker
   lib/roles.ts       who can do what (one table)
   lib/session.ts     sign-in cookies
-  routes/            one file per feature: auth, users, machines, boards, clock, prefs
+  routes/            one file per feature: auth, users, machines, boards, prefs
 src/help/            customer help center Worker (may import only src/help and src/shared)
 src/shared/          code both sides use: ids, CSV export, privacy check, themes, headers
 web/                 staff app (React). web/src/pages has one file per screen
@@ -97,13 +97,10 @@ peer list. All peers the project needs are listed directly in `package.json`.)
 - **Headers**: strict Content Security Policy (only our own files), HSTS, no framing,
   no referrer. Fonts are bundled, nothing loads from other sites.
 - **Rate limits** on sign-in (20 a minute per address) and the API (300 a minute).
-- **Audit log** of sign-ins, invites, role changes, exports and hour edits. The database
+- **Audit log** of sign-ins, invites, role changes and exports. The database
   itself refuses to change or delete audit rows.
-- **Time clock** uses the server's clock. Location is taken only at the tap.
-  **Typed-address mode** (hard rule): people allowed to type an address can turn it on;
-  while it is on the app never asks the device for its location, the server discards any
-  coordinates, and every punch uses the typed address until it is turned off. Time
-  changes need someone else's approval (Lola or an admin); the original time is kept.
+- **No time clock.** Ronchi keeps time in its existing timekeeping app; the portal has no
+  clock, hours or location tracking (removed 2026-11-24 at Aaron's request).
 - **Exports** are built so a spreadsheet cell can't run as a formula.
 - **Message board text** is always shown as text, never as HTML.
 

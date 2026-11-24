@@ -22,14 +22,14 @@ import { endSession, startSession } from "../lib/session";
 const CHALLENGE_SECONDS = 300;
 
 interface InviteRow {
-  id: string; email: string; name: string; role: string; can_type_address: number;
+  id: string; email: string; name: string; role: string;
   expires_at: string; used_at: string | null; user_id: string | null;
 }
 
 async function findInvite(db: D1Database, token: unknown): Promise<InviteRow> {
   if (typeof token !== "string" || token.length < 20 || token.length > 100) fail(400, "This invite link isn't valid.");
   const row = await db
-    .prepare("SELECT id, email, name, role, can_type_address, expires_at, used_at, user_id FROM invites WHERE token_hash = ?")
+    .prepare("SELECT id, email, name, role, expires_at, used_at, user_id FROM invites WHERE token_hash = ?")
     .bind(await sha256Hex(token))
     .first<InviteRow>();
   if (!row) fail(404, "This invite link isn't valid.");
@@ -61,7 +61,7 @@ export const auth = new Hono<AppEnv>();
 auth.get("/me", (c) => {
   const u = c.get("user");
   return c.json({
-    user: u ? { id: u.id, name: u.name, email: u.email, role: u.role, canTypeAddress: !!u.can_type_address, permissions: [...PERMISSIONS[u.role]] } : null,
+    user: u ? { id: u.id, name: u.name, email: u.email, role: u.role, permissions: [...PERMISSIONS[u.role]] } : null,
   });
 });
 
@@ -131,8 +131,8 @@ auth.post("/register/verify", async (c) => {
   const stmts: D1PreparedStatement[] = [];
   if (newUser) {
     stmts.push(
-      c.env.DB.prepare("INSERT INTO users (id, email, name, role, status, can_type_address, created_at, updated_at) VALUES (?,?,?,?, 'active', ?,?,?)")
-        .bind(userId, inv.email, inv.name, inv.role, inv.can_type_address, t, t),
+      c.env.DB.prepare("INSERT INTO users (id, email, name, role, status, created_at, updated_at) VALUES (?,?,?,?, 'active', ?,?)")
+        .bind(userId, inv.email, inv.name, inv.role, t, t),
     );
   }
   stmts.push(
@@ -209,7 +209,7 @@ auth.post("/logout", async (c) => {
 /** Make a one-time link to add a passkey on another device (for example a new phone). */
 auth.post("/add-device", async (c) => {
   const u = requireUser(c);
-  const link = await createInvite(c.env, { email: u.email, name: u.name, role: u.role, canTypeAddress: !!u.can_type_address, createdBy: u.id, userId: u.id, hours: 1 });
+  const link = await createInvite(c.env, { email: u.email, name: u.name, role: u.role, createdBy: u.id, userId: u.id, hours: 1 });
   await audit(c.env.DB, { userId: u.id, action: "passkey.add_link", targetType: "user", targetId: u.id, ip: c.get("ip") });
   return c.json({ link });
 });

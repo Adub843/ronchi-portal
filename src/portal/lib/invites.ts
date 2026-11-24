@@ -9,14 +9,14 @@ import { addSeconds, now } from "./db";
  */
 export async function createInvite(
   env: Env,
-  o: { email: string; name: string; role: string; canTypeAddress: boolean; createdBy: string | null; userId?: string; hours?: number },
+  o: { email: string; name: string; role: string; createdBy: string | null; userId?: string; hours?: number },
 ): Promise<string> {
   const token = randomToken();
   const t = now();
   await env.DB.prepare(
-    "INSERT INTO invites (id, email, name, role, can_type_address, token_hash, created_by, created_at, expires_at, user_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
+    "INSERT INTO invites (id, email, name, role, token_hash, created_by, created_at, expires_at, user_id) VALUES (?,?,?,?,?,?,?,?,?)",
   )
-    .bind(randomId(), o.email, o.name, o.role, o.canTypeAddress ? 1 : 0, await sha256Hex(token), o.createdBy, t, addSeconds(t, (o.hours ?? 72) * 3600), o.userId ?? null)
+    .bind(randomId(), o.email, o.name, o.role, await sha256Hex(token), o.createdBy, t, addSeconds(t, (o.hours ?? 72) * 3600), o.userId ?? null)
     .run();
   return `${env.ORIGIN}/welcome#${token}`;
 }

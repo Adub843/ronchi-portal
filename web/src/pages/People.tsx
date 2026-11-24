@@ -7,7 +7,7 @@ export function People({ me }: { me: Me }) {
   const { data, error, reload } = useLoad(() => api("/users"));
   const roles = useLoad(() => api("/users/roles"));
   const audit = useLoad(() => api("/users/audit/recent"));
-  const [form, setForm] = useState({ name: "", email: "", role: "tech", canTypeAddress: false });
+  const [form, setForm] = useState({ name: "", email: "", role: "tech" });
   const [link, setLink] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -17,7 +17,7 @@ export function People({ me }: { me: Me }) {
     try {
       const r = await api("/users/invite", { body: form });
       setLink(r.link);
-      setForm({ name: "", email: "", role: "tech", canTypeAddress: false });
+      setForm({ name: "", email: "", role: "tech" });
       reload();
     } catch (x) {
       setErr((x as Error).message);
@@ -56,9 +56,6 @@ export function People({ me }: { me: Me }) {
             {Object.entries(roleNames).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </div>
-        <label className="row" style={{ gap: 6, alignSelf: "end" }}>
-          <input type="checkbox" checked={form.canTypeAddress} onChange={(e) => setForm({ ...form, canTypeAddress: e.target.checked })} /> May type an address at clock in/out
-        </label>
         <ErrorNote error={err} />
         <div><button className="btn primary" type="submit">Create invite link</button></div>
       </form>
@@ -76,7 +73,7 @@ export function People({ me }: { me: Me }) {
       <ErrorNote error={error} />
       <div className="panel tbl">
         <table>
-          <thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Devices</th><th>Typed address</th><th /></tr></thead>
+          <thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Devices</th><th /></tr></thead>
           <tbody>
             {data?.users.map((u: any) => (
               <tr key={u.id}>
@@ -88,7 +85,6 @@ export function People({ me }: { me: Me }) {
                 </td>
                 <td><span className={`pill ${u.status === "active" ? "p-ok" : "p-acc"}`}>{u.status}</span></td>
                 <td className="muted">{u.passkeys} passkey(s), {u.sessions} signed in</td>
-                <td><input type="checkbox" checked={!!u.can_type_address} onChange={(e) => update(u.id, { canTypeAddress: e.target.checked })} aria-label={`Typed address for ${u.name}`} /></td>
                 <td className="row" style={{ gap: 6 }}>
                   <button className="btn small" onClick={() => signOutAll(u.id)}>Sign out everywhere</button>
                   {u.id !== me.id && (

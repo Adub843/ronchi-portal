@@ -12,13 +12,10 @@ describe("deny by default: each role sees only its part", () => {
     expect((await admin.fetch("/api/users")).status).toBe(200);
   });
 
-  it("only billing and admin see everyone's hours and approve edits; scheduling can view", async () => {
-    expect((await (await person("tech")).fetch("/api/clock/hours")).status).toBe(403);
-    expect((await (await person("sales")).fetch("/api/clock/hours")).status).toBe(403);
-    expect((await (await person("scheduling")).fetch("/api/clock/hours")).status).toBe(200);
-    expect((await (await person("scheduling")).fetch("/api/clock/edits")).status).toBe(403);
-    expect((await (await person("billing")).fetch("/api/clock/edits")).status).toBe(200);
-    expect((await (await person("billing")).fetch("/api/clock/hours/export")).status).toBe(200);
+  it("the portal has no time clock (removed 2026-11-24 at Aaron's request)", async () => {
+    const admin = await person("admin");
+    for (const path of ["/api/clock/status", "/api/clock/hours", "/api/time/now"]) expect((await admin.fetch(path)).status, path).toBe(404);
+    expect((await admin.json("/api/auth/me")).data.user.permissions.some((p: string) => /clock|hours/.test(p))).toBe(false);
   });
 
   it("sales can view machines but not change them", async () => {

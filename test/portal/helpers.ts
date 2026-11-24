@@ -53,11 +53,11 @@ export class Browser {
 
 let n = 0;
 /** Make a signed-in person with the given role. */
-export async function person(role: string, opts: { canTypeAddress?: boolean; name?: string } = {}) {
+export async function person(role: string, opts: { name?: string } = {}) {
   n++;
   const b = new Browser();
   const email = `${role}${n}-${crypto.randomUUID().slice(0, 6)}@example.com`;
-  const link = await createInvite(env, { email, name: opts.name ?? `${role} ${n}`, role, canTypeAddress: !!opts.canTypeAddress, createdBy: null });
+  const link = await createInvite(env, { email, name: opts.name ?? `${role} ${n}`, role, createdBy: null });
   await b.acceptInvite(link);
   const me = await b.json("/api/auth/me");
   return Object.assign(b, { id: me.data.user.id as string, email });
