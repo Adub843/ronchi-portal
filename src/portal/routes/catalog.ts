@@ -168,8 +168,14 @@ catalog.post("/machines/:id/import", async (c) => {
     db.prepare("DELETE FROM catalog_sheets WHERE machine_id = ? AND source = 'manual'").bind(m.id),
   ];
   const parts = new Map<string, { code: string; rev: string | null; nameEn: string | null; nameIt: string | null }>();
-  // Parents go in before children, so the parent_id reference always exists.
-  const order = [...incoming].sort((a, b2) => (a.parentKey ? 1 : 0) - (b2.parentKey ? 1 : 0));
+  // Parents go in before children at every depth, so the parent_id reference always exists. A sheet
+  // whose parent is missing, or that sits in a loop, goes to the top level.
+  const kids = new Map<string, typeof incoming>();
+  for (const s of incoming) if (s.parentKey && s.parentKey !== s.key && byKey.has(s.parentKey)) kids.set(s.parentKey, [...(kids.get(s.parentKey) ?? []), s]);
+  const order: typeof incoming = incoming.filter((s) => !s.parentKey || s.parentKey === s.key || !byKey.has(s.parentKey));
+  const placed = new Set(order.map((s) => s.key));
+  for (let i = 0; i < order.length; i++) for (const k of kids.get(order[i]!.key) ?? []) if (!placed.has(k.key)) { placed.add(k.key); order.push(k); }
+  for (const s of incoming) if (!placed.has(s.key)) { s.parentKey = null; order.push(s); }
   for (const s of order) {
     const sort = (base?.n ?? -1) + 1 + incoming.indexOf(s);
     const parentId = s.parentKey ? (byKey.get(s.parentKey) ?? null) : null;

@@ -246,7 +246,7 @@ function LoadFiles({ me, machines, onDone }: { me: Me; machines: any[]; onDone: 
         }
         if (!mid) throw new Error(t("{serial} isn't in the machine list.", { serial }));
         if (!j.sheets.length) { say(t("{serial}: no parts lists in the file", { serial })); continue; }
-        await api(`/catalog/machines/${enc(mid)}/import`, { body: { fileName: j.fileName || file.name, sheets: j.sheets, warnings: j.skipped?.length ? [t("Codes left out: {list}", { list: j.skipped.slice(0, 40).join(", ") })] : [] } });
+        await api(`/catalog/machines/${enc(mid)}/import`, { body: { fileName: j.fileName || file.name, sheets: j.sheets, warnings: j.skipped?.length ? [t("Codes left out: {list}", { list: j.skipped.slice(0, 40).map((x: any) => (typeof x === "string" ? x : x?.code)).filter(Boolean).join(", ") })] : [] } });
         say(t("{serial}: {n} parts lists loaded", { serial, n: j.sheets.length }));
       } catch (e) {
         say(`${file.name}: ${(e as Error).message}`);

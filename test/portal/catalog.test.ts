@@ -44,6 +44,25 @@ describe("parts catalog (staff)", () => {
     expect(part.data.usedOn[0].serial).toBe(m.serial);
   });
 
+  it("imports nested sub-assemblies listed in any order, and Mario's bought-in codes", async () => {
+    const svc = await person("service");
+    const m = await machine(await person("admin"));
+    const sheets = [
+      { key: "c", parentKey: "b", title: "Valve", code: "RA1018_GS102289", rows: [{ pos: "1", code: "ELE00885", qty: 1, nameEn: "Sensor" }, { pos: "2", code: "PV-RON-WD123456", qty: 2 }] },
+      { key: "b", parentKey: "a", title: "Head", code: "MB000200", rows: [{ pos: "1", code: "RA1018_GS102289", qty: 1 }] },
+      { key: "a", title: "Machine", code: "MB000100", rows: [{ pos: "1", code: "MB000200", qty: 1 }] },
+      { key: "d", parentKey: "gone", title: "Orphan", rows: [{ pos: "1", code: "SKL-SCS-123456", qty: 1 }] },
+    ];
+    const imp = await svc.json(`/api/catalog/machines/${m.id}/import`, { body: { fileName: "Ronchi Mario portal 4101MB", sheets } });
+    expect(imp.status).toBe(200);
+    const id = Object.fromEntries(imp.data.sheets.map((s: any) => [s.key, s.id]));
+    const tree = await svc.json(`/api/catalog/machines/${m.id}`);
+    const parent = (k: string) => tree.data.sheets.find((s: any) => s.id === id[k]).parent_id;
+    expect([parent("a"), parent("b"), parent("c"), parent("d")]).toEqual([null, id.a, id.b, null]);
+    const c = await svc.json(`/api/catalog/sheets/${id.c}`);
+    expect(c.data.rows.map((r: any) => r.code)).toEqual(["ELE00885", "PV-RON-WD123456"]);
+  });
+
   it("imports machines from a CSV, never overwriting, and a machine number search finds a machine with no catalog yet", async () => {
     const admin = await person("admin");
     const svc = await person("service");
