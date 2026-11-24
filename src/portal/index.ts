@@ -13,7 +13,6 @@ import { fail } from "./lib/http";
 import { loadSession } from "./lib/session";
 import { auth } from "./routes/auth";
 import { boards } from "./routes/boards";
-import { clock } from "./routes/clock";
 import { machines } from "./routes/machines";
 import { prefs } from "./routes/prefs";
 import { users } from "./routes/users";
@@ -49,7 +48,6 @@ app.route("/api/auth", auth);
 app.route("/api/users", users);
 app.route("/api/machines", machines);
 app.route("/api/boards", boards);
-app.route("/api/clock", clock);
 app.route("/api/prefs", prefs);
 
 app.all("/api/*", () => fail(404, "Not found."));

@@ -1,13 +1,11 @@
 // DEMO ONLY. Used by `npm run build:demo` (the preview shown inside Claude), never by the real portal.
 // It answers the app's /api calls from example data kept in this browser, so the real screens
 // can be clicked through without a server. Signed in as Aaron Lewis, admin.
-import { allowedNext, dailyTotals, stateAfter, toShifts, type Punch, type PunchKind } from "../../../src/portal/lib/hours";
 import { PERMISSIONS, ROLES } from "../../../src/portal/lib/roles";
 type Role = keyof typeof ROLES;
 
 // Ids for example records. Uses the browser's secure random source like the real server does.
 const id = () => "d" + [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, "0")).join("");
-const jitter = () => crypto.getRandomValues(new Uint16Array(1))[0]! / 65535 / 50;
 const iso = (d: Date) => d.toISOString();
 const daysAgo = (n: number, h: number, m = 0) => {
   const d = new Date();
@@ -23,11 +21,8 @@ interface DB {
   machines: any[];
   boards: any[];
   posts: any[];
-  punches: (Punch & { location_source: string; lat: number | null; lng: number | null; accuracy_m: number | null; address: string | null; note: string | null })[];
-  edits: any[];
   audit: any[];
   prefs: any;
-  addressMode?: string | null;
 }
 
 function seed(): DB {
@@ -71,34 +66,12 @@ function seed(): DB {
     p(sales, andrew, "Quote for two change-part sets on 4212MB sent today.", daysAgo(1, 14, 0)),
     p(eng, steve, "Does anyone have the latest star wheel drawing for the 50 ml bottle?", daysAgo(1, 9, 30)),
   ];
-  const punches: DB["punches"] = [];
-  // A shift with a lunch break (lunch starts at lunchH and lasts lunchMin minutes).
-  const shift = (user: User, dAgo: number, inH: number, outH: number, typed?: string, lunchH = 12, lunchMin = 30) => {
-    const steps: [PunchKind, number][] = [["in", inH], ["break_start", lunchH], ["break_end", lunchH + lunchMin / 60], ["out", outH]];
-    for (const [kind, h] of steps) {
-      const at = daysAgo(dAgo, Math.floor(h), Math.round((h % 1) * 60));
-      punches.push({ id: id(), user_id: user.id, kind, at: iso(at), location_source: typed ? "typed" : "gps", lat: typed ? null : 32.85 + jitter(), lng: typed ? null : -79.97 + jitter(), accuracy_m: typed ? null : 12, address: typed ?? null, note: null });
-    }
-  };
-  for (let d = 13; d >= 1; d--) {
-    const day = daysAgo(d, 12).getDay();
-    if (day === 0 || day === 6) continue;
-    shift(aaron, d, 7.5, d % 3 === 0 ? 18 : 16.5, d === 2 ? "Example Foods Inc., Atlanta GA" : undefined);
-    shift(steve, d, 8, 16.75, undefined, 11.5, 45);
-    shift(meagan, d, 8.5, 17, undefined, 12.5, 30);
-  }
-  // Aaron is clocked in today.
-  punches.push({ id: id(), user_id: aaron.id, kind: "in", at: iso(new Date(Date.now() - 2 * 3600000)), location_source: "gps", lat: 32.85, lng: -79.97, accuracy_m: 10, address: null, note: null });
-  const steveLast = punches.filter((x) => x.user_id === steve.id).at(-1)!;
-  const edits = [{ id: id(), punch_id: steveLast.id, requested_by: steve.id, old_at: steveLast.at, new_at: iso(new Date(Date.parse(steveLast.at) + 45 * 60000)), reason: "Stayed late to finish the 3811CP test run", status: "pending", decided_by: null, decided_at: null, created_at: iso(daysAgo(1, 18)) }];
   const audit = [
     { at: iso(daysAgo(0, 7, 30)), action: "login", who: "Aaron Lewis", ip: "your phone" },
     { at: iso(daysAgo(1, 9, 0)), action: "invite.create", who: "Paolo Ferla", ip: "office" },
-    { at: iso(daysAgo(1, 18, 2)), action: "punch.edit_request", who: "Steve Williams", ip: "field" },
-    { at: iso(daysAgo(3, 16, 0)), action: "hours.export", who: "Lola Parker", ip: "office" },
   ];
   void lola;
-  return { users, invites: [], machines, boards: [service, torque, sales, eng], posts, punches, edits, audit, prefs: null };
+  return { users, invites: [], machines, boards: [service, torque, sales, eng], posts, audit, prefs: null };
 }
 
 // Example data lives in memory only. Nothing is written to the browser's storage,
@@ -120,19 +93,11 @@ const me = () => db.users[0]!;
 const name = (uid: string) => db.users.find((u) => u.id === uid)?.name ?? "";
 const log = (action: string) => db.audit.unshift({ at: iso(new Date()), action, who: me().name, ip: "this browser" });
 
-function hours(from?: string | null, to?: string | null, userId?: string | null) {
-  const start = from ? Date.parse(`${from}T00:00:00`) : Date.now() - 14 * 86400000;
-  const end = to ? Date.parse(`${to}T23:59:59`) : Date.now();
-  const punches = db.punches.filter((p) => Date.parse(p.at) >= start && Date.parse(p.at) <= end && (!userId || p.user_id === userId)).map((p) => ({ ...p, name: name(p.user_id) }));
-  const shifts = toShifts(punches);
-  return { punches, shifts, days: dailyTotals(shifts).map((d) => ({ ...d, name: name(d.userId) })) };
-}
-
 function route(method: string, path: string, q: URLSearchParams, body: any): unknown {
   const seg = path.split("/").filter(Boolean);
   const u = me();
   // --- auth & me ---
-  if (path === "/auth/me") return { user: { id: u.id, name: u.name, email: u.email, role: u.role, canTypeAddress: true, permissions: [...PERMISSIONS[u.role]] } };
+  if (path === "/auth/me") return { user: { id: u.id, name: u.name, email: u.email, role: u.role, permissions: [...PERMISSIONS[u.role]] } };
   if (path === "/auth/logout") throw new Fail(400, "Sign-out is turned off in this preview.");
   if (path === "/auth/add-device") return { link: "https://portal.ronchiamerica.com/welcome#example-one-time-link" };
   if (path === "/prefs") {
@@ -237,59 +202,6 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       canModerate: true,
       posts: db.posts.filter((p) => p.board_id === b.id && !p.deleted_at).map((p) => ({ ...p, author: name(p.user_id) })).sort((x, y) => y.created_at.localeCompare(x.created_at)),
     };
-  }
-  // --- clock & hours ---
-  const mine = () => db.punches.filter((p) => p.user_id === u.id).sort((a, b) => a.at.localeCompare(b.at));
-  if (path === "/clock/status") {
-    const last = mine().at(-1) ?? null;
-    const state = stateAfter(last?.kind);
-    const shiftStart = state === "out" ? null : mine().filter((p) => p.kind === "in").at(-1)?.at ?? null;
-    return { last, state, shiftStart, canTypeAddress: true, addressMode: !!db.addressMode, typedAddress: db.addressMode ?? null, serverTime: iso(new Date()) };
-  }
-  if (path === "/clock/address-mode") {
-    if (body.on && !String(body.address ?? "").trim()) throw new Fail(400, "The address is required.");
-    db.addressMode = body.on ? String(body.address).trim() : null;
-    log(body.on ? "clock.address_mode_on" : "clock.address_mode_off");
-    return { addressMode: !!db.addressMode, typedAddress: db.addressMode };
-  }
-  if (path === "/clock/punch") {
-    const state = stateAfter(mine().at(-1)?.kind);
-    if (!["in", "out", "break_start", "break_end"].includes(body.kind)) throw new Fail(400, "Clock in, clock out, or break?");
-    if (!allowedNext(state).includes(body.kind)) {
-      throw new Fail(409, state === "out" ? "You're not clocked in." : body.kind === "in" ? "You're already clocked in." : state === "working" ? "You're not on break." : "You're already on break.");
-    }
-    const typed = db.addressMode ?? null;
-    const source = typed ? "typed" : typeof body.lat === "number" ? "gps" : "none";
-    const p = { id: id(), user_id: u.id, kind: body.kind, at: iso(new Date()), location_source: source, lat: typed ? null : body.lat ?? null, lng: typed ? null : body.lng ?? null, accuracy_m: typed ? null : body.accuracy ?? null, address: typed, note: null };
-    db.punches.push(p);
-    return { id: p.id, at: p.at, kind: p.kind, state: stateAfter(p.kind), location: source };
-  }
-  if (path === "/clock/mine") {
-    const h = hours(null, null, u.id);
-    return { punches: h.punches, days: h.days, edits: db.edits.filter((e) => e.requested_by === u.id) };
-  }
-  if (seg[0] === "clock" && seg[1] === "punches") {
-    const p = db.punches.find((x) => x.id === seg[2]);
-    if (!p) throw new Fail(404, "Not found.");
-    if (!body.reason?.trim()) throw new Fail(400, "A reason is required.");
-    db.edits.push({ id: id(), punch_id: p.id, requested_by: u.id, old_at: p.at, new_at: body.newAt, reason: body.reason, status: "pending", created_at: iso(new Date()) });
-    log("punch.edit_request");
-    return { ok: true };
-  }
-  if (path === "/clock/hours") return hours(q.get("from"), q.get("to"), q.get("user"));
-  if (path === "/clock/edits")
-    return { edits: db.edits.filter((e) => e.status === "pending").map((e) => ({ ...e, requested_by_name: name(e.requested_by), kind: db.punches.find((p) => p.id === e.punch_id)?.kind })) };
-  if (seg[0] === "clock" && seg[1] === "edits") {
-    const e = db.edits.find((x) => x.id === seg[2]);
-    if (!e) throw new Fail(404, "Not found, or already decided.");
-    if (e.requested_by === u.id) throw new Fail(403, "Someone else has to approve changes to your own hours.");
-    e.status = body.approve ? "approved" : "rejected";
-    if (body.approve) {
-      const p = db.punches.find((x) => x.id === e.punch_id);
-      if (p) p.at = e.new_at;
-    }
-    log(body.approve ? "punch.edit_approve" : "punch.edit_reject");
-    return { ok: true };
   }
   throw new Fail(404, "Not found.");
 }

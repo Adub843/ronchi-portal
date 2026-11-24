@@ -6,7 +6,7 @@ import { Browser, person } from "./helpers";
 describe("passkey sign-in", () => {
   it("an invite creates a login, and the passkey signs in again later", async () => {
     const b = new Browser();
-    const link = await createInvite(env, { email: "paolo@example.com", name: "Paolo Ferla", role: "admin", canTypeAddress: false, createdBy: null });
+    const link = await createInvite(env, { email: "paolo@example.com", name: "Paolo Ferla", role: "admin", createdBy: null });
     expect(link).toMatch(/\/welcome#/);
     const check = await b.json("/api/auth/invite/check", { body: { token: link.split("#")[1] } });
     expect(check.data).toMatchObject({ name: "Paolo Ferla", role: "admin" });
@@ -22,7 +22,7 @@ describe("passkey sign-in", () => {
   });
 
   it("an invite link works only once", async () => {
-    const link = await createInvite(env, { email: "once@example.com", name: "Once", role: "tech", canTypeAddress: false, createdBy: null });
+    const link = await createInvite(env, { email: "once@example.com", name: "Once", role: "tech", createdBy: null });
     await new Browser().acceptInvite(link);
     const again = await new Browser().json("/api/auth/register/options", { body: { token: link.split("#")[1] } });
     expect(again.status).toBe(410);
@@ -75,7 +75,7 @@ describe("passkey sign-in", () => {
 
   it("signed-out requests are refused", async () => {
     const b = new Browser();
-    for (const path of ["/api/boards", "/api/machines", "/api/clock/status", "/api/users", "/api/prefs"]) {
+    for (const path of ["/api/boards", "/api/machines", "/api/users", "/api/prefs"]) {
       expect((await b.fetch(path)).status, path).toBe(401);
     }
   });

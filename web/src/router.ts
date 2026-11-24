@@ -32,7 +32,12 @@ function currentPath(): string {
   return p === "/home" ? "/" : p;
 }
 
-export function navigate(path: string) {
+// Pages visited inside the portal, so Back returns to the page you came from.
+const visited: string[] = [];
+
+export function navigate(path: string, opts: { back?: boolean } = {}) {
+  const from = currentPath();
+  if (!opts.back && from !== path) visited.push(from);
   if (DEMO) {
     location.hash = hrefFor(path);
   } else {
@@ -41,6 +46,20 @@ export function navigate(path: string) {
     window.dispatchEvent(new PopStateEvent("popstate"));
   }
   window.scrollTo(0, 0);
+}
+
+/** Where Back goes when there's no earlier page: a board or machine goes to its list, anything else to Home. */
+export function parentOf(path: string): string {
+  const m = /^\/(boards|machines)\/.+$/.exec(path);
+  return m ? `/${m[1]}` : "/";
+}
+
+/** Back: the page you came from inside the portal, or the page above this one. */
+export function goBack() {
+  const here = currentPath();
+  let to = visited.pop();
+  while (to === here) to = visited.pop();
+  navigate(to ?? parentOf(here), { back: true });
 }
 
 export function usePath(): string {

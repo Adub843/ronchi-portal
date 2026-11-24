@@ -4,15 +4,13 @@ import logoUrl from "./assets/ronchi-logo.png";
 import { useEffect, useState } from "react";
 import { api, can, type Me } from "./api";
 import { Link } from "./components/ui";
-import { usePath } from "./router";
+import { goBack, usePath } from "./router";
 import { applyTheme, type Prefs } from "./theme";
 import { SignIn } from "./pages/SignIn";
 import { Welcome } from "./pages/Welcome";
 import { Home } from "./pages/Home";
 import { Boards, BoardPage } from "./pages/Boards";
 import { Machines, MachinePage } from "./pages/Machines";
-import { Clock } from "./pages/Clock";
-import { Hours } from "./pages/Hours";
 import { People } from "./pages/People";
 import { Settings } from "./pages/Settings";
 
@@ -20,8 +18,6 @@ const NAV: { to: string; label: string; perm?: string }[] = [
   { to: "/", label: "Home" },
   { to: "/boards", label: "Boards", perm: "boards.use" },
   { to: "/machines", label: "Machines", perm: "machines.view" },
-  { to: "/clock", label: "Clock", perm: "clock.use" },
-  { to: "/hours", label: "Hours", perm: "hours.view_all" },
   { to: "/people", label: "People", perm: "users.manage" },
   { to: "/settings", label: "Settings" },
 ];
@@ -54,8 +50,6 @@ export function App() {
   else if (m?.[1] === "machines") page = <MachinePage id={m[2]!} me={me} />;
   else if (section === "/boards") page = <Boards me={me} />;
   else if (section === "/machines") page = <Machines me={me} />;
-  else if (section === "/clock") page = <Clock me={me} />;
-  else if (section === "/hours") page = <Hours me={me} />;
   else if (section === "/people") page = <People me={me} />;
   else if (section === "/settings") page = <Settings me={me} prefs={prefs} onPrefs={(p) => { setPrefs(p); applyTheme(p); }} onSignOut={refresh} />;
   else page = <Home me={me} />;
@@ -80,7 +74,7 @@ export function App() {
       {import.meta.env.MODE === "demo" && (
         <div className="note">
           <div className="wrap row">
-            <span>Preview with example data, signed in as you. Customers, sites and hours shown are examples. Changes are not saved and reset when you reload.</span>
+            <span>Preview with example data, signed in as you. Customers, sites and messages shown are examples. Changes are not saved and reset when you reload.</span>
             <button className="linkish" onClick={() => { location.hash = "#home"; location.reload(); }}>Reset examples</button>
           </div>
         </div>
@@ -94,7 +88,14 @@ export function App() {
               </Link>
             ))}
           </nav>
-          <main>{page}</main>
+          <main>
+            {path !== "/" && (
+              <button type="button" className="back" onClick={goBack}>
+                <span aria-hidden="true">←</span> Back
+              </button>
+            )}
+            {page}
+          </main>
         </div>
       </div>
     </>

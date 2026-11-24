@@ -4,7 +4,7 @@ export type Role = "admin" | "billing" | "scheduling" | "service" | "sales" | "e
 
 export const ROLES: Record<Role, string> = {
   admin: "Admin: everything (Paolo, Aaron)",
-  billing: "Billing and hours (Lola)",
+  billing: "Billing (Lola)",
   scheduling: "Scheduling (Meagan)",
   service: "Service workbook side (Steve)",
   sales: "Sales",
@@ -18,23 +18,18 @@ export type Permission =
   | "machines.view"
   | "machines.edit"
   | "boards.use"          // read and post on boards they can see, create boards
-  | "boards.moderate"     // pin, archive, remove anyone's post
-  | "clock.use"           // clock themselves in and out
-  | "hours.view_all"      // everyone's hours
-  | "hours.approve"       // approve punch edits
-  | "hours.export";
+  | "boards.moderate";    // pin, archive, remove anyone's post
 
 const ALL: Permission[] = [
   "users.manage", "audit.view", "machines.view", "machines.edit", "boards.use", "boards.moderate",
-  "clock.use", "hours.view_all", "hours.approve", "hours.export",
 ];
 
-const STAFF_BASE: Permission[] = ["boards.use", "clock.use", "machines.view"];
+const STAFF_BASE: Permission[] = ["boards.use", "machines.view"];
 
 export const PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
   admin: new Set(ALL),
-  billing: new Set([...STAFF_BASE, "hours.view_all", "hours.approve", "hours.export"]),
-  scheduling: new Set([...STAFF_BASE, "hours.view_all"]),
+  billing: new Set([...STAFF_BASE]),
+  scheduling: new Set([...STAFF_BASE]),
   service: new Set([...STAFF_BASE, "machines.edit", "boards.moderate"]),
   sales: new Set([...STAFF_BASE]),
   engineering: new Set([...STAFF_BASE, "machines.edit"]),

@@ -55,82 +55,6 @@ describe("machine registry", () => {
   });
 });
 
-describe("time clock", () => {
-  it("clocks in and out with phone location, using the server's time", async () => {
-    const tech = await person("tech");
-    const before = Date.now();
-    const a = await tech.json("/api/clock/punch", { body: { kind: "in", lat: 32.7765123, lng: -79.9311456, accuracy: 12 } });
-    expect(a.status).toBe(200);
-    expect(Date.parse(a.data.at)).toBeGreaterThanOrEqual(before - 1000);
-    expect((await tech.fetch("/api/clock/punch", { body: { kind: "in" } })).status).toBe(409);
-    expect((await tech.json("/api/clock/punch", { body: { kind: "out", lat: 32.77, lng: -79.93 } })).status).toBe(200);
-    const row = await env.DB.prepare("SELECT lat, location_source FROM punches WHERE id = ?").bind(a.data.id).first<{ lat: number; location_source: string }>();
-    expect(row).toEqual({ lat: 32.77651, location_source: "gps" });
-  });
-
-  it("only people with the option can type an address", async () => {
-    const tech = await person("tech");
-    expect((await tech.fetch("/api/clock/punch", { body: { kind: "in", address: "123 Main St" } })).status).toBe(403);
-    const aaron = await person("tech", { canTypeAddress: true });
-    const r = await aaron.json("/api/clock/punch", { body: { kind: "in", address: "Plant 2, Charleston SC" } });
-    expect(r.data.location).toBe("typed");
-  });
-
-  it("a time change needs someone else's approval, and the original time is kept", async () => {
-    const lola = await person("billing");
-    const tech = await person("tech");
-    const p = await tech.json("/api/clock/punch", { body: { kind: "in" } });
-    const newAt = new Date(Date.now() - 3600_000).toISOString();
-    const req = await tech.json(`/api/clock/punches/${p.data.id}/edit`, { body: { newAt, reason: "Forgot to clock in" } });
-    expect(req.status).toBe(200);
-    // Lola can't approve her own; the tech can't approve at all.
-    expect((await tech.fetch(`/api/clock/edits/${req.data.id}/decide`, { body: { approve: true } })).status).toBe(403);
-    expect((await lola.fetch(`/api/clock/edits/${req.data.id}/decide`, { body: { approve: true } })).status).toBe(200);
-    const punch = await env.DB.prepare("SELECT at FROM punches WHERE id = ?").bind(p.data.id).first<{ at: string }>();
-    expect(punch?.at).toBe(newAt);
-    const edit = await env.DB.prepare("SELECT old_at, status FROM punch_edits WHERE id = ?").bind(req.data.id).first<{ old_at: string; status: string }>();
-    expect(edit?.status).toBe("approved");
-    expect(edit?.old_at).not.toBe(newAt);
-  });
-  it("a break stops the clock until the break ends", async () => {
-    const tech = await person("tech");
-    expect((await tech.fetch("/api/clock/punch", { body: { kind: "break_start" } })).status).toBe(409);
-    await tech.json("/api/clock/punch", { body: { kind: "in" } });
-    expect((await tech.fetch("/api/clock/punch", { body: { kind: "break_end" } })).status).toBe(409);
-    const b = await tech.json("/api/clock/punch", { body: { kind: "break_start" } });
-    expect(b.data.state).toBe("on_break");
-    expect((await tech.json("/api/clock/status")).data.state).toBe("on_break");
-    const again = await tech.json("/api/clock/punch", { body: { kind: "break_start" } });
-    expect(again.status).toBe(409);
-    expect(again.data.error).toBe("You're already on break.");
-    expect((await tech.fetch("/api/clock/punch", { body: { kind: "in" } })).status).toBe(409);
-    const e = await tech.json("/api/clock/punch", { body: { kind: "break_end" } });
-    expect(e.data.state).toBe("working");
-    // Put the punches an hour apart so the totals are exact.
-    const ids = (await env.DB.prepare("SELECT id FROM punches WHERE user_id = (SELECT user_id FROM punches WHERE id = ?) ORDER BY at").bind(e.data.id).all<{ id: string }>()).results.map((r) => r.id);
-    const base = Date.parse("2026-11-23T13:00:00Z");
-    for (const [i, pid] of ids.entries()) await env.DB.prepare("UPDATE punches SET at = ? WHERE id = ?").bind(new Date(base + i * 3600000).toISOString(), pid).run();
-    await env.DB.prepare("INSERT INTO punches (id, user_id, kind, at, location_source, created_at) SELECT 'p-out', user_id, 'out', ?1, 'none', ?1 FROM punches WHERE id = ?2").bind(new Date(base + 3 * 3600000).toISOString(), e.data.id).run();
-    const lola = await person("billing");
-    const days = (await lola.json("/api/clock/hours?from=2026-11-23&to=2026-11-23")).data.days;
-    expect(days[0]).toMatchObject({ hours: 2, breakHours: 1 });
-    const csv = await (await lola.fetch("/api/clock/hours/export?format=csv&kind=days&from=2026-11-23&to=2026-11-23")).text();
-    expect(csv).toContain("Break hours");
-  });
-
-  it("exports hours as a spreadsheet-safe CSV", async () => {
-    const lola = await person("billing");
-    const tech = await person("tech", { name: "=HYPERLINK(evil)" });
-    await tech.json("/api/clock/punch", { body: { kind: "in" } });
-    await tech.json("/api/clock/punch", { body: { kind: "out" } });
-    const res = await lola.fetch("/api/clock/hours/export?format=csv&kind=punches");
-    expect(res.headers.get("content-type")).toContain("text/csv");
-    const text = await res.text();
-    expect(text).toContain("'=HYPERLINK(evil)");
-    expect(text).not.toMatch(/(^|,)=HYPERLINK/m);
-  });
-});
-
 describe("personal look", () => {
   it("saves theme and layout to the login, and Reset goes back to Ronchi", async () => {
     const p = await person("tech");
@@ -147,37 +71,5 @@ describe("audit log", () => {
     await person("tech");
     await expect(env.DB.prepare("DELETE FROM audit_log").run()).rejects.toThrow(/append-only/);
     await expect(env.DB.prepare("UPDATE audit_log SET action = 'x'").run()).rejects.toThrow(/append-only/);
-  });
-});
-
-describe("typed-address mode (hard rule)", () => {
-  it("while on, every punch uses the typed address and coordinates are never stored, until turned off", async () => {
-    const aaron = await person("admin", { canTypeAddress: true });
-    const on = await aaron.json("/api/clock/address-mode", { method: "PUT", body: { on: true, address: "Example Foods, Atlanta GA" } });
-    expect(on.data).toEqual({ addressMode: true, typedAddress: "Example Foods, Atlanta GA" });
-    expect((await aaron.json("/api/clock/status")).data).toMatchObject({ addressMode: true, typedAddress: "Example Foods, Atlanta GA" });
-    // Even if a phone sends coordinates, they're thrown away.
-    const a = await aaron.json("/api/clock/punch", { body: { kind: "in", lat: 33.7, lng: -84.4, accuracy: 5 } });
-    expect(a.data.location).toBe("typed");
-    const b = await aaron.json("/api/clock/punch", { body: { kind: "out", lat: 33.7, lng: -84.4 } });
-    for (const pid of [a.data.id, b.data.id]) {
-      const row = await env.DB.prepare("SELECT lat, lng, accuracy_m, address, location_source FROM punches WHERE id = ?").bind(pid).first();
-      expect(row).toEqual({ lat: null, lng: null, accuracy_m: null, address: "Example Foods, Atlanta GA", location_source: "typed" });
-    }
-    // Off again: phone location is used.
-    await aaron.json("/api/clock/address-mode", { method: "PUT", body: { on: false } });
-    const c = await aaron.json("/api/clock/punch", { body: { kind: "in", lat: 32.7, lng: -79.9 } });
-    expect(c.data.location).toBe("gps");
-  });
-
-  it("needs the option, and removing the option ends the mode", async () => {
-    const tech = await person("tech");
-    expect((await tech.fetch("/api/clock/address-mode", { method: "PUT", body: { on: true, address: "x street" } })).status).toBe(403);
-    const admin = await person("admin");
-    const p = await person("tech", { canTypeAddress: true });
-    await p.json("/api/clock/address-mode", { method: "PUT", body: { on: true, address: "Plant 2" } });
-    await admin.json(`/api/users/${p.id}`, { method: "PATCH", body: { canTypeAddress: false } });
-    const row = await env.DB.prepare("SELECT address_mode FROM users WHERE id = ?").bind(p.id).first<{ address_mode: number }>();
-    expect(row?.address_mode).toBe(0);
   });
 });

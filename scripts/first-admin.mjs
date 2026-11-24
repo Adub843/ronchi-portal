@@ -38,7 +38,7 @@ const hash = createHash("sha256").update(token).digest("hex");
 const now = new Date();
 const expires = new Date(now.getTime() + 24 * 3600 * 1000);
 d1(
-  `INSERT INTO invites (id, email, name, role, can_type_address, token_hash, created_by, created_at, expires_at) VALUES (` +
+  `INSERT INTO invites (id, email, name, role, token_hash, created_by, created_at, expires_at) VALUES (` +
     [q(randomUUID()), q(email), q(name), q("admin"), 1, q(hash), "NULL", q(now.toISOString()), q(expires.toISOString())].join(",") +
     `)`,
 );
