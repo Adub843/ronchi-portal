@@ -261,6 +261,17 @@ body:has(.chat-compose) .alerts{bottom:calc(96px + env(safe-area-inset-bottom,0p
 .demo .chat{height:calc(100dvh - 250px)}
 @media (max-width:640px){.demo .chat{height:calc(100dvh - 350px - env(safe-area-inset-bottom,0px))}}
 
+/* Parts catalog (the viewers themselves are styled in web/catalog/catalog.css). */
+.note-inline{background:var(--info-soft);color:var(--ink);padding:8px 12px;border-radius:6px;margin:0}
+.crumbs{font-size:13px;color:var(--muted);margin:0 0 4px}
+.crumbs a{font-weight:600}
+.edit-rows input,.edit-rows select{font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--solid);color:var(--ink);width:100%;box-sizing:border-box;min-width:60px}
+.edit-rows td{padding:4px}
+.imp summary{cursor:pointer;padding:6px 0}
+.imp ul{margin:4px 0 10px;font-size:13px}
+.panel input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]),.panel select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--solid);color:var(--ink)}
+.panel .edit-rows input,.panel .edit-rows select{padding:4px 6px}
+@media (max-width:640px){nav.side{overflow-x:auto;scrollbar-width:none}}
 /* Change-part orders */
 .cp-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}
 .cp-tile{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;cursor:pointer;font:inherit;color:var(--ink);border:1px solid transparent}

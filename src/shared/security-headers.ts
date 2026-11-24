@@ -13,10 +13,14 @@ export function securityHeaders(opts: { csp: string }): Record<string, string> {
   };
 }
 
-/** Staff app: only our own scripts, styles, fonts and images. No outside sites at all. */
+/**
+ * Staff app: only our own scripts, styles, fonts and images. No outside sites at all.
+ * 'wasm-unsafe-eval' lets the catalog import turn STEP files into 3D models in the browser
+ * (occt-import-js is WebAssembly, served from our own site). It does not allow eval() of text.
+ */
 export const PORTAL_CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self'",
   "img-src 'self' data: blob:",
   "font-src 'self'",
@@ -28,6 +32,9 @@ export const PORTAL_CSP = [
   "form-action 'self'",
   "object-src 'none'",
 ].join("; ");
+
+/** Customer parts site: the staff rules, without WebAssembly (customers only view finished models). */
+export const PARTS_CSP = PORTAL_CSP.replace(" 'wasm-unsafe-eval'", "");
 
 /** Help center: server-rendered HTML with one inline stylesheet (hash-free, so 'unsafe-inline' for styles only). */
 export const HELP_CSP = [

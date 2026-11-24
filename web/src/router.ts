@@ -50,6 +50,8 @@ export function navigate(path: string, opts: { back?: boolean } = {}) {
 
 /** Where Back goes when there's no earlier page: a chat, board, machine or order goes to its list, anything else to Home. */
 export function parentOf(path: string): string {
+  if (/^\/catalog\/./.test(path)) return "/catalog";
+  if (/^\/quotes\/./.test(path)) return "/quotes";
   const m = /^\/(boards|machines|chats|change-parts)\/.+$/.exec(path);
   return m ? `/${m[1]}` : "/";
 }

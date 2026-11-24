@@ -1,0 +1,49 @@
+// Ronchi Parts: the CUSTOMER parts catalog. Customers sign in with a passkey and see only
+// the machines Ronchi America has linked to their company.
+// THE WALL: this Worker's only database is parts-db and its only bucket is ronchi-parts-files.
+// It has no binding, URL or key for portal-db, the staff files or the staff Worker. The staff
+// portal reaches IN through a service binding to publish; nothing here can reach back out.
+// test/unit/wall.test.ts fails the build if that ever changes.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ronchi-parts",
+  "main": "src/parts/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "web-parts/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "d1_databases": [
+    // database_id is filled in once with `wrangler d1 create parts-db` (see REBUILD.md). Until then the
+    // placeholder must differ from portal-db's, or local development would share one database file.
+    { "binding": "PARTS_DB", "database_name": "parts-db", "database_id": "00000000-0000-0000-0000-000000000002", "migrations_dir": "migrations/parts" }
+  ],
+  "r2_buckets": [
+    // Published drawings and 3D models. Created once with `wrangler r2 bucket create ronchi-parts-files`.
+    { "binding": "PARTS_FILES", "bucket_name": "ronchi-parts-files" }
+  ],
+  "ratelimits": [
+    { "name": "AUTH_LIMIT", "namespace_id": "3001", "simple": { "limit": 20, "period": 60 } },
+    { "name": "API_LIMIT", "namespace_id": "3002", "simple": { "limit": 600, "period": 60 } }
+  ],
+  // ADMIN_KEY_HASH is a secret: `wrangler secret put ADMIN_KEY_HASH --env production -c wrangler.parts.jsonc`.
+  "vars": { "ORIGIN": "http://localhost:8789", "RP_ID": "localhost", "RP_NAME": "Ronchi Parts" },
+  "observability": { "enabled": true },
+  "env": {
+    "production": {
+      "name": "ronchi-parts",
+      "vars": { "ORIGIN": "https://parts.ronchiamerica.com", "RP_ID": "parts.ronchiamerica.com", "RP_NAME": "Ronchi Parts" },
+      "d1_databases": [
+        { "binding": "PARTS_DB", "database_name": "parts-db", "database_id": "00000000-0000-0000-0000-000000000002", "migrations_dir": "migrations/parts" }
+      ],
+      "r2_buckets": [{ "binding": "PARTS_FILES", "bucket_name": "ronchi-parts-files" }],
+      "ratelimits": [
+        { "name": "AUTH_LIMIT", "namespace_id": "3001", "simple": { "limit": 20, "period": 60 } },
+        { "name": "API_LIMIT", "namespace_id": "3002", "simple": { "limit": 600, "period": 60 } }
+      ]
+    }
+  }
+}

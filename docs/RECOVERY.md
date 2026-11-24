@@ -75,3 +75,26 @@ Nightly exports to a separate, locked storage bucket are added before launch (pl
 
 Rollback (section 1, step 3), then fix on a branch, run `npm run check`, open a pull
 request, and deploy again after it is merged.
+
+## 7. The parts site publish key leaked or was lost
+
+Make a new key and set both halves (REBUILD.md step 4b). The old key stops working as
+soon as the new `ADMIN_KEY_HASH` is set. Wrong-key attempts are recorded in the parts
+site's audit log:
+`npx wrangler d1 execute parts-db --remote --env production -c wrangler.parts.jsonc --command "SELECT * FROM audit_log ORDER BY at DESC LIMIT 100"`
+
+## 8. A customer company must be cut off now
+
+In the portal: **Customers** → the company → **Manage** → **Turn company off**. Everyone
+at that company is signed out at once and can't sign in until it's turned back on. To
+cut off one person, use **Turn off** on their row. To stop a company seeing one machine,
+remove it from **Machines they see** and save.
+
+If the portal itself is down, the same from the command line:
+`npx wrangler d1 execute parts-db --remote --env production -c wrangler.parts.jsonc --command "UPDATE companies SET status='disabled' WHERE name='Company Name'; DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE company_id=(SELECT id FROM companies WHERE name='Company Name'))"`
+
+## 9. Pull a catalog off the parts site
+
+**Parts catalog** → the machine → **Unpublish**. Its sheets, drawings and 3D files are
+removed from the parts site at once. The staff copy in the portal is untouched.
+
