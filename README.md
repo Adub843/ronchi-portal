@@ -3,12 +3,12 @@
 The control hub for Ronchi America: one sign-in for staff (computer or phone), plus a
 separate public help center and a customer parts site. Written so any web developer can pick it up.
 
-- **Staff portal** (`portal.ronchiamerica.com`): sign-in with passkeys, message boards,
+- **Staff portal** (`ronchi-portal.business-console.workers.dev` for now): sign-in with passkeys, message boards,
   and the machine registry. Later steps add the knowledge base, training,
   orders, the schedule and remote support (see the plan).
-- **Help center** (`help.ronchiamerica.com`): an open search of Ronchi-made articles.
+- **Help center** (`ronchi-help.business-console.workers.dev`): an open search of Ronchi-made articles.
   No login, and no way to reach business data (see "The wall" below).
-- **Parts site** (`parts.ronchiamerica.com`): the interactive parts catalog for customers.
+- **Parts site** (`ronchi-parts.business-console.workers.dev`): the interactive parts catalog for customers.
   Each customer company signs in with passkeys and sees only its own machines: 2D
   exploded drawings with clickable balloons, 3D models to rotate, hide, isolate,
   see through, explode and cut, search, carts, shared lists and quote requests.
