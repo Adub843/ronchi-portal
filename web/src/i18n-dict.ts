@@ -557,7 +557,6 @@ export const ES: Record<string, string> = {
   "Open": "Abierto",
   "Completed": "Completado",
   "Delivered": "Entregado",
-  "Closed": "Cerrado",
   "Samples sent to Italy": "Muestras enviadas a Italia",
   "Folder only": "Solo carpeta",
   "Folders not on the master sheet": "Carpetas que no están en la hoja maestra"
@@ -1047,7 +1046,6 @@ export const IT: Record<string, string> = {
   "Open": "Aperto",
   "Completed": "Completato",
   "Delivered": "Consegnato",
-  "Closed": "Chiuso",
   "Samples sent to Italy": "Campioni inviati in Italia",
   "Folder only": "Solo cartella",
   "Folders not on the master sheet": "Cartelle non presenti nel foglio principale"
