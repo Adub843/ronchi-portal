@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { t } from "../i18n";
 import { hrefFor, navigate } from "../router";
 
 export function Link({ to, children, className, current }: { to: string; children: ReactNode; className?: string; current?: boolean }) {
@@ -33,7 +34,7 @@ export function PageHead({ title, sub, children }: { title: string; sub?: string
 
 export function ErrorNote({ error }: { error: string | null }) {
   if (!error) return null;
-  return <p className="err" role="alert">{error}</p>;
+  return <p className="err" role="alert">{t(error)}</p>;
 }
 
 export function Empty({ children }: { children: ReactNode }) {
@@ -66,7 +67,7 @@ export function toast(message: string) {
     el.setAttribute("role", "status");
     document.body.appendChild(el);
   }
-  el.textContent = message;
+  el.textContent = t(message);
   el.hidden = false;
   window.clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => el && (el.hidden = true), 3500);
