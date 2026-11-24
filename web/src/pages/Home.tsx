@@ -5,6 +5,7 @@ import { t } from "../i18n";
 
 export function Home({ me, unread }: { me: Me; unread: Unread }) {
   const boards = useLoad(() => (can(me, "boards.use") ? api("/boards") : Promise.resolve({ boards: [] })));
+  const orders = useLoad(() => (can(me, "orders.view") ? api("/change-parts") : Promise.resolve(null)));
   const hour = new Date().getHours();
   const greet = hour < 12 ? t("Good morning") : hour < 18 ? t("Good afternoon") : t("Good evening");
 
@@ -32,6 +33,13 @@ export function Home({ me, unread }: { me: Me; unread: Unread }) {
           <Link to="/machines" className="panel tile">
             <h2>{t("Machines")}</h2>
             <span className="muted">{t("Find any machine by number, model or customer.")}</span>
+          </Link>
+        )}
+        {can(me, "orders.view") && (
+          <Link to="/change-parts" className="panel tile">
+            <h2>{t("Change-part orders")}</h2>
+            <span className="stat"><span className="n">{orders.data ? orders.data.orders.filter((o: any) => o.open).length : "–"}</span><span className="l">{t("Open jobs")}</span></span>
+            <span className="muted">{t("Every change-part job, from quote to shipped.")}</span>
           </Link>
         )}
         <div className="panel tile">

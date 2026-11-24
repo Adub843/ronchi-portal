@@ -4,6 +4,7 @@
 import logoUrl from "../assets/ronchi-logo.png";
 import { cleanName, fileInfo, fileProblem } from "../../../src/shared/files";
 import { PERMISSIONS, ROLES } from "../../../src/portal/lib/roles";
+import { CP_FIELDS, isOpen, normalDate, readOrdersCsv } from "../../../src/shared/change-parts";
 type Role = keyof typeof ROLES;
 
 // Ids for example records. Uses the browser's secure random source like the real server does.
@@ -29,6 +30,7 @@ interface DB {
   muted: Record<string, boolean>;
   members: Record<string, string[]>; // chat id -> user ids
   files: any[];
+  orders: any[];
 }
 
 /** A small real PDF (one page of text), so example files open like the real thing. */
@@ -62,7 +64,7 @@ function seed(): DB {
     u("Andrew Yang", "sales", "andrew@ronchiamerica.com"),
     u("Michele Falsini", "sales", "michele@ronchiamerica.com"),
   ];
-  const [aaron, paolo, lola, meagan, steve, andrew] = users as [User, User, User, User, User, User, User];
+  const [aaron, paolo, lola, meagan, steve, andrew, michele] = users as [User, User, User, User, User, User, User];
   const m = (serial: string, model: string, customer: string, site: string, notes = "") => ({ id: id(), serial, model, customer, site, notes, sharepoint_url: null, created_at: t0, updated_at: t0 });
   const machines = [
     m("3069MB", "Monoblock filler and capper", "Example Pharma Co.", "Columbus, OH", "Example record. Capper clutch serviced Oct 2026."),
@@ -131,11 +133,27 @@ function seed(): DB {
   attach(c3, "Fill weights line 2 heads 1-12.csv", new Blob(["Head,Target g,Actual g\n" + Array.from({ length: 12 }, (_, i) => `${i + 1},500.0,${(499.6 + ((i * 7) % 9) / 10).toFixed(1)}`).join("\n")], { type: "text/csv" }));
   attach(s9, "ronchi-logo.png", new Blob(["png"], { type: "image/png" }), logoUrl);
   const members = Object.fromEntries(chats.map((c) => [c.id, c.people.map((x) => x.id)]));
-  void andrew;
+  // Example change-part orders. Customers, POs and parts are made up.
+  const dayIso = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  const o = (customer: string, machine: string, part: string, status: string, more: Record<string, string | null> = {}, by: User = andrew, n = 3) => {
+    const at = iso(daysAgo(n, 10));
+    const row: any = { id: id(), customer, machine, part, status, customer_po: null, ra_po: null, aa: null, samples_received: null, samples_shipped: null, fill_test: null, ship_date: null, folder_url: null, notes: null, ...more, revision: 1, created_by: by.id, updated_by: by.id, created_at: at, updated_at: at };
+    row._h = [{ at, action: "cp_order.create", who: by.name, changes: null }];
+    return row;
+  };
+  const orders = [
+    o("Example Pharma Co.", "3069MB", "250 ml oval bottle set (star wheels, guides, scroll)", "In production", { customer_po: "EPC-44817", ra_po: "RA-2611", aa: "AA-1093", samples_received: dayIso(-41), samples_shipped: dayIso(-38), fill_test: "Passed in Italy", ship_date: dayIso(12), notes: "Example order. Customer wants it before their January shutdown." }, andrew, 2),
+    o("Example Foods Inc.", "4222TP", "Piston resize kit 1 L", "Waiting on samples", { customer_po: "EF-2210", ra_po: "RA-2614", notes: "Example. 24 bottles and caps promised by Friday." }, michele, 5),
+    o("Example Home Care", "4212MB", "Trigger sprayer cap chuck set", "Ready to ship", { customer_po: "EHC-90021", ra_po: "RA-2598", aa: "AA-1081", samples_received: dayIso(-70), samples_shipped: dayIso(-66), fill_test: "Passed", ship_date: dayIso(-4) }, andrew, 1),
+    o("Example Personal Care", "3535MB", "60 ml round bottle set", "Quote", { notes: "Example. Quote sent, waiting on PO." }, michele, 8),
+    o("Example Pharma Co.", "3811CP", "38 mm cap chucks", "Shipped", { customer_po: "EPC-43002", ra_po: "RA-2560", aa: "AA-1040", samples_received: dayIso(-120), samples_shipped: dayIso(-115), fill_test: "Passed", ship_date: dayIso(-30) }, andrew, 29),
+    o("Example Beverage LLC", "", "Neck guides for 2 L PET", "In design", { customer_po: "EB-7781", samples_received: dayIso(-9), samples_shipped: dayIso(-7) }, andrew, 4),
+  ];
+  orders[0]._h.unshift({ at: iso(daysAgo(1, 15, 20)), action: "cp_order.update", who: andrew.name, changes: { status: ["Fill test", "In production"], ship_date: [dayIso(5), dayIso(12)] } });
   return {
     users, invites: [], machines, boards: [service, torque, sales, eng, ...chats.map(({ people: _p, ...c }) => c)], posts, audit, prefs: null,
     reads: { [torque.id]: iso(new Date()), [withLola.id]: iso(new Date()), [crew.id]: iso(new Date()), [withSteve.id]: iso(ago(100)) },
-    muted: {}, members, files,
+    muted: {}, members, files, orders,
   };
 }
 
@@ -232,7 +250,68 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       log("machine.update");
       return { ok: true };
     }
-    return { machine: m, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at) };
+    return { machine: m, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at), orders: db.orders.filter((x) => x.machine === m.serial && !x.removed_at).map(({ _h, ...x }) => x) };
+  }
+  // --- change-part orders ---
+  if (seg[0] === "change-parts") {
+    const view = (x: any) => {
+      const { _h, ...rest } = x;
+      return { ...rest, open: isOpen(x.status), machine_id: db.machines.find((m) => m.serial === x.machine)?.id ?? null };
+    };
+    const tidy = (b: any) => {
+      const out: any = {};
+      for (const f of CP_FIELDS) {
+        if (!(f in b)) continue;
+        let v = String(b[f] ?? "").trim();
+        if (v && (f === "samples_received" || f === "samples_shipped" || f === "ship_date")) {
+          const d = normalDate(v);
+          if (!d) throw new Fail(400, "Dates must be real dates.");
+          v = d;
+        }
+        if (v && f === "folder_url" && !/^https:\/\/[a-z0-9-]+(?:-my)?\.sharepoint\.com\//i.test(v)) throw new Fail(400, "The folder link must start with https://<company>.sharepoint.com/");
+        out[f] = (f === "machine" ? v.toUpperCase() : v) || null;
+      }
+      return out;
+    };
+    const live = db.orders.filter((x) => !x.removed_at);
+    if (seg.length === 1 && method === "GET") return { orders: live.sort((a, b) => b.updated_at.localeCompare(a.updated_at)).map(view) };
+    if (seg.length === 1 && method === "POST") {
+      const f = tidy(body);
+      if (!f.customer) throw new Fail(400, "Customer is required.");
+      const at = iso(new Date());
+      const row = { id: id(), ...Object.fromEntries(CP_FIELDS.map((k) => [k, null])), ...f, revision: 1, created_at: at, updated_at: at, _h: [{ at, action: "cp_order.create", who: u.name, changes: null }] };
+      db.orders.push(row);
+      return { id: row.id };
+    }
+    if (seg[1] === "import") {
+      const read = readOrdersCsv(String(body.csv ?? ""));
+      const k = (x: any) => [x.customer, x.machine, x.part, x.customer_po].map((v) => String(v ?? "").trim().toLowerCase()).join("|");
+      const have = new Set(live.map(k));
+      const fresh = read.orders.filter((x) => (have.has(k(x)) ? false : (have.add(k(x)), true)));
+      const summary = { found: read.orders.length, adding: fresh.length, duplicates: read.orders.length - fresh.length, skipped: read.skipped, matched: read.matched, extra: read.extra, problems: read.problems, sample: fresh.slice(0, 5) };
+      if (body.confirm !== true) return summary;
+      const at = iso(new Date());
+      for (const x of fresh) db.orders.push({ id: id(), ...Object.fromEntries(CP_FIELDS.map((f) => [f, null])), ...x, revision: 1, created_at: at, updated_at: at, _h: [{ at, action: "cp_order.create", who: u.name, changes: null }] });
+      return { ...summary, imported: fresh.length };
+    }
+    const row = live.find((x) => x.id === seg[1]);
+    if (!row) throw new Fail(404, "Not found.");
+    if (method === "DELETE") {
+      row.removed_at = iso(new Date());
+      return { ok: true };
+    }
+    if (method === "PATCH") {
+      if (body.revision !== row.revision) throw new Fail(409, "Someone else changed this order while you were editing. Reload to see their changes.");
+      const f = tidy(body);
+      const changes: any = {};
+      for (const [key, v] of Object.entries(f)) if ((row[key] ?? null) !== v) changes[key] = [row[key] ?? null, v];
+      if (!Object.keys(changes).length) return { ok: true, revision: row.revision };
+      Object.assign(row, f, { revision: row.revision + 1, updated_at: iso(new Date()) });
+      row._h.unshift({ at: row.updated_at, action: "cp_order.update", who: u.name, changes });
+      return { ok: true, revision: row.revision };
+    }
+    const creator = db.users.find((x) => x.id === row.created_by);
+    return { order: { ...view(row), created_by_name: creator?.name ?? null }, history: row._h };
   }
   // --- boards and chats ---
   const visible = (b: any) => !b.archived_at && (b.kind === "chat" ? (db.members[b.id] ?? []).includes(u.id) : true);

@@ -15,6 +15,7 @@ import { auth } from "./routes/auth";
 import { boards } from "./routes/boards";
 import { catalog } from "./routes/catalog";
 import { customers, quotes } from "./routes/customers";
+import { changeParts } from "./routes/change-parts";
 import { files } from "./routes/files";
 import { machines } from "./routes/machines";
 import { prefs } from "./routes/prefs";
@@ -61,6 +62,7 @@ app.route("/api/files", files);
 app.route("/api/catalog", catalog);
 app.route("/api/customers", customers);
 app.route("/api/quotes", quotes);
+app.route("/api/change-parts", changeParts);
 
 app.all("/api/*", () => fail(404, "Not found."));
 
