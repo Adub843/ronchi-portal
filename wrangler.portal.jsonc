@@ -25,9 +25,10 @@
     { "name": "AUTH_LIMIT", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } },
     { "name": "API_LIMIT", "namespace_id": "1002", "simple": { "limit": 300, "period": 60 } }
   ],
-  // The customer parts site. The portal publishes catalogs into it through this binding with the
-  // PARTS_ADMIN_KEY secret. It's one way: the parts site has no binding back to the portal.
-  "services": [{ "binding": "PARTS", "service": "ronchi-parts" }],
+  // The customer parts site and the customer help center. The portal publishes into each through
+  // its binding with a publish key secret (PARTS_ADMIN_KEY, HELP_ADMIN_KEY). It's one way: neither
+  // customer site has a binding back to the portal.
+  "services": [{ "binding": "PARTS", "service": "ronchi-parts" }, { "binding": "HELP", "service": "ronchi-help" }],
   "vars": {
     // Local development values. The live values are set under env.production below.
     "ORIGIN": "http://localhost:8787",
@@ -44,7 +45,7 @@
         { "binding": "DB", "database_name": "portal-db", "database_id": "17153d9d-8595-4dbb-83f9-66515cbdceea", "migrations_dir": "migrations/portal" }
       ],
       "r2_buckets": [{ "binding": "FILES", "bucket_name": "ronchi-portal-files" }],
-      "services": [{ "binding": "PARTS", "service": "ronchi-parts" }],
+      "services": [{ "binding": "PARTS", "service": "ronchi-parts" }, { "binding": "HELP", "service": "ronchi-help" }],
       "ratelimits": [
         { "name": "AUTH_LIMIT", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } },
         { "name": "API_LIMIT", "namespace_id": "1002", "simple": { "limit": 300, "period": 60 } }

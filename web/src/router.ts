@@ -11,6 +11,8 @@ const HASH_ALIAS: Record<string, string> = { "my-settings": "settings" };
 function hashToPath(hash: string): string {
   const h = hash.replace(/^#/, "");
   if (!h) return "/";
+  const k = /^kb-([A-Za-z0-9_-]+)$/.exec(h);
+  if (k) return `/kb/${k[1]}`;
   const m = /^(board|machine|chat|change-part)-([A-Za-z0-9_-]+)$/.exec(h);
   if (m) return `/${m[1]}s/${m[2]}`;
   return `/${HASH_ALIAS[h] ?? h}`;
@@ -20,6 +22,8 @@ function hashToPath(hash: string): string {
 export function hrefFor(path: string): string {
   if (!DEMO) return path;
   if (path === "/") return "#home";
+  const k = /^\/kb\/(.+)$/.exec(path);
+  if (k) return `#kb-${k[1]}`;
   const m = /^\/(boards|machines|chats|change-parts)\/(.+)$/.exec(path);
   if (m) return `#${m[1]!.slice(0, -1)}-${m[2]}`;
   const name = path.slice(1);
@@ -52,6 +56,7 @@ export function navigate(path: string, opts: { back?: boolean } = {}) {
 export function parentOf(path: string): string {
   if (/^\/catalog\/./.test(path)) return "/catalog";
   if (/^\/quotes\/./.test(path)) return "/quotes";
+  if (/^\/kb\/./.test(path)) return "/kb";
   const m = /^\/(boards|machines|chats|change-parts)\/.+$/.exec(path);
   return m ? `/${m[1]}` : "/";
 }
