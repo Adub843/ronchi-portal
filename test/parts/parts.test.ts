@@ -172,6 +172,9 @@ describe("sign-in and roles", () => {
     // A machine-number search finds the company's own machines only, catalog or not.
     expect((await alice.json("/api/search?q=290")).data.machines.map((m: any) => m.serial)).toEqual(["2901AA", "2902AA"]);
     expect((await bob.json("/api/search?q=2902")).data.machines).toEqual([]);
+    // Searching by company name lists that company's own machines, never another company's.
+    expect((await alice.json("/api/search?q=bottler")).data.machines.map((m: any) => m.serial)).toEqual(["2901AA", "2902AA"]);
+    expect((await bob.json("/api/search?q=bottler")).data.machines.map((m: any) => m.serial)).toEqual(["2903BB"]);
   });
 
   it("Ronchi America machine numbers (RA1018) work for companies", async () => {

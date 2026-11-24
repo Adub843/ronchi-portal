@@ -635,7 +635,7 @@ function Search({ q }: { q: string }) {
     <>
       <Head title={t("Search")} sub={t("Find a machine by its number, or a part on any of your machines by its number, name, or the maker's part number.")} />
       <form className="row" onSubmit={(e) => { e.preventDefault(); navigate(`/search?q=${enc(text.trim())}`); }}>
-        <input className="panel" style={{ flex: 1, padding: "10px 12px", font: "inherit" }} value={text} onChange={(e) => setText(e.target.value)} placeholder={t("Part number or name")} aria-label={t("Search parts")} />
+        <input className="panel" style={{ flex: 1, padding: "10px 12px", font: "inherit" }} value={text} onChange={(e) => setText(e.target.value)} placeholder={t("Company, machine number, part number or name")} aria-label={t("Search parts")} />
         <button className="btn" type="submit">{t("Search")}</button>
       </form>
       <Err error={error} />

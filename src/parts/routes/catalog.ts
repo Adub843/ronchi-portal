@@ -1,5 +1,6 @@
 // The catalog a customer sees: their machines, each machine's drawings and parts, search and
 // where-used. Every route goes through lib/access.ts, so a company only ever reaches its own machines.
+import { cleanPartCode } from "../../shared/catalog/model";
 import { Hono } from "hono";
 import type { PartsApp } from "../env";
 import { companySerials, requireMachine, requireSheet } from "../lib/access";
@@ -94,20 +95,23 @@ catalog.get("/search", async (c) => {
       WHERE r.code LIKE ? ESCAPE '\\' OR p.name_en LIKE ? ESCAPE '\\' OR p.name_it LIKE ? ESCAPE '\\' OR p.maker_pn LIKE ? ESCAPE '\\'
       ORDER BY (r.code = ?) DESC, r.code, s.serial LIMIT 200`,
   ).bind(u.companyId, like, like, like, like, q.toUpperCase()).all();
-  // The company's own machines whose number, model or label matches.
+  // The company's own machines whose number, model or label matches. Customers also search by their
+  // own company name: that lists all of their machines (never another company's).
   const { results: machines } = await c.env.PARTS_DB.prepare(
-    `SELECT cm.serial, m.model, cm.label FROM company_machines cm LEFT JOIN machines m ON m.serial = cm.serial
-      WHERE cm.company_id = ? AND (cm.serial LIKE ? ESCAPE '\\' OR m.model LIKE ? ESCAPE '\\' OR cm.label LIKE ? ESCAPE '\\')
-      ORDER BY cm.serial LIMIT 50`,
-  ).bind(u.companyId, like, like, like).all();
+    `SELECT cm.serial, m.model, cm.label FROM company_machines cm
+       JOIN companies co ON co.id = cm.company_id
+       LEFT JOIN machines m ON m.serial = cm.serial
+      WHERE cm.company_id = ? AND (cm.serial LIKE ? ESCAPE '\\' OR m.model LIKE ? ESCAPE '\\' OR cm.label LIKE ? ESCAPE '\\' OR co.name LIKE ? ESCAPE '\\')
+      ORDER BY cm.serial LIMIT 200`,
+  ).bind(u.companyId, like, like, like, like).all();
   return c.json({ results, machines });
 });
 
 /** One part: its names and where it's used, on this company's machines only. */
 catalog.get("/parts/:code", async (c) => {
   const u = requireCustomer(c);
-  const code = c.req.param("code").toUpperCase();
-  if (!/^[A-Z0-9_]{4,20}$/.test(code)) fail(404, "Not found.");
+  const code = cleanPartCode(c.req.param("code"));
+  if (!code) fail(404, "Not found.");
   const serials = await companySerials(c.env.PARTS_DB, u);
   if (!serials.length) fail(404, "Not found.");
   const { results: used } = await c.env.PARTS_DB.prepare(
