@@ -16,7 +16,9 @@ import type { AppEnv } from "../env";
 import { addSeconds, audit, now } from "../lib/db";
 import { body, fail, requireUser } from "../lib/http";
 import { createInvite } from "../lib/invites";
-import { PERMISSIONS } from "../lib/roles";
+import { permissionsOf } from "../lib/roles";
+import { getSettings } from "../lib/settings-store";
+import { publicPart } from "../lib/settings";
 import { endSession, startSession } from "../lib/session";
 
 const CHALLENGE_SECONDS = 300;
@@ -61,7 +63,8 @@ export const auth = new Hono<AppEnv>();
 auth.get("/me", (c) => {
   const u = c.get("user");
   return c.json({
-    user: u ? { id: u.id, name: u.name, email: u.email, role: u.role, permissions: [...PERMISSIONS[u.role]] } : null,
+    user: u ? { id: u.id, name: u.name, email: u.email, role: u.role, permissions: permissionsOf(u.role) } : null,
+    settings: u ? publicPart(getSettings()) : null,
   });
 });
 

@@ -10,7 +10,8 @@
 // that board or chat (see routes/files.ts).
 import { Hono, type Context } from "hono";
 import { randomId } from "../../shared/crypto";
-import { cleanName, fileInfo, fileProblem, MAX_FILES_PER_MESSAGE, MAX_MESSAGE_BYTES } from "../../shared/files";
+import { cleanName, fileInfo, fileProblem, MAX_MESSAGE_BYTES } from "../../shared/files";
+import { getSettings } from "../lib/settings-store";
 import type { AppEnv, SessionUser } from "../env";
 import { audit, now } from "../lib/db";
 import { body, fail, mustStr, requirePerm, str } from "../lib/http";
@@ -23,7 +24,6 @@ export interface BoardRow {
   created_by: string; created_at: string; archived_at: string | null; locked: number;
 }
 
-const MAX_CHAT_PEOPLE = 30;
 
 /** Who can see a board or chat. `member` = this person is listed in the chat's members. */
 export function canSee(user: SessionUser, b: Pick<BoardRow, "kind" | "audience">, member: boolean): boolean {
@@ -145,6 +145,7 @@ boards.post("/read-all", async (c) => {
 
 boards.post("/", async (c) => {
   const u = requirePerm(c, "boards.use");
+  if (getSettings().chats.boardsBy === "moderators" && !can(u.role, "boards.moderate")) fail(403, "Only moderators can start new boards. Ask an admin.");
   const b = await body(c);
   const name = mustStr(b.name, 80, "Board name");
   const description = str(b.description, 500);
@@ -171,7 +172,8 @@ boards.post("/", async (c) => {
 async function activeUsers(db: D1Database, ids: unknown): Promise<string[]> {
   if (!Array.isArray(ids) || !ids.every((x) => typeof x === "string")) fail(400, "Pick who to chat with.");
   const unique = [...new Set(ids as string[])];
-  if (unique.length > MAX_CHAT_PEOPLE) fail(400, `A chat can have up to ${MAX_CHAT_PEOPLE} people.`);
+  const max = getSettings().chats.maxPeople;
+  if (unique.length > max) fail(400, `A chat can have up to ${max} people.`);
   if (!unique.length) return [];
   const { results } = await db.prepare(`SELECT id FROM users WHERE status = 'active' AND id IN (${unique.map(() => "?").join(",")})`).bind(...unique).all<{ id: string }>();
   if (results.length !== unique.length) fail(400, "Someone you picked can't be found.");
@@ -184,6 +186,8 @@ boards.post("/chats", async (c) => {
   const b = await body(c);
   const others = (await activeUsers(c.env.DB, b.userIds)).filter((x) => x !== u.id);
   if (!others.length) fail(400, "Pick who to chat with.");
+  const max = getSettings().chats.maxPeople; // counting the person who starts it
+  if (others.length + 1 > max) fail(400, `A chat can have up to ${max} people.`);
   const name = str(b.name, 80) ?? "";
   if (others.length === 1 && !name) {
     const existing = await c.env.DB.prepare(
@@ -336,7 +340,8 @@ async function addPeople(c: Context<AppEnv>, u: SessionUser, board: BoardRow, id
   const have = new Set(current.map((m) => m.user_id));
   const add = (await activeUsers(db, ids)).filter((x) => !have.has(x));
   if (!add.length) fail(400, "Pick someone who isn't in this chat yet.");
-  if (have.size + add.length > MAX_CHAT_PEOPLE) fail(400, `A chat can have up to ${MAX_CHAT_PEOPLE} people.`);
+  const max = getSettings().chats.maxPeople;
+  if (have.size + add.length > max) fail(400, `A chat can have up to ${max} people.`);
   const { results: named } = await db.prepare(`SELECT name FROM users WHERE id IN (${add.map(() => "?").join(",")}) ORDER BY name`).bind(...add).all<{ name: string }>();
   const names = named.map((x) => x.name);
   const at = now();
@@ -426,11 +431,14 @@ boards.post("/:id/posts", async (c) => {
   if (!canPost(u, board)) fail(403, "Only the board's creator and moderators can post here.");
   const { text, parentId, files } = await readMessage(c);
   if (!text && !files.length) fail(400, "Message is required.");
-  if (files.length > MAX_FILES_PER_MESSAGE) fail(400, `Send up to ${MAX_FILES_PER_MESSAGE} files at a time.`);
+  const limits = getSettings().chats;
+  if (files.length && !limits.files) fail(403, "Sending photos and files is turned off. Send a message without files.");
+  if (files.length > limits.maxFiles) fail(400, `Send up to ${limits.maxFiles} files at a time.`);
   if (files.reduce((n, f) => n + f.size, 0) > MAX_MESSAGE_BYTES) fail(400, "Those files are too big to send together. Send them in two messages.");
   for (const f of files) {
     const problem = fileProblem(f.name, f.size);
     if (problem) fail(400, `${cleanName(f.name)}: ${problem}`);
+    if (f.size > limits.maxFileMb * 1024 * 1024) fail(400, `${cleanName(f.name)}: Files can be up to ${limits.maxFileMb} MB each.`);
   }
   if (parentId) {
     const parent = await c.env.DB.prepare("SELECT id FROM posts WHERE id = ? AND board_id = ? AND deleted_at IS NULL AND kind = 'post'").bind(parentId, board.id).first();

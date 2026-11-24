@@ -1,6 +1,7 @@
 // Spanish and Italian for every piece of text in the staff app, keyed by the English.
 // Add a line here whenever a new t("...") text is added; test/unit/i18n.test.ts checks none is missing.
 // Messages people type are never translated.
+import { ADMIN_ES, ADMIN_IT } from "./i18n-admin";
 
 /** Texts shown through a variable (role names, menu tabs) or sent by the server, so the test can't find them in t("...") calls. */
 export const DYNAMIC: string[] = [
@@ -1113,3 +1114,7 @@ export const IT: Record<string, string> = {
   "Folder only": "Solo cartella",
   "Folders not on the master sheet": "Cartelle non presenti nel foglio principale"
 };
+
+// Settings > Admin controls (i18n-admin.ts).
+Object.assign(ES, ADMIN_ES);
+Object.assign(IT, ADMIN_IT);

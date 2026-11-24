@@ -45,7 +45,7 @@ export function App() {
   const [unread, setUnread] = useState<Unread>({ boards: 0, chats: 0 });
   const [sound, setSoundState] = useState(soundOn);
 
-  const refresh = () => api<{ user: Me | null }>("/auth/me").then((r) => setMe(r.user), () => setMe(null));
+  const refresh = () => api<{ user: Me | null; settings?: Me["settings"] }>("/auth/me").then((r) => setMe(r.user ? { ...r.user, settings: r.settings } : null), () => setMe(null));
   useEffect(() => void refresh(), []);
   useEffect(() => {
     if (!me) return;
@@ -75,6 +75,12 @@ export function App() {
     }
   }
 
+  const brand = me?.settings?.brand ?? { name: "Ronchi Portal", company: "Ronchi America", notice: "" };
+  useEffect(() => {
+    document.title = brand.name;
+  }, [brand.name]);
+  const langs = LANGS.filter((l) => !me?.settings || me.settings.languages.allowed.includes(l.id));
+
   if (path === "/welcome") return <Welcome onDone={refresh} />;
   if (me === undefined) return <div className="boot" aria-busy="true" />;
   if (me === null) return <SignIn onDone={refresh} />;
@@ -96,18 +102,19 @@ export function App() {
   else if (section === "/machines") page = <Machines me={me} />;
   else if (section === "/change-parts") page = <ChangeParts me={me} />;
   else if (section === "/people") page = <People me={me} />;
-  else if (section === "/settings") page = <Settings me={me} prefs={prefs} onPrefs={savePrefs} onSignOut={signOut} sound={sound} onSound={(on) => { setSound(on); setSoundState(on); }} />;
+  else if (section === "/settings") page = <Settings me={me} admin={path === "/settings/admin"} prefs={prefs} onPrefs={savePrefs} onSignOut={signOut} sound={sound} onSound={(on) => { setSound(on); setSoundState(on); }} onSettings={(s) => setMe({ ...me, settings: s })} />;
   else page = <Home me={me} unread={unread} />;
 
   const account: MenuItem[] = [
     { heading: me.name, sub: me.email },
-    ...LANGS.map((l): MenuItem => ({ label: l.name, role: "radio", checked: lang === l.id, onSelect: () => savePrefs({ lang: l.id }) })),
+    ...langs.map((l): MenuItem => ({ label: l.name, role: "radio", checked: lang === l.id, onSelect: () => savePrefs({ lang: l.id }) })),
     "sep",
     { label: t("Pop-up alerts on this computer"), role: "checkbox", checked: popups, onSelect: () => savePrefs({ popups: !popups }) },
     { label: t("Alert sound"), role: "checkbox", checked: sound, onSelect: () => { setSound(!sound); setSoundState(!sound); } },
     { label: t("Mark all chats and boards read"), onSelect: async () => { await api("/boards/read-all", { body: {} }).catch(() => undefined); setUnread({ boards: 0, chats: 0 }); toast(t("All marked as read")); }, hidden: !can(me, "boards.use") },
     "sep",
     { label: t("Settings"), onSelect: () => navigate("/settings") },
+    { label: t("Admin controls"), hint: t("Admin"), onSelect: () => navigate("/settings/admin"), hidden: !can(me, "settings.manage") },
     { label: t("People and access"), hint: t("Admin"), onSelect: () => navigate("/people"), hidden: !can(me, "users.manage") },
     { label: t("Archived boards"), hint: t("Admin"), onSelect: () => navigate("/boards"), hidden: !can(me, "boards.moderate") || !can(me, "users.manage") },
     "sep",
@@ -121,7 +128,7 @@ export function App() {
           <Link to="/" className="brand">
             <img src={logoUrl} alt="Ronchi" />
             <span>
-              Ronchi Portal<small>Ronchi America</small>
+              {brand.name}<small>{brand.company}</small>
             </span>
           </Link>
           <span className="spacer" />
@@ -139,6 +146,11 @@ export function App() {
           />
         </div>
       </header>
+      {brand.notice && (
+        <div className="notice-strip" role="status">
+          <div className="wrap">{brand.notice}</div>
+        </div>
+      )}
       {import.meta.env.MODE === "demo" && (
         <div className="note">
           <div className="wrap row">

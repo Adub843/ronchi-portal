@@ -6,9 +6,12 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { randomToken, sha256Hex } from "../../shared/crypto";
 import type { AppEnv, SessionUser } from "../env";
 import { addSeconds, now } from "./db";
+import { getSettings } from "./settings-store";
 
-const ABSOLUTE_LIFETIME = 30 * 24 * 3600; // signed out after 30 days no matter what
-const IDLE_LIFETIME = 14 * 24 * 3600;     // or after 14 days without use
+// How long a sign-in lasts is set in Settings > Admin controls (defaults: 30 days no matter what,
+// or 14 days without use). Shortening either one applies to people already signed in.
+const absoluteLifetime = () => getSettings().people.sessionDays * 24 * 3600;
+const idleLifetime = () => getSettings().people.idleDays * 24 * 3600;
 
 /** "__Host-" cookies must be Secure, on "/", with no Domain. Local http dev can't use that prefix. */
 export function cookieName(origin: string): string {
@@ -21,14 +24,14 @@ export async function startSession(c: Context<AppEnv>, userId: string): Promise<
   await c.env.DB.prepare(
     "INSERT INTO sessions (id_hash, user_id, created_at, last_seen_at, expires_at, user_agent, ip) VALUES (?,?,?,?,?,?,?)",
   )
-    .bind(await sha256Hex(token), userId, t, t, addSeconds(t, ABSOLUTE_LIFETIME), (c.req.header("user-agent") ?? "").slice(0, 200), c.get("ip"))
+    .bind(await sha256Hex(token), userId, t, t, addSeconds(t, absoluteLifetime()), (c.req.header("user-agent") ?? "").slice(0, 200), c.get("ip"))
     .run();
   setCookie(c, cookieName(c.env.ORIGIN), token, {
     httpOnly: true,
     secure: c.env.ORIGIN.startsWith("https://"),
     sameSite: "Strict",
     path: "/",
-    maxAge: ABSOLUTE_LIFETIME,
+    maxAge: absoluteLifetime(),
   });
 }
 
@@ -37,15 +40,16 @@ export async function loadSession(c: Context<AppEnv>): Promise<SessionUser | nul
   if (!token || token.length > 100) return null;
   const hash = await sha256Hex(token);
   const row = await c.env.DB.prepare(
-    `SELECT s.id_hash, s.last_seen_at, s.expires_at, u.id, u.email, u.name, u.role, u.status
+    `SELECT s.id_hash, s.created_at, s.last_seen_at, s.expires_at, u.id, u.email, u.name, u.role, u.status
        FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id_hash = ?`,
   )
     .bind(hash)
-    .first<{ id_hash: string; last_seen_at: string; expires_at: string; id: string; email: string; name: string; role: SessionUser["role"]; status: string }>();
+    .first<{ id_hash: string; created_at: string; last_seen_at: string; expires_at: string; id: string; email: string; name: string; role: SessionUser["role"]; status: string }>();
   if (!row) return null;
   const t = now();
-  const idleExpired = Date.parse(row.last_seen_at) + IDLE_LIFETIME * 1000 < Date.parse(t);
-  if (row.status !== "active" || row.expires_at < t || idleExpired) {
+  const idleExpired = Date.parse(row.last_seen_at) + idleLifetime() * 1000 < Date.parse(t);
+  const tooOld = Date.parse(row.created_at) + absoluteLifetime() * 1000 < Date.parse(t);
+  if (row.status !== "active" || row.expires_at < t || idleExpired || tooOld) {
     await c.env.DB.prepare("DELETE FROM sessions WHERE id_hash = ?").bind(hash).run();
     return null;
   }
