@@ -13,6 +13,7 @@ import { fail } from "./lib/http";
 import { loadSession } from "./lib/session";
 import { auth } from "./routes/auth";
 import { boards } from "./routes/boards";
+import { files } from "./routes/files";
 import { machines } from "./routes/machines";
 import { prefs } from "./routes/prefs";
 import { users } from "./routes/users";
@@ -26,7 +27,10 @@ app.use("*", async (c, next) => {
   c.set("ip", c.req.header("cf-connecting-ip") ?? "unknown");
   c.set("user", null);
   await next();
+  // A file from a chat keeps its own, stricter Content-Security-Policy (see routes/files.ts).
+  const own = c.req.path.startsWith("/api/files/") ? c.res.headers.get("Content-Security-Policy") : null;
   c.res = withHeaders(c.res, HEADERS);
+  if (own) c.res.headers.set("Content-Security-Policy", own);
 });
 
 app.use("/api/*", async (c, next) => {
@@ -41,7 +45,8 @@ app.use("/api/*", async (c, next) => {
     if (!success) fail(429, "Too many requests. Wait a minute and try again.");
   }
   await next();
-  c.header("Cache-Control", "no-store");
+  // API answers are never cached, except files (routes/files.ts), which set their own private rule.
+  if (!c.res.headers.get("Cache-Control")) c.header("Cache-Control", "no-store");
 });
 
 app.route("/api/auth", auth);
@@ -49,6 +54,7 @@ app.route("/api/users", users);
 app.route("/api/machines", machines);
 app.route("/api/boards", boards);
 app.route("/api/prefs", prefs);
+app.route("/api/files", files);
 
 app.all("/api/*", () => fail(404, "Not found."));
 

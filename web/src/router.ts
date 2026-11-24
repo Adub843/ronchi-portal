@@ -11,7 +11,7 @@ const HASH_ALIAS: Record<string, string> = { "my-settings": "settings" };
 function hashToPath(hash: string): string {
   const h = hash.replace(/^#/, "");
   if (!h) return "/";
-  const m = /^(board|machine)-([A-Za-z0-9-]+)$/.exec(h);
+  const m = /^(board|machine|chat)-([A-Za-z0-9-]+)$/.exec(h);
   if (m) return `/${m[1]}s/${m[2]}`;
   return `/${HASH_ALIAS[h] ?? h}`;
 }
@@ -20,7 +20,7 @@ function hashToPath(hash: string): string {
 export function hrefFor(path: string): string {
   if (!DEMO) return path;
   if (path === "/") return "#home";
-  const m = /^\/(boards|machines)\/(.+)$/.exec(path);
+  const m = /^\/(boards|machines|chats)\/(.+)$/.exec(path);
   if (m) return `#${m[1]!.slice(0, -1)}-${m[2]}`;
   const name = path.slice(1);
   return `#${name === "settings" ? "my-settings" : name}`;
@@ -48,9 +48,9 @@ export function navigate(path: string, opts: { back?: boolean } = {}) {
   window.scrollTo(0, 0);
 }
 
-/** Where Back goes when there's no earlier page: a board or machine goes to its list, anything else to Home. */
+/** Where Back goes when there's no earlier page: a chat, board or machine goes to its list, anything else to Home. */
 export function parentOf(path: string): string {
-  const m = /^\/(boards|machines)\/.+$/.exec(path);
+  const m = /^\/(boards|machines|chats)\/.+$/.exec(path);
   return m ? `/${m[1]}` : "/";
 }
 

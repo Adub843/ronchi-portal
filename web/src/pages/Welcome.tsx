@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { startRegistration } from "@simplewebauthn/browser";
 import { api } from "../api";
 import { ErrorNote } from "../components/ui";
+import { t } from "../i18n";
 import { navigate } from "../router";
 
 export function Welcome({ onDone }: { onDone: () => void }) {
@@ -15,7 +16,7 @@ export function Welcome({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     // Take the token out of the address bar straight away.
     history.replaceState(null, "", "/welcome");
-    if (!token) return setError("This invite link isn't complete. Open it again from the message you were sent.");
+    if (!token) return setError(t("This invite link isn't complete. Open it again from the message you were sent."));
     api("/auth/invite/check", { body: { token } }).then(setInvite, (e: Error) => setError(e.message));
   }, [token]);
 
@@ -30,7 +31,7 @@ export function Welcome({ onDone }: { onDone: () => void }) {
       onDone();
     } catch (e) {
       const err = e as Error;
-      setError(err.name === "NotAllowedError" ? "Passkey creation was cancelled. Try again." : err.message);
+      setError(err.name === "NotAllowedError" ? t("Passkey creation was cancelled. Try again.") : err.message);
     } finally {
       setBusy(false);
     }
@@ -43,19 +44,19 @@ export function Welcome({ onDone }: { onDone: () => void }) {
         {invite ? (
           <>
             <div>
-              <h1>{invite.addingDevice ? "Add this device" : `Welcome, ${invite.name.split(" ")[0]}`}</h1>
+              <h1>{invite.addingDevice ? t("Add this device") : t("Welcome, {name}", { name: invite.name.split(" ")[0]! })}</h1>
               <p className="sub">
                 {invite.addingDevice
-                  ? "Create a passkey on this phone or computer so you can sign in here too."
-                  : `Your Ronchi Portal login is ${invite.email}. Create a passkey to finish. Nothing to remember: you'll sign in with Face ID, your fingerprint or your device PIN.`}
+                  ? t("Create a passkey on this phone or computer so you can sign in here too.")
+                  : t("Your Ronchi Portal login is {email}. Create a passkey to finish. Nothing to remember: you'll sign in with Face ID, your fingerprint or your device PIN.", { email: invite.email })}
               </p>
             </div>
             <button className="btn primary" onClick={create} disabled={busy}>
-              {busy ? "Follow the prompt on your device…" : "Create my passkey"}
+              {busy ? t("Follow the prompt on your device…") : t("Create my passkey")}
             </button>
           </>
         ) : (
-          !error && <p className="muted">Checking your invite…</p>
+          !error && <p className="muted">{t("Checking your invite…")}</p>
         )}
         <ErrorNote error={error} />
       </div>

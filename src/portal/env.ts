@@ -6,6 +6,7 @@ export type { Role };
 export interface Env {
   DB: D1Database;          // portal-db, the business store
   ASSETS: Fetcher;         // the built staff app in web/dist
+  FILES: R2Bucket;         // photos and files sent in boards and chats (bucket ronchi-portal-files)
   AUTH_LIMIT?: RateLimit;  // sign-in attempts per address
   API_LIMIT?: RateLimit;   // API calls per signed-in person
   ORIGIN: string;          // for example https://portal.ronchiamerica.com

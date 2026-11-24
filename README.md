@@ -102,7 +102,15 @@ peer list. All peers the project needs are listed directly in `package.json`.)
 - **No time clock.** Ronchi keeps time in its existing timekeeping app; the portal has no
   clock, hours or location tracking (removed 2026-11-24 at Aaron's request).
 - **Exports** are built so a spreadsheet cell can't run as a formula.
-- **Message board text** is always shown as text, never as HTML.
+- **Message board and chat text** is always shown as text, never as HTML.
+- **Private chats** can be read only by the people in them, admins included
+  (Aaron's choice, 2026-11-24). Boards stay visible to the roles they're shared with.
+- **Files in chats** (photos, PDF, Office, CAD, video, zip; 25 MB each) are kept in R2 and
+  served only to people who can see that chat. The served type comes from the file's
+  extension (src/shared/files.ts), never from the uploader's browser; web pages, SVG and
+  programs are refused, and every file is served with a sandbox policy so it can't run code.
+- **Languages:** English, Spanish and Italian for the app's screens (web/src/i18n-dict.ts).
+  Messages are never translated. A test fails if any screen text is missing a translation.
 
 ## The wall (customers vs. business)
 
@@ -120,7 +128,8 @@ the wall fails the build.
 ## Going live
 
 See [docs/REBUILD.md](docs/REBUILD.md). In short: create the two D1 databases, put their
-ids in the two wrangler files, `npm run db:migrate:remote`, `npm run deploy`, then
+ids in the two wrangler files, create the file store with
+`wrangler r2 bucket create ronchi-portal-files`, `npm run db:migrate:remote`, `npm run deploy`, then
 `npm run invite:first-admin` and set up the two custom domains in Cloudflare.
 
 If something breaks: [docs/RECOVERY.md](docs/RECOVERY.md).
