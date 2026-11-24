@@ -1,3 +1,4 @@
+import logoUrl from "../assets/ronchi-logo.png";
 // Opened from an invite link: /welcome#<token>. Creates the person's passkey.
 import { useEffect, useState } from "react";
 import { startRegistration } from "@simplewebauthn/browser";
@@ -38,7 +39,7 @@ export function Welcome({ onDone }: { onDone: () => void }) {
   return (
     <div className="center">
       <div className="panel signin">
-        <img src="/ronchi-logo.png" alt="Ronchi" />
+        <img src={logoUrl} alt="Ronchi" />
         {invite ? (
           <>
             <div>

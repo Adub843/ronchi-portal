@@ -15,7 +15,7 @@ export function Clock({ me }: { me: Me }) {
   const mine = useLoad(() => api("/clock/mine"));
   const [now, setNow] = useState(new Date());
   const [busy, setBusy] = useState(false);
-  const [useAddress, setUseAddress] = useState(false);
+  const [typing, setTyping] = useState(false);
   const [address, setAddress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<any>(null);
@@ -26,16 +26,28 @@ export function Clock({ me }: { me: Me }) {
   }, []);
 
   const clockedIn = status.data?.last?.kind === "in";
+  // Typed-address mode is saved on the server and stays on until turned off with the button.
+  const addressMode: boolean = !!status.data?.addressMode;
+
+  async function setMode(on: boolean) {
+    setError(null);
+    try {
+      await api("/clock/address-mode", { method: "PUT", body: on ? { on: true, address } : { on: false } });
+      setTyping(false);
+      status.reload();
+      toast(on ? "Typed address is on. Your phone's location won't be read." : "Typed address is off. Phone location is used again.");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
 
   async function punch() {
     setBusy(true);
     setError(null);
     try {
       let body: Record<string, unknown> = { kind: clockedIn ? "out" : "in" };
-      if (useAddress) {
-        if (!address.trim()) throw new Error("Type the address first.");
-        body.address = address;
-      } else {
+      // HARD RULE: in typed-address mode the phone's location is never requested or read.
+      if (!addressMode) {
         const pos = await getLocation();
         if (pos) body = { ...body, lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
       }
@@ -74,19 +86,30 @@ export function Clock({ me }: { me: Me }) {
           <button className={`big${clockedIn ? " out" : ""}`} onClick={punch} disabled={busy || !status.data}>
             {busy ? "Saving…" : clockedIn ? "Clock out" : "Clock in"}
           </button>
-          {me.canTypeAddress && (
-            <label className="row" style={{ gap: 6 }}>
-              <input type="checkbox" checked={useAddress} onChange={(e) => setUseAddress(e.target.checked)} /> Type the address instead
-            </label>
+          {addressMode ? (
+            <>
+              <p className="locnote">
+                <span className="pill p-warn">Typed address</span> Your location shows as <b>{status.data.typedAddress}</b>.
+                Your phone's location is not read or tracked until you turn this off.
+              </p>
+              <button className="btn" onClick={() => setMode(false)}>Turn off typed address</button>
+            </>
+          ) : (
+            <>
+              <p className="locnote">Your location is recorded only at the moment you tap Clock in or Clock out, never in between.</p>
+              {me.canTypeAddress && !typing && <button className="btn" onClick={() => setTyping(true)}>Type the address instead</button>}
+              {me.canTypeAddress && typing && (
+                <form className="stack" style={{ width: "100%", maxWidth: 340 }} onSubmit={(e) => { e.preventDefault(); setMode(true); }}>
+                  <input id="typed-address" className="panel" style={{ padding: "10px 12px", font: "inherit" }} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Address or site" maxLength={300} aria-label="Address" required autoFocus />
+                  <div className="row" style={{ justifyContent: "center" }}>
+                    <button className="btn primary" type="submit">Use this address</button>
+                    <button className="btn" type="button" onClick={() => setTyping(false)}>Cancel</button>
+                  </div>
+                  <span className="muted">Stays on until you turn it off. Shows as “entered by hand” in the hours view.</span>
+                </form>
+              )}
+            </>
           )}
-          {useAddress && (
-            <input className="panel" style={{ width: "100%", maxWidth: 340, padding: "10px 12px", font: "inherit" }} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Address or site" maxLength={300} aria-label="Address" />
-          )}
-          <p className="locnote">
-            {useAddress
-              ? "This punch will show “entered by hand” in the hours view."
-              : "Your location is recorded only at the moment you tap Clock in or Clock out, never in between."}
-          </p>
           <ErrorNote error={error} />
         </div>
         <div className="panel">
@@ -111,7 +134,7 @@ export function Clock({ me }: { me: Me }) {
           <table>
             <thead><tr><th>Time</th><th>In/Out</th><th>Location</th><th /></tr></thead>
             <tbody>
-              {[...(mine.data?.punches ?? [])].reverse().map((p: any) => (
+              {[...(mine.data?.punches ?? [])].reverse().slice(0, 12).map((p: any) => (
                 <tr key={p.id}>
                   <td>{fmtTime(p.at)}</td>
                   <td>{p.kind === "in" ? "In" : "Out"}</td>

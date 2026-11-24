@@ -1,8 +1,10 @@
 // Time clock and hours.
 // - The time of a punch is ALWAYS the server's clock. A phone's clock is never trusted.
 // - Location is taken only at the moment of clocking in or out (people are told this on screen).
-// - People with the "type an address" option (Aaron, or anyone Paolo allows) can type an address
-//   instead; it is labeled "entered by hand" everywhere it shows.
+// - People with the "type an address" option (Aaron, or anyone Paolo allows) can turn on
+//   TYPED-ADDRESS MODE (hard rule): while it is on, the app never asks the phone for its location,
+//   the server throws away any coordinates it is sent, and every punch uses the typed address.
+//   It stays on until the person turns it off with the button. Labeled "entered by hand".
 // - Changing a punch time is a request. Lola (billing) or an admin approves it, never the person
 //   who asked. The original time is kept in punch_edits.
 import { Hono } from "hono";
@@ -19,9 +21,32 @@ async function lastPunch(db: D1Database, userId: string) {
   return db.prepare("SELECT id, kind, at FROM punches WHERE user_id = ? ORDER BY at DESC LIMIT 1").bind(userId).first<{ id: string; kind: "in" | "out"; at: string }>();
 }
 
+async function addressMode(db: D1Database, userId: string) {
+  const row = await db.prepare("SELECT can_type_address, address_mode, typed_address FROM users WHERE id = ?").bind(userId).first<{ can_type_address: number; address_mode: number; typed_address: string | null }>();
+  const on = !!row?.can_type_address && !!row?.address_mode && !!row?.typed_address;
+  return { on, address: on ? row!.typed_address : null };
+}
+
 clock.get("/status", async (c) => {
   const u = requirePerm(c, "clock.use");
-  return c.json({ last: await lastPunch(c.env.DB, u.id), canTypeAddress: !!u.can_type_address, serverTime: now() });
+  const mode = await addressMode(c.env.DB, u.id);
+  return c.json({ last: await lastPunch(c.env.DB, u.id), canTypeAddress: !!u.can_type_address, addressMode: mode.on, typedAddress: mode.address, serverTime: now() });
+});
+
+/** Turn typed-address mode on (with the address) or off. */
+clock.put("/address-mode", async (c) => {
+  const u = requirePerm(c, "clock.use");
+  const b = await body(c);
+  if (b.on === true) {
+    if (!u.can_type_address) fail(403, "Typing an address isn't turned on for your login. Ask Paolo.");
+    const address = mustStr(b.address, 300, "The address");
+    await c.env.DB.prepare("UPDATE users SET address_mode = 1, typed_address = ?, updated_at = ? WHERE id = ?").bind(address, now(), u.id).run();
+    await audit(c.env.DB, { userId: u.id, action: "clock.address_mode_on", detail: { address }, ip: c.get("ip") });
+    return c.json({ addressMode: true, typedAddress: address });
+  }
+  await c.env.DB.prepare("UPDATE users SET address_mode = 0, updated_at = ? WHERE id = ?").bind(now(), u.id).run();
+  await audit(c.env.DB, { userId: u.id, action: "clock.address_mode_off", ip: c.get("ip") });
+  return c.json({ addressMode: false, typedAddress: null });
 });
 
 clock.post("/punch", async (c) => {
@@ -34,8 +59,13 @@ clock.post("/punch", async (c) => {
 
   let source: "gps" | "typed" | "none" = "none";
   let lat: number | null = null, lng: number | null = null, acc: number | null = null, address: string | null = null;
-  const typed = str(b.address, 300);
-  if (typed) {
+  const mode = await addressMode(c.env.DB, u.id);
+  const typed = mode.on ? null : str(b.address, 300);
+  if (mode.on) {
+    // Typed-address mode: any coordinates sent are ignored and never stored.
+    source = "typed";
+    address = mode.address;
+  } else if (typed) {
     if (!u.can_type_address) fail(403, "Typing an address isn't turned on for your login. Ask Paolo.");
     source = "typed";
     address = typed;

@@ -1,3 +1,4 @@
+import logoUrl from "./assets/ronchi-logo.png";
 // The staff app shell: top bar, the L2 menu (a bar under the header; a bottom tab bar on phones),
 // and the page for the current address.
 import { useEffect, useState } from "react";
@@ -64,7 +65,7 @@ export function App() {
       <header className="top">
         <div className="wrap">
           <Link to="/" className="brand">
-            <img src="/ronchi-logo.png" alt="Ronchi" />
+            <img src={logoUrl} alt="Ronchi" />
             <span>
               Ronchi Portal<small>Ronchi America</small>
             </span>
@@ -76,6 +77,14 @@ export function App() {
           </span>
         </div>
       </header>
+      {import.meta.env.MODE === "demo" && (
+        <div className="note">
+          <div className="wrap row">
+            <span>Preview with example data, signed in as you. Changes stay in this browser only. Customers, sites and hours shown are examples.</span>
+            <button className="linkish" onClick={async () => { (await import("./demo/mock")).resetDemo(); location.hash = "#home"; location.reload(); }}>Reset examples</button>
+          </div>
+        </div>
+      )}
       <div className="wrap">
         <div className="shell">
           <nav className="side" aria-label="Main">

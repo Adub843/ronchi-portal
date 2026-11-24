@@ -14,7 +14,9 @@ prefs.get("/", async (c) => {
   const u = requireUser(c);
   const row = await c.env.DB.prepare("SELECT theme, mode, layout, tiles FROM user_prefs WHERE user_id = ?").bind(u.id).first<{ theme: string; mode: string; layout: string; tiles: string | null }>();
   if (!row) return c.json(DEFAULTS);
-  return c.json({ ...row, tiles: row.tiles ? (JSON.parse(row.tiles) as string[]) : null });
+  // A theme that has since been removed falls back to the Ronchi default.
+  const theme = THEME_IDS.has(row.theme) ? row.theme : DEFAULT_THEME;
+  return c.json({ ...row, theme, tiles: row.tiles ? (JSON.parse(row.tiles) as string[]) : null });
 });
 
 prefs.put("/", async (c) => {

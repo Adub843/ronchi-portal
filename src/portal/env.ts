@@ -1,3 +1,7 @@
+import type { Role } from "./lib/roles";
+
+export type { Role };
+
 // What the portal Worker is given by Cloudflare (see wrangler.portal.jsonc).
 export interface Env {
   DB: D1Database;          // portal-db, the business store
@@ -18,6 +22,5 @@ export interface SessionUser {
   sessionHash: string;
 }
 
-export type Role = "admin" | "billing" | "scheduling" | "service" | "sales" | "engineering" | "tech";
 
 export type AppEnv = { Bindings: Env; Variables: { user: SessionUser | null; ip: string } };

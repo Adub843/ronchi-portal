@@ -72,8 +72,9 @@ describe("roles", () => {
 });
 
 describe("themes", () => {
-  it("has the Ronchi default plus 20 looks", () => {
-    expect(THEMES).toHaveLength(21);
+  it("has the Ronchi default plus 19 looks, without Ronchi Red Steel", () => {
+    expect(THEMES).toHaveLength(20);
     expect(THEMES[0]!.id).toBe("ronchi");
+    expect(THEMES.some((t) => t.name === "Ronchi Red Steel" || t.id === "T1")).toBe(false);
   });
 });

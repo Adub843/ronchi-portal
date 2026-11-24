@@ -1,4 +1,5 @@
-// The 20 looks from "Ronchi Portal looks" (https://claude.ai/artifact/57Fs16BpjDhT3u32Nc5bWb),
+// The looks from "Ronchi Portal looks" (https://claude.ai/artifact/57Fs16BpjDhT3u32Nc5bWb), minus
+// "Ronchi Red Steel" (T1), which Aaron removed on 2026-11-24. Ids are kept stable, so T2..T20 remain,
 // plus the default Ronchi workbook theme. Each person picks one in Settings; it is saved to their login.
 // The customer help center always uses the Ronchi theme.
 
@@ -13,7 +14,6 @@ export const DEFAULT_THEME = "ronchi";
 
 export const THEMES: Theme[] = [
   { id: "ronchi", name: "Ronchi Workbook", blurb: "The Field Service Workbook look: light grey, white panels, Ronchi red. Follows light or dark mode.", tokens: null },
-  { id: "T1", name: "Ronchi Red Steel", blurb: "Steel navy with a Ronchi red accent. Industrial and confident.", tokens: {bg: "#f3f5f7",solid: "#fff",line: "#d9dfe5",ink: "#18212b",muted: "#5b6774",accent: "#c4122f",accentInk: "#fff",ok: "#1f7a4d",okSoft: "#e3f3ea",steel: "#2b3a4a",steelInk: "#eef2f6",radius: "3px",dark: false} },
   { id: "T2", name: "Night Shift", blurb: "Dark control-room look that's easy on the eyes on site.", tokens: {bg: "#0f151b",solid: "#17202a",line: "#2a3642",ink: "#e6ebf0",muted: "#97a3b0",accent: "#ff4d64",accentInk: "#fff",ok: "#5fd39a",okSoft: "#14321f",steel: "#0a0f14",steelInk: "#dfe6ed",radius: "3px",dark: true} },
   { id: "T3", name: "Clean White Lab", blurb: "Bright white with one blue accent. Very calm and clinical.", tokens: {bg: "#ffffff",solid: "#fff",line: "#e2e7ec",ink: "#1b2530",muted: "#667381",accent: "#1d6fd1",accentInk: "#fff",ok: "#1a7f4b",okSoft: "#e4f4ea",steel: "#f6f8fa",steelInk: "#24303c",radius: "8px",dark: false} },
   { id: "T4", name: "Italian Heritage", blurb: "Deep green, cream and brass, a nod to Ronchi's Italian roots.", tokens: {bg: "#f6f3ec",solid: "#fffdf8",line: "#e1dacb",ink: "#1d2620",muted: "#5f665f",accent: "#a8792a",accentInk: "#fff",ok: "#2c6e49",okSoft: "#e2efe5",steel: "#1f3b2f",steelInk: "#efe9da",radius: "4px",dark: false} },
