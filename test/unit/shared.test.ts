@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { csvCell, toCsv } from "../../src/shared/csv";
+import { isOpen, mapHeader, normalDate, parseCsv } from "../../src/shared/change-parts";
 import { parseServiceReportName } from "../../src/shared/service-report";
 import { scanForCustomerData } from "../../src/shared/privacy";
 import { can, PERMISSIONS } from "../../src/portal/lib/roles";
@@ -56,5 +57,29 @@ describe("themes", () => {
     expect(THEMES).toHaveLength(20);
     expect(THEMES[0]!.id).toBe("ronchi");
     expect(THEMES.some((t) => t.name === "Ronchi Red Steel" || t.id === "T1")).toBe(false);
+  });
+});
+
+describe("change-part spreadsheet reading", () => {
+  it("reads quoted cells, commas and line breaks", () => {
+    expect(parseCsv('﻿a,"b, c","d ""q"""\r\n1,"x\ny",3\n')).toEqual([["a", "b, c", 'd "q"'], ["1", "x\ny", "3"]]);
+  });
+  it("understands the usual date styles and rejects nonsense", () => {
+    expect(normalDate("11/24/2026")).toBe("2026-11-24");
+    expect(normalDate("1/5/26")).toBe("2026-01-05");
+    expect(normalDate("2026-11-24")).toBe("2026-11-24");
+    expect(normalDate("2/30/2026")).toBeNull();
+    expect(normalDate("TBD")).toBeNull();
+  });
+  it("matches column names however they're written", () => {
+    const { map, unknown } = mapHeader(["Cust. P.O. #", "Serial Number", "Customer", "Samples Rcvd", "Whatever"]);
+    expect(map).toMatchObject({ customer_po: 0, machine: 1, customer: 2, samples_received: 3 });
+    expect(unknown).toEqual([{ index: 4, name: "Whatever" }]);
+  });
+  it("knows which statuses are finished", () => {
+    expect(isOpen("In design")).toBe(true);
+    expect(isOpen(null)).toBe(true);
+    expect(isOpen("Shipped")).toBe(false);
+    expect(isOpen("cancelled")).toBe(false);
   });
 });

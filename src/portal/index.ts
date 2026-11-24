@@ -13,6 +13,7 @@ import { fail } from "./lib/http";
 import { loadSession } from "./lib/session";
 import { auth } from "./routes/auth";
 import { boards } from "./routes/boards";
+import { changeParts } from "./routes/change-parts";
 import { files } from "./routes/files";
 import { machines } from "./routes/machines";
 import { prefs } from "./routes/prefs";
@@ -55,6 +56,7 @@ app.route("/api/machines", machines);
 app.route("/api/boards", boards);
 app.route("/api/prefs", prefs);
 app.route("/api/files", files);
+app.route("/api/change-parts", changeParts);
 
 app.all("/api/*", () => fail(404, "Not found."));
 

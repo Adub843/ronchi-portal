@@ -14,6 +14,7 @@ import { SignIn } from "./pages/SignIn";
 import { Welcome } from "./pages/Welcome";
 import { Home } from "./pages/Home";
 import { Boards, BoardPage, Chats } from "./pages/Boards";
+import { ChangePartPage, ChangeParts } from "./pages/ChangeParts";
 import { Machines, MachinePage } from "./pages/Machines";
 import { People } from "./pages/People";
 import { Settings } from "./pages/Settings";
@@ -23,6 +24,7 @@ const NAV: { to: string; label: string; perm?: string; count?: keyof Unread; pho
   { to: "/chats", label: "Chats", perm: "boards.use", count: "chats" },
   { to: "/boards", label: "Boards", perm: "boards.use", count: "boards" },
   { to: "/machines", label: "Machines", perm: "machines.view" },
+  { to: "/change-parts", label: "Change parts", perm: "orders.view" },
   { to: "/people", label: "People", perm: "users.manage" },
   // On phones Settings lives in the account menu (top right), so the tab bar keeps room for the rest.
   { to: "/settings", label: "Settings", phone: false },
@@ -78,12 +80,14 @@ export function App() {
   const popups = prefs?.popups !== false;
 
   let page;
-  const m = /^\/(boards|machines|chats)\/([A-Za-z0-9_-]+)$/.exec(path);
+  const m = /^\/(boards|machines|chats|change-parts)\/([A-Za-z0-9_-]+)$/.exec(path);
   if (m?.[1] === "boards" || m?.[1] === "chats") page = <BoardPage key={m[2]} id={m[2]!} me={me} />;
   else if (m?.[1] === "machines") page = <MachinePage id={m[2]!} me={me} />;
+  else if (m?.[1] === "change-parts") page = <ChangePartPage key={m[2]} id={m[2]!} me={me} />;
   else if (section === "/chats") page = <Chats me={me} />;
   else if (section === "/boards") page = <Boards me={me} />;
   else if (section === "/machines") page = <Machines me={me} />;
+  else if (section === "/change-parts") page = <ChangeParts me={me} />;
   else if (section === "/people") page = <People me={me} />;
   else if (section === "/settings") page = <Settings me={me} prefs={prefs} onPrefs={savePrefs} onSignOut={signOut} sound={sound} onSound={(on) => { setSound(on); setSoundState(on); }} />;
   else page = <Home me={me} unread={unread} />;

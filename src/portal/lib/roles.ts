@@ -18,10 +18,13 @@ export type Permission =
   | "machines.view"
   | "machines.edit"
   | "boards.use"          // read and post on boards they can see, create boards
-  | "boards.moderate";    // pin, archive, remove anyone's post
+  | "boards.moderate"     // pin, archive, remove anyone's post
+  | "orders.view"         // see change-part orders (sales side)
+  | "orders.edit";        // add, change, import and remove change-part orders
 
 const ALL: Permission[] = [
   "users.manage", "audit.view", "machines.view", "machines.edit", "boards.use", "boards.moderate",
+  "orders.view", "orders.edit",
 ];
 
 const STAFF_BASE: Permission[] = ["boards.use", "machines.view"];
@@ -31,7 +34,7 @@ export const PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
   billing: new Set([...STAFF_BASE]),
   scheduling: new Set([...STAFF_BASE]),
   service: new Set([...STAFF_BASE, "machines.edit", "boards.moderate"]),
-  sales: new Set([...STAFF_BASE]),
+  sales: new Set([...STAFF_BASE, "orders.view", "orders.edit"]),
   engineering: new Set([...STAFF_BASE, "machines.edit"]),
   tech: new Set([...STAFF_BASE]),
 };
