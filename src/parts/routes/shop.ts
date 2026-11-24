@@ -292,9 +292,10 @@ shop.post("/carts/:id/quote", async (c) => {
   if (!n?.n) fail(400, "The cart is empty.");
   const id = randomId();
   const t = now();
-  // RQ-261124-04821: the date, then a random number, so two requests at once never collide.
-  const rand = crypto.getRandomValues(new Uint32Array(1))[0]! % 100000;
-  const number = `RQ-${t.slice(2, 10).replace(/-/g, "")}-${String(rand).padStart(5, "0")}`;
+  // RQ-261124-4F82C: the date, then 5 random hex characters (20 random bits, taken with a mask
+  // rather than a remainder so every value is equally likely), so two requests at once never collide.
+  const rand = crypto.getRandomValues(new Uint32Array(1))[0]! & 0xfffff;
+  const number = `RQ-${t.slice(2, 10).replace(/-/g, "")}-${rand.toString(16).toUpperCase().padStart(5, "0")}`;
   await c.env.PARTS_DB.batch([
     c.env.PARTS_DB.prepare("INSERT INTO quotes (id, number, company_id, user_id, email, notes, status, created_at, updated_at) VALUES (?,?,?,?,?,?, 'sent', ?,?)")
       .bind(id, number, u.companyId, u.id, email, [cart.notes, str(b.notes, 2000)].filter(Boolean).join("\n\n"), t, t),

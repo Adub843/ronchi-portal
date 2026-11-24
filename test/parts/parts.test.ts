@@ -94,7 +94,7 @@ describe("the wall between companies", () => {
 
     const quote = await alice.json(`/api/carts/${cartId}/quote`, { body: { email: "buyer@example.com" } });
     expect(quote.status).toBe(200);
-    expect(quote.data.number).toMatch(/^RQ-\d{6}-\d{5}$/);
+    expect(quote.data.number).toMatch(/^RQ-\d{6}-[0-9A-F]{5}$/);
     expect((await andy.json("/api/quotes")).data.quotes.map((q: any) => q.id)).toContain(quote.data.id);
     expect((await bob.json("/api/quotes")).data.quotes.map((q: any) => q.id)).not.toContain(quote.data.id);
     expect((await bob.json(`/api/quotes/${quote.data.id}`)).status).toBe(404);
