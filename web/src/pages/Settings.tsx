@@ -84,7 +84,7 @@ export function Settings({ me, prefs, onPrefs, onSignOut }: { me: Me; prefs: Pre
               <tr key={s.id}>
                 <td>{describeAgent(s.user_agent)} {s.current && <span className="pill p-ok">this device</span>}</td>
                 <td>{fmtTime(s.last_seen_at)}</td>
-                <td>{!s.current && <button className="btn small" onClick={async () => { await api(`/users/me/sessions/${s.id}/end`, { body: {} }); devices.reload(); }}>Sign out</button>}</td>
+                <td>{!s.current && <button className="btn small" onClick={async () => { await api(`/users/me/sessions/${encodeURIComponent(s.id)}/end`, { body: {} }); devices.reload(); }}>Sign out</button>}</td>
               </tr>
             ))}
           </tbody>

@@ -9,6 +9,8 @@ export class ApiError extends Error {
 }
 
 export async function api<T = any>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
+  // Only ever call this portal's own /api, never a path that could climb out of it.
+  if (!path.startsWith("/") || path.startsWith("//") || /(^|\/)\.\.(\/|$)|[\\#\s]/.test(path)) throw new ApiError(400, "Bad request.");
   const method = opts.method ?? (opts.body === undefined ? "GET" : "POST");
   const res = await fetch(`/api${path}`, {
     method,

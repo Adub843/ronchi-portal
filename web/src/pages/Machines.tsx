@@ -64,7 +64,7 @@ export function Machines({ me }: { me: Me }) {
 }
 
 export function MachinePage({ id, me }: { id: string; me: Me }) {
-  const { data, error, reload } = useLoad(() => api(`/machines/${id}`), [id]);
+  const { data, error, reload } = useLoad(() => api(`/machines/${encodeURIComponent(id)}`), [id]);
   const [edit, setEdit] = useState<any>(null);
   if (error) return <ErrorNote error={error} />;
   if (!data) return null;
@@ -73,7 +73,7 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
   async function save(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await api(`/machines/${id}`, { method: "PATCH", body: edit });
+      await api(`/machines/${encodeURIComponent(id)}`, { method: "PATCH", body: edit });
       setEdit(null);
       reload();
       toast("Saved");

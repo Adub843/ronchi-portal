@@ -25,7 +25,7 @@ export function People({ me }: { me: Me }) {
   }
   async function update(id: string, body: Record<string, unknown>) {
     try {
-      await api(`/users/${id}`, { method: "PATCH", body });
+      await api(`/users/${encodeURIComponent(id)}`, { method: "PATCH", body });
       toast("Saved. They've been signed out so the change applies right away.");
       reload();
     } catch (x) {
@@ -34,7 +34,7 @@ export function People({ me }: { me: Me }) {
   }
   async function signOutAll(id: string) {
     try {
-      const r = await api(`/users/${id}/sign-out-everywhere`, { body: {} });
+      const r = await api(`/users/${encodeURIComponent(id)}/sign-out-everywhere`, { body: {} });
       toast(`Signed out of ${r.sessions} device(s)`);
       reload();
     } catch (x) {
@@ -105,7 +105,7 @@ export function People({ me }: { me: Me }) {
             {data.invites.map((i: any) => (
               <div key={i.id} className="row" style={{ padding: "4px 0" }}>
                 <span>{i.name} ({i.email}), expires {fmtTime(i.expires_at)}</span>
-                <button className="linkish" onClick={async () => { await api(`/users/invites/${i.id}`, { method: "DELETE" }); reload(); }}>Cancel</button>
+                <button className="linkish" onClick={async () => { await api(`/users/invites/${encodeURIComponent(i.id)}`, { method: "DELETE" }); reload(); }}>Cancel</button>
               </div>
             ))}
           </>

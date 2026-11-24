@@ -73,7 +73,7 @@ export function Boards(_: { me: Me }) {
 }
 
 export function BoardPage({ id, me }: { id: string; me: Me }) {
-  const { data, error, reload } = useLoad(() => api(`/boards/${id}`), [id]);
+  const { data, error, reload } = useLoad(() => api(`/boards/${encodeURIComponent(id)}`), [id]);
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -82,7 +82,7 @@ export function BoardPage({ id, me }: { id: string; me: Me }) {
     e.preventDefault();
     setErr(null);
     try {
-      await api(`/boards/${id}/posts`, { body: { body: text, parentId: replyTo?.id } });
+      await api(`/boards/${encodeURIComponent(id)}/posts`, { body: { body: text, parentId: replyTo?.id } });
       setText("");
       setReplyTo(null);
       reload();

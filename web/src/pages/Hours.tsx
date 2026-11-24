@@ -16,12 +16,12 @@ function isoDay(d: Date) {
 export function Hours({ me }: { me: Me }) {
   const [from, setFrom] = useState(isoDay(new Date(Date.now() - 13 * 86400000)));
   const [to, setTo] = useState(isoDay(new Date()));
-  const hours = useLoad(() => api(`/clock/hours?from=${from}&to=${to}`), [from, to]);
+  const hours = useLoad(() => api(`/clock/hours?${new URLSearchParams({ from: isoOnly(from), to: isoOnly(to) }).toString()}`), [from, to]);
   const edits = useLoad(() => (can(me, "hours.approve") ? api("/clock/edits") : Promise.resolve({ edits: [] })));
 
   async function decide(id: string, approve: boolean) {
     try {
-      await api(`/clock/edits/${id}/decide`, { body: { approve } });
+      await api(`/clock/edits/${encodeURIComponent(id)}/decide`, { body: { approve } });
       toast(approve ? "Approved" : "Declined");
       edits.reload();
       hours.reload();

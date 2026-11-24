@@ -68,7 +68,7 @@ export function Clock({ me }: { me: Me }) {
   async function requestEdit(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await api(`/clock/punches/${editing.id}/edit`, { body: { newAt: new Date(editing.newAt).toISOString(), reason: editing.reason } });
+      await api(`/clock/punches/${encodeURIComponent(editing.id)}/edit`, { body: { newAt: new Date(editing.newAt).toISOString(), reason: editing.reason } });
       toast("Sent to Lola for approval");
       setEditing(null);
       mine.reload();

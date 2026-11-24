@@ -6,7 +6,7 @@ import { PERMISSIONS, ROLES } from "../../../src/portal/lib/roles";
 type Role = keyof typeof ROLES;
 
 // Ids for example records. Uses the browser's secure random source like the real server does.
-const id = () => "d" + [...crypto.getRandomValues(new Uint8Array(8))].map((b) => (b % 36).toString(36)).join("");
+const id = () => "d" + [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, "0")).join("");
 const jitter = () => crypto.getRandomValues(new Uint16Array(1))[0]! / 65535 / 50;
 const iso = (d: Date) => d.toISOString();
 const daysAgo = (n: number, h: number, m = 0) => {
