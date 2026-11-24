@@ -3,7 +3,7 @@
 import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
 import { Drawing2D, type Balloon } from "./Drawing2D";
 import { PartsList, type Row } from "./PartsList";
-import { w, type Lang } from "./words";
+import { partName, w, type Lang } from "./words";
 
 // three.js is large; it loads only when someone opens a 3D model.
 const Model3D = lazy(() => import("./Model3D").then((m) => ({ default: m.Model3D })));
@@ -78,6 +78,23 @@ export function SheetView({
               onPick={(code) => setRowId(code ? (rows.find((r) => r.code === code)?.id ?? null) : null)}
               lang={lang}
               knownCodes={codes}
+              describe={(code) => { const r = rows.find((x) => x.code === code); return r ? partName(lang, r) || null : null; }}
+              card={(code) => {
+                const r = rows.find((x) => x.code === code);
+                if (!r) return null;
+                return (
+                  <div className="cv-card-body">
+                    <span>{w(lang, "Pos.")} <b>{r.pos}</b></span>
+                    <span>{w(lang, "Qty")} <b>{r.qty ?? "–"}{r.unit === "m" ? ` ${w(lang, "m")}` : ""}</b></span>
+                    {r.wear && <span className="cv-tag" title={w(lang, "Wear part: good to keep a spare")}>{w(lang, "Wears")}</span>}
+                    {r.maker && <span className="cv-maker">{[r.maker, r.maker_pn].filter(Boolean).join(" ")}</span>}
+                    <span>{partLink(r.code)}</span>
+                    {r.sub_sheet && <button type="button" className="cv-link" onClick={() => onOpenSheet(r.sub_sheet!)}>{w(lang, "Open assembly")} →</button>}
+                    {action?.(r)}
+                  </div>
+                );
+              }}
+              fileName={[sheet.code, sheet.title].filter(Boolean).join(" ")}
             />
           </Suspense>
         )}
