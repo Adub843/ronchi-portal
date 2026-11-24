@@ -44,6 +44,30 @@ describe("parts catalog (staff)", () => {
     expect(part.data.usedOn[0].serial).toBe(m.serial);
   });
 
+  it("imports machines from a CSV, never overwriting, and a machine number search finds a machine with no catalog yet", async () => {
+    const admin = await person("admin");
+    const svc = await person("service");
+    const known = await machine(admin, { customer: "Kept Co" });
+    const csv = [
+      "Machine,Model,Customer,Site,SharePoint,Notes",
+      "RA1018,F,Sanofi,Chattanooga TN,https://example.sharepoint.com/sites/x,SharePoint has: CAD files",
+      "3426,,Clorox,Pleasanton,,",
+      `${known.serial},,Other Co,Line 9,,`,
+      "Not a machine,,,,,",
+    ].join("\n");
+    const preview = await admin.json("/api/machines/import", { body: { csv } });
+    expect(preview.data).toMatchObject({ found: 3, adding: 2, updating: 1, notMachines: ["NOT A MACHINE"] });
+    expect((await (await person("billing")).json("/api/machines/import", { body: { csv, confirm: true } })).status).toBe(403);
+    expect((await admin.json("/api/machines/import", { body: { csv, confirm: true } })).data.imported).toBe(2);
+    const kept = await admin.json(`/api/machines/${known.id}`);
+    expect(kept.data.machine.customer).toBe("Kept Co");
+    expect(kept.data.machine.site).toBe("Line 9");
+    const found = await svc.json("/api/catalog/search?q=RA1018");
+    expect(found.data.machines.map((m: any) => [m.serial, m.customer, m.sheets])).toEqual([["RA1018", "Sanofi", 0]]);
+    expect((await admin.json("/api/machines", { body: { serial: "RA1042F" } })).status).toBe(200);
+    expect((await admin.json("/api/machines", { body: { serial: "0012" } })).status).toBe(400);
+  });
+
   it("re-importing replaces the manual's sheets but keeps hand-made ones", async () => {
     const svc = await person("service");
     const m = await machine(await person("admin"));

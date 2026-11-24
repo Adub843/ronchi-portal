@@ -10,6 +10,7 @@ export function Machines({ me }: { me: Me }) {
   const [query, setQuery] = useState("");
   const { data, error } = useLoad(() => api(`/machines?q=${encodeURIComponent(query)}`), [query]);
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [form, setForm] = useState({ serial: "", model: "", customer: "", site: "" });
   const [err, setErr] = useState<string | null>(null);
 
@@ -26,14 +27,16 @@ export function Machines({ me }: { me: Me }) {
   return (
     <>
       <PageHead title={t("Machines")} sub={t("Every Ronchi machine in the field, by machine number.")}>
+        {can(me, "machines.edit") && <button className="btn" onClick={() => setImporting(!importing)}>{importing ? t("Cancel") : t("Import CSV")}</button>}
         {can(me, "machines.edit") && <button className="btn primary" onClick={() => setAdding(!adding)}>{adding ? t("Cancel") : t("Add machine")}</button>}
       </PageHead>
+      {importing && <ImportMachines onDone={() => { setImporting(false); setQuery(" "); setTimeout(() => setQuery(""), 0); }} />}
       {adding && (
         <form className="panel grid g2" onSubmit={add}>
           {(["serial", "model", "customer", "site"] as const).map((k) => (
             <div className="field" key={k}>
               <label htmlFor={`m-${k}`}>{{ serial: t("Machine number"), model: t("Model"), customer: t("Customer"), site: t("Site") }[k]}</label>
-              <input id={`m-${k}`} value={form[k]} required={k === "serial"} placeholder={k === "serial" ? "3069MB" : ""} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
+              <input id={`m-${k}`} value={form[k]} required={k === "serial"} placeholder={k === "serial" ? "3069MB, RA1018" : ""} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
             </div>
           ))}
           <ErrorNote error={err} />
@@ -138,5 +141,54 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
         </div>
       )}
     </>
+  );
+}
+
+function ImportMachines({ onDone }: { onDone: () => void }) {
+  const [csv, setCsv] = useState("");
+  const [preview, setPreview] = useState<any>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function pick(file: File | undefined) {
+    setPreview(null);
+    setErr(null);
+    if (!file) return;
+    const text = await file.text();
+    setCsv(text);
+    try {
+      setPreview(await api("/machines/import", { body: { csv: text } }));
+    } catch (x) {
+      setErr((x as Error).message);
+    }
+  }
+  async function confirm() {
+    setBusy(true);
+    try {
+      const r = await api("/machines/import", { body: { csv, confirm: true } });
+      toast(t("Added {n} machines", { n: r.imported }));
+      onDone();
+    } catch (x) {
+      setErr((x as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="panel stack">
+      <h2>{t("Import machines from a spreadsheet")}</h2>
+      <p className="muted">{t("A CSV file with a Machine column, and if you have them Model, Customer, Site, SharePoint and Notes. Machines already here keep what they have; only their empty fields are filled in.")}</p>
+      <div className="field">
+        <label htmlFor="mi-file">{t("CSV file")}</label>
+        <input id="mi-file" type="file" accept=".csv,text/csv" onChange={(e) => pick(e.target.files?.[0])} />
+      </div>
+      <ErrorNote error={err} />
+      {preview && (
+        <>
+          <p>{t("{found} machines found: {adding} new, {updating} already here.", { found: preview.found, adding: preview.adding, updating: preview.updating })}</p>
+          {!!preview.notMachines.length && <p className="muted">{t("Not machine numbers, left out")}: {preview.notMachines.join(", ")}</p>}
+          <div className="row"><button className="btn primary" onClick={confirm} disabled={busy || !preview.found}>{t("Import {n} machines", { n: preview.found })}</button></div>
+        </>
+      )}
+    </div>
   );
 }

@@ -94,7 +94,13 @@ catalog.get("/search", async (c) => {
       WHERE r.code LIKE ? ESCAPE '\\' OR p.name_en LIKE ? ESCAPE '\\' OR p.name_it LIKE ? ESCAPE '\\' OR p.maker_pn LIKE ? ESCAPE '\\'
       ORDER BY (r.code = ?) DESC, r.code, s.serial LIMIT 200`,
   ).bind(u.companyId, like, like, like, like, q.toUpperCase()).all();
-  return c.json({ results });
+  // The company's own machines whose number, model or label matches.
+  const { results: machines } = await c.env.PARTS_DB.prepare(
+    `SELECT cm.serial, m.model, cm.label FROM company_machines cm LEFT JOIN machines m ON m.serial = cm.serial
+      WHERE cm.company_id = ? AND (cm.serial LIKE ? ESCAPE '\\' OR m.model LIKE ? ESCAPE '\\' OR cm.label LIKE ? ESCAPE '\\')
+      ORDER BY cm.serial LIMIT 50`,
+  ).bind(u.companyId, like, like, like).all();
+  return c.json({ results, machines });
 });
 
 /** One part: its names and where it's used, on this company's machines only. */

@@ -47,7 +47,7 @@ export interface ParsedSheet {
 }
 
 /** Ronchi part codes: two or three letters and six digits (with an optional _1.._999 variant), or ten-digit kit numbers. */
-export const PART_CODE = /^(?:[A-Z]{2,3}\d{6}(?:_\d{1,3})?|\d{10})$/;
+export const PART_CODE = /^(?:RA\d{0,4}_)?(?:[A-Z]{2,3}\d{6}(?:_\d{1,3})?|\d{10})$/;
 
 export function isPartCode(s: string): boolean {
   return PART_CODE.test(s.trim().toUpperCase());
