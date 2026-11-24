@@ -32,6 +32,15 @@ export const DYNAMIC: string[] = [
 ];
 
 export const ES: Record<string, string> = {
+  "All": "Todos",
+  "Build the book ({n} drawings)": "Crear el libro ({n} dibujos)",
+  "Change drawings": "Cambiar dibujos",
+  "Choose the drawings, build the book, then print it or save it as a PDF.": "Elija los dibujos, cree el libro y luego imprímalo o guárdelo como PDF.",
+  "Getting drawing {n} of {total}": "Obteniendo dibujo {n} de {total}",
+  "None": "Ninguno",
+  "Parts book": "Libro de piezas",
+  "Parts book (PDF)": "Libro de piezas (PDF)",
+  "Print or save as PDF": "Imprimir o guardar como PDF",
   "A buyer at your company sends quote requests. Ask Ronchi America if you need to send them too.": "Un comprador de su empresa envía las solicitudes de cotización. Pida a Ronchi America si usted también necesita enviarlas.",
   "Add": "Añadir",
   "Add a part that isn't in the catalog": "Añadir una pieza que no está en el catálogo",
@@ -161,6 +170,15 @@ export const ES: Record<string, string> = {
 };
 
 export const IT: Record<string, string> = {
+  "All": "Tutti",
+  "Build the book ({n} drawings)": "Crea il libro ({n} disegni)",
+  "Change drawings": "Cambia disegni",
+  "Choose the drawings, build the book, then print it or save it as a PDF.": "Scegli i disegni, crea il libro, poi stampalo o salvalo in PDF.",
+  "Getting drawing {n} of {total}": "Recupero disegno {n} di {total}",
+  "None": "Nessuno",
+  "Parts book": "Libro ricambi",
+  "Parts book (PDF)": "Libro ricambi (PDF)",
+  "Print or save as PDF": "Stampa o salva in PDF",
   "A buyer at your company sends quote requests. Ask Ronchi America if you need to send them too.": "Un responsabile acquisti della tua azienda invia le richieste di offerta. Chiedi a Ronchi America se devi inviarle anche tu.",
   "Add": "Aggiungi",
   "Add a part that isn't in the catalog": "Aggiungi un ricambio che non è nel catalogo",
