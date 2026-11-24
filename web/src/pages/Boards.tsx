@@ -44,6 +44,22 @@ function dayLabel(d: Date): string {
   return d.toLocaleDateString(loc(), { weekday: "long", month: "long", day: "numeric" });
 }
 
+/** "Aaron added Steve Williams", "You removed Lola Parker", "Meagan left the chat", in the person's language. */
+function eventText(p: { body: string; user_id: string; author: string }, meId: string): string {
+  let e: { type?: string; names?: string[] } = {};
+  try {
+    e = JSON.parse(p.body);
+  } catch {
+    /* an unreadable line shows just the name */
+  }
+  const you = p.user_id === meId;
+  const names = (e.names ?? []).join(", ");
+  if (e.type === "added") return you ? t("You added {names}", { names }) : t("{who} added {names}", { who: p.author, names });
+  if (e.type === "removed") return you ? t("You removed {names}", { names }) : t("{who} removed {names}", { who: p.author, names });
+  if (e.type === "left") return you ? t("You left the chat") : t("{who} left the chat", { who: p.author });
+  return p.author;
+}
+
 const clock = (iso: string) => new Date(iso).toLocaleTimeString(loc(), { hour: "numeric", minute: "2-digit" });
 
 // ───────────────────────────── Lists ─────────────────────────────
@@ -262,7 +278,7 @@ export function BoardPage({ id, me }: { id: string; me: Me }) {
   const [files, setFiles] = useState<Pending[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  const [panel, setPanel] = useState<null | "files" | "edit">(null);
+  const [panel, setPanel] = useState<null | "files" | "edit" | "people" | "add">(null);
   const [search, setSearch] = useState<string | null>(null);
   const [viewer, setViewer] = useState<any>(null);
   const [dragging, setDragging] = useState(false);
@@ -402,7 +418,7 @@ export function BoardPage({ id, me }: { id: string; me: Me }) {
   const byId = new Map(posts.map((p) => [p.id, p]));
   const pinned = posts.filter((p) => p.pinned).at(-1);
   const s = search?.trim().toLowerCase() ?? "";
-  const visible = s ? posts.filter((p) => p.body.toLowerCase().includes(s) || p.files.some((f: any) => f.name.toLowerCase().includes(s))) : posts;
+  const visible = s ? posts.filter((p) => p.kind !== "event" && p.body.toLowerCase().includes(s) || p.files.some((f: any) => f.name.toLowerCase().includes(s))) : posts;
   const canPin = kind === "chat" || data.canModerate;
   const canExport = kind === "chat" || data.canModerate;
 
@@ -413,7 +429,9 @@ export function BoardPage({ id, me }: { id: string; me: Me }) {
     { label: t("Mute alerts"), role: "checkbox", checked: data.muted, onSelect: () => act(`/boards/${bid}/mute`, "POST", { muted: !data.muted }) },
     { label: t("Export chat (.txt)"), onSelect: () => exportChat(title), hidden: !canExport },
     "sep",
-    { label: kind === "chat" ? t("Edit chat name and people") : t("Edit board"), onSelect: () => setPanel("edit"), hidden: !data.canModerate || direct },
+    { label: t("People in this chat ({n})", { n: data.members?.length ?? 0 }), onSelect: () => setPanel("people"), hidden: kind !== "chat" },
+    { label: t("Add people"), onSelect: () => setPanel("add"), hidden: kind !== "chat" },
+    { label: kind === "chat" ? t("Rename group") : t("Edit board"), onSelect: () => setPanel("edit"), hidden: !data.canModerate || direct },
     { label: t("Announcements only"), hint: t("Only you and moderators can post"), role: "checkbox", checked: !!b.locked, onSelect: () => act(`/boards/${bid}`, "PATCH", { locked: !b.locked }), hidden: kind !== "board" || !data.canModerate },
     { label: t("Leave chat"), danger: true, onSelect: async () => { await act(`/boards/${bid}/leave`, "POST", {}); navigate("/chats"); }, hidden: kind !== "chat" || direct },
     { label: t("Archive board"), danger: true, onSelect: async () => { await act(`/boards/${bid}/archive`, "POST", {}); navigate("/boards"); }, hidden: kind !== "board" || !data.canModerate },
@@ -428,10 +446,17 @@ export function BoardPage({ id, me }: { id: string; me: Me }) {
     >
       <div className="chat-head">
         <span className={`avatar${kind === "chat" ? " person" : ""}`} aria-hidden="true">{initials(title)}</span>
-        <div className="chat-title">
-          <h1>{title}</h1>
-          <span className="muted">{data.muted && <span className="muted-ic"><BellOff /></span>}{subtitle}</span>
-        </div>
+        {kind === "chat" ? (
+          <button type="button" className="chat-title as-button" onClick={() => setPanel(panel === "people" || panel === "add" ? null : "people")} aria-label={t("{title}. Show people in this chat.", { title })}>
+            <h1>{title}</h1>
+            <span className="muted">{data.muted && <span className="muted-ic"><BellOff /></span>}{subtitle}</span>
+          </button>
+        ) : (
+          <div className="chat-title">
+            <h1>{title}</h1>
+            <span className="muted">{data.muted && <span className="muted-ic"><BellOff /></span>}{subtitle}</span>
+          </div>
+        )}
         <button type="button" className="iconbtn" aria-label={t("Search in chat")} title={t("Search in chat")} onClick={() => setSearch(search === null ? "" : null)}><Search /></button>
         <Menu label={t("Chat options")} trigger={<Dots />} items={menu} />
       </div>
@@ -450,6 +475,7 @@ export function BoardPage({ id, me }: { id: string; me: Me }) {
       )}
 
       {panel === "files" && <FilesPanel bid={bid} onClose={() => setPanel(null)} onView={setViewer} />}
+      {(panel === "people" || panel === "add") && <PeoplePanel key={panel} startAdding={panel === "add"} data={data} me={me} direct={direct} onClose={() => setPanel(null)} onChanged={(newId) => { if (newId) { setPanel(null); navigate(`/chats/${newId}`); } else reload(); }} />}
       {panel === "edit" && <EditPanel data={data} me={me} onClose={() => setPanel(null)} onSaved={() => { setPanel(null); reload(); }} />}
 
       {panel === null && (
@@ -461,7 +487,15 @@ export function BoardPage({ id, me }: { id: string; me: Me }) {
             const prev = visible[i - 1];
             const newDay = !prev || !sameDay(new Date(prev.created_at), d);
             const mine = p.user_id === me.id;
-            const grouped = !s && !newDay && prev && prev.user_id === p.user_id && d.getTime() - Date.parse(prev.created_at) < 5 * 60000;
+            if (p.kind === "event") {
+              return (
+                <div key={p.id}>
+                  {newDay && <div className="chat-day"><span>{dayLabel(d)}</span></div>}
+                  <div className="chat-event" id={`m-${p.id}`}><span>{eventText(p, me.id)} · {clock(p.created_at)}</span></div>
+                </div>
+              );
+            }
+            const grouped = !s && !newDay && prev && prev.kind !== "event" && prev.user_id === p.user_id && d.getTime() - Date.parse(prev.created_at) < 5 * 60000;
             const parent = p.parent_id ? byId.get(p.parent_id) : null;
             const open = picked === p.id;
             const photos = p.files.filter((f: any) => f.kind === "image");
@@ -622,19 +656,98 @@ function FilesPanel({ bid, onClose, onView }: { bid: string; onClose: () => void
   );
 }
 
+/**
+ * Who is in a chat. Anyone in it can add people; the person who started it can remove people.
+ * Adding someone to a one-to-one chat starts a new group, so the two-person history stays private.
+ */
+function PeoplePanel({ data, me, direct, startAdding, onClose, onChanged }: { data: any; me: Me; direct: boolean; startAdding: boolean; onClose: () => void; onChanged: (newChatId?: string) => void }) {
+  const b = data.board;
+  const members: any[] = [...(data.members ?? [])].sort((x, y) => (x.id === me.id ? -1 : y.id === me.id ? 1 : x.name.localeCompare(y.name)));
+  const [adding, setAdding] = useState(startAdding);
+  const [add, setAdd] = useState<string[]>([]);
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const other = members.find((m) => m.id !== me.id);
+  async function run(fn: () => Promise<void>) {
+    setBusy(true);
+    setErr(null);
+    try {
+      await fn();
+    } catch (x) {
+      setErr((x as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const addNow = () => run(async () => {
+    const r = await api(`/boards/${encodeURIComponent(b.id)}/people`, { body: { userIds: add } });
+    toast(r.newChat ? t("New group chat started") : add.length === 1 ? t("1 person added") : t("{n} people added", { n: add.length }));
+    setAdd([]);
+    setAdding(false);
+    onChanged(r.newChat ? r.id : undefined);
+  });
+  const removeNow = (m: any) => run(async () => {
+    await api(`/boards/${encodeURIComponent(b.id)}/people/${encodeURIComponent(m.id)}`, { method: "DELETE" });
+    toast(t("{name} was removed", { name: m.name }));
+    setConfirm(null);
+    onChanged();
+  });
+  return (
+    <div className="chat-panel stack">
+      <div className="chat-panel-head"><b>{t("People in this chat ({n})", { n: members.length })}</b><button type="button" className="iconbtn" aria-label={t("Close")} onClick={onClose}><Close /></button></div>
+      <div className="people-list">
+        {members.map((m) => (
+          <div key={m.id} className="people-row">
+            <span className="avatar person" aria-hidden="true">{initials(m.name)}</span>
+            <span className="people-text">
+              <b>{m.id === me.id ? t("You") : m.name}</b>
+              <small className="muted">{[t(ROLE_LABELS[m.role] ?? m.role ?? ""), m.id === b.created_by ? t("Started this chat") : null].filter(Boolean).join(" · ")}</small>
+            </span>
+            {data.canModerate && m.id !== me.id && !direct && (confirm === m.id ? (
+              <span className="people-confirm">
+                <button type="button" className="btn small danger" disabled={busy} onClick={() => removeNow(m)}>{t("Remove")}</button>
+                <button type="button" className="btn small" onClick={() => setConfirm(null)}>{t("Cancel")}</button>
+              </span>
+            ) : (
+              <button type="button" className="btn small" onClick={() => setConfirm(m.id)} aria-label={t("Remove {name} from this chat", { name: m.name })}>{t("Remove")}</button>
+            ))}
+          </div>
+        ))}
+      </div>
+      {confirm && <p className="muted small-note">{t("They'll stop seeing this chat, its messages and its files. Everyone in the chat will see that they were removed.")}</p>}
+      {adding ? (
+        <div className="stack">
+          <b>{t("Add people")}</b>
+          {direct && other && <p className="muted small-note">{t("This starts a new group chat. Your messages with {name} stay private between the two of you.", { name: other.name })}</p>}
+          {!direct && <p className="muted small-note">{t("People you add can see the messages and files already in this chat.")}</p>}
+          <PeoplePicker picked={add} setPicked={setAdd} exclude={members.map((m) => m.id)} />
+          <div className="row">
+            <button type="button" className="btn primary" disabled={!add.length || busy} onClick={addNow}>{direct ? t("Start group chat") : add.length > 1 ? t("Add {n} people", { n: add.length }) : t("Add")}</button>
+            <button type="button" className="btn" onClick={() => { setAdding(false); setAdd([]); }}>{t("Cancel")}</button>
+          </div>
+        </div>
+      ) : (
+        <div className="row">
+          <button type="button" className="btn primary" onClick={() => setAdding(true)}>{t("Add people")}</button>
+        </div>
+      )}
+      <ErrorNote error={err} />
+    </div>
+  );
+}
+
 function EditPanel({ data, me, onClose, onSaved }: { data: any; me: Me; onClose: () => void; onSaved: () => void }) {
   const b = data.board;
   const [name, setName] = useState(b.name);
   const [desc, setDesc] = useState(b.description ?? "");
   const [roles, setRoles] = useState<string[]>(b.audience ? JSON.parse(b.audience) : []);
-  const [add, setAdd] = useState<string[]>([]);
-  const [remove, setRemove] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const chat = b.kind === "chat";
   async function save(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await api(`/boards/${encodeURIComponent(b.id)}`, { method: "PATCH", body: chat ? { name, addUserIds: add, removeUserIds: remove } : { name, description: desc, audience: roles } });
+      await api(`/boards/${encodeURIComponent(b.id)}`, { method: "PATCH", body: chat ? { name } : { name, description: desc, audience: roles } });
       toast(t("Saved"));
       onSaved();
     } catch (x) {
@@ -643,24 +756,10 @@ function EditPanel({ data, me, onClose, onSaved }: { data: any; me: Me; onClose:
   }
   return (
     <form className="chat-panel stack" onSubmit={save}>
-      <div className="chat-panel-head"><b>{chat ? t("Edit chat name and people") : t("Edit board")}</b><button type="button" className="iconbtn" aria-label={t("Close")} onClick={onClose}><Close /></button></div>
+      <div className="chat-panel-head"><b>{chat ? t("Rename group") : t("Edit board")}</b><button type="button" className="iconbtn" aria-label={t("Close")} onClick={onClose}><Close /></button></div>
       <div className="field"><label htmlFor="en">{chat ? t("Group name (optional)") : t("Board name")}</label><input id="en" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required={!chat} /></div>
       {!chat && <div className="field"><label htmlFor="ed">{t("What it's for (optional)")}</label><input id="ed" value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={500} /></div>}
       {!chat && <RolePicker roles={roles} setRoles={setRoles} />}
-      {chat && (
-        <>
-          <b>{t("People in this chat")}</b>
-          {data.members.filter((m: any) => m.id !== me.id).map((m: any) => (
-            <label key={m.id} className="picker-row">
-              <input type="checkbox" checked={!remove.includes(m.id)} onChange={(e) => setRemove(e.target.checked ? remove.filter((x) => x !== m.id) : [...remove, m.id])} />
-              <span className="avatar person" aria-hidden="true">{initials(m.name)}</span>
-              <span><b>{m.name}</b>{remove.includes(m.id) && <small className="muted">{t("Will be removed")}</small>}</span>
-            </label>
-          ))}
-          <b>{t("Add people")}</b>
-          <PeoplePicker picked={add} setPicked={setAdd} exclude={data.members.map((m: any) => m.id)} />
-        </>
-      )}
       <ErrorNote error={err} />
       <div className="row"><button className="btn primary" type="submit">{t("Save")}</button><button className="btn" type="button" onClick={onClose}>{t("Cancel")}</button></div>
     </form>

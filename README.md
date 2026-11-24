@@ -139,6 +139,10 @@ peer list. All peers the project needs are listed directly in `package.json`.)
 - **Message board and chat text** is always shown as text, never as HTML.
 - **Private chats** can be read only by the people in them, admins included
   (Aaron's choice, 2026-11-24). Boards stay visible to the roles they're shared with.
+- **People in a chat:** anyone in a chat can add people, and they then see its history. Only
+  the person who started the chat can remove someone, who loses access at once. Adding someone
+  to a one-to-one chat starts a new group instead, so the two-person history stays private.
+  Each add, remove and leave shows as a line in the chat and goes in the audit log.
 - **Files in chats** (photos, PDF, Office, CAD, video, zip; 25 MB each) are kept in R2 and
   served only to people who can see that chat. The served type comes from the file's
   extension (src/shared/files.ts), never from the uploader's browser; web pages, SVG and

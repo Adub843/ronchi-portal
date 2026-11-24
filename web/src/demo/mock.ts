@@ -111,7 +111,7 @@ function seed(): DB {
   const chat = (name: string, by: User, people: User[], n: number) => ({ id: id(), kind: "chat", name, description: null, audience: null, machine_id: null, created_by: by.id, created_at: iso(daysAgo(n, 8)), archived_at: null, locked: 0, people });
   const withSteve = chat("", steve, [aaron, steve], 6);
   const withLola = chat("", lola, [aaron, lola], 3);
-  const crew = chat("Atlanta install crew", meagan, [aaron, steve, meagan], 5);
+  const crew = chat("Atlanta install crew", aaron, [aaron, steve, meagan], 5);
   const chats = [withSteve, withLola, crew];
   const files: any[] = [];
   const attach = (post: any, name: string, blob: Blob, url?: string) => {
@@ -127,7 +127,8 @@ function seed(): DB {
   const g2 = p(crew, steve, "I'll bring the torque wrench and the spare O-ring kit.", daysAgo(1, 16, 45));
   const g3 = p(crew, aaron, "Sounds good. Plant contact wants us on site by 8.", daysAgo(1, 17, 2), g1.id);
   const s9 = p(service, paolo, "Logo file for the service report header, please use this one from now on.", daysAgo(2, 11, 10));
-  posts.push(c1, c2, c3, c4, c5, g1, g2, g3, s9);
+  const g0 = { ...p(crew, aaron, JSON.stringify({ type: "added", names: ["Meagan Hooper"] }), daysAgo(1, 16, 5)), kind: "event" };
+  posts.push(c1, c2, c3, c4, c5, g0, g1, g2, g3, s9);
   attach(c1, "Service report 4222TP changeover.pdf", examplePdf("Service report 4222TP changeover (example)"));
   attach(c5, "Service report 4222TP changeover.pdf", examplePdf("Service report 4222TP changeover (example)"));
   attach(c3, "Fill weights line 2 heads 1-12.csv", new Blob(["Head,Target g,Actual g\n" + Array.from({ length: 12 }, (_, i) => `${i + 1},500.0,${(499.6 + ((i * 7) % 9) / 10).toFixed(1)}`).join("\n")], { type: "text/csv" }));
@@ -318,8 +319,10 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   const live = (bid: string) => db.posts.filter((p) => p.board_id === bid && !p.deleted_at).sort((x, y) => x.created_at.localeCompare(y.created_at));
   const liveFiles = (postId: string) => db.files.filter((f) => f.post_id === postId && !f.deleted_at);
   const membersOf = (bid: string) => (db.members[bid] ?? []).map((uid) => db.users.find((x) => x.id === uid)!).map((x) => ({ id: x.id, name: x.name, role: x.role }));
+  const event = (b: any, type: string, names: string[]) =>
+    db.posts.push({ id: id(), board_id: b.id, parent_id: null, user_id: u.id, body: JSON.stringify({ type, names }), kind: "event", pinned: 0, created_at: iso(new Date()), edited_at: null, deleted_at: null });
   const listRow = (b: any) => {
-    const posts = live(b.id);
+    const posts = live(b.id).filter((p) => p.kind !== "event");
     const last = posts.at(-1);
     const unread = posts.filter((p) => p.user_id !== u.id && p.created_at > (db.reads[b.id] ?? "")).length;
     return {
@@ -340,7 +343,7 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     const since = q.get("since");
     if (!since) return { now: at, posts: [], unread };
     const posts = db.posts
-      .filter((p) => p.created_at > since && p.user_id !== u.id && !p.deleted_at)
+      .filter((p) => p.created_at > since && p.user_id !== u.id && !p.deleted_at && p.kind !== "event")
       .map((p) => ({ p, b: db.boards.find((b) => b.id === p.board_id)! }))
       .filter(({ b }) => visible(b) && !db.muted[b.id])
       .map(({ p, b }) => ({ id: p.id, board_id: b.id, body: p.body.slice(0, 160), created_at: p.created_at, author: name(p.user_id), board_name: b.name, kind: b.kind, files: liveFiles(p.id).length }));
@@ -393,6 +396,31 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     }
     if (seg[2] === "leave") {
       db.members[b.id] = (db.members[b.id] ?? []).filter((x) => x !== u.id);
+      event(b, "left", []);
+      if (b.created_by === u.id && db.members[b.id]!.length) b.created_by = db.members[b.id]![0];
+      return { ok: true };
+    }
+    if (seg[2] === "people" && method === "POST") {
+      const have = db.members[b.id] ?? [];
+      const add = (body.userIds ?? []).filter((x: string) => !have.includes(x));
+      if (!add.length) throw new Fail(400, "Pick someone who isn't in this chat yet.");
+      const names = add.map(name).sort();
+      if (!b.name && have.length <= 2) {
+        const c = { id: id(), kind: "chat", name: "", description: null, audience: null, machine_id: null, created_by: u.id, created_at: iso(new Date()), archived_at: null, locked: 0 };
+        db.boards.push(c);
+        db.members[c.id] = [...have, ...add];
+        return { id: c.id, newChat: true };
+      }
+      db.members[b.id] = [...have, ...add];
+      event(b, "added", names);
+      return { id: b.id, newChat: false };
+    }
+    if (seg[2] === "people" && seg[3] && method === "DELETE") {
+      if (!moderate) throw new Fail(403, "Only the person who started this chat can remove people.");
+      if (seg[3] === u.id) throw new Fail(400, "To take yourself out, leave the chat.");
+      if (!(db.members[b.id] ?? []).includes(seg[3])) throw new Fail(404, "That person isn't in this chat.");
+      db.members[b.id] = db.members[b.id]!.filter((x) => x !== seg[3]);
+      event(b, "removed", [name(seg[3])]);
       return { ok: true };
     }
     if (seg[2] === "files") {
@@ -402,6 +430,11 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       const lines = [b.name || "Chat", `Exported ${iso(new Date())} by ${u.name}. Times are UTC.`, ""];
       for (const p of live(b.id)) {
         const f = liveFiles(p.id).map((x) => x.name).join(", ");
+        if (p.kind === "event") {
+          const e = JSON.parse(p.body);
+          lines.push(`[${p.created_at.slice(0, 16).replace("T", " ")}] ${name(p.user_id)} ${e.type === "left" ? "left the chat" : `${e.type} ${e.names.join(", ")}`}`);
+          continue;
+        }
         lines.push(`[${p.created_at.slice(0, 16).replace("T", " ")}] ${name(p.user_id)}: ${p.body}${f ? ` (files: ${f})` : ""}`);
       }
       return { __text: lines.join("\r\n") };
@@ -415,7 +448,6 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       } else {
         if (!moderate) throw new Fail(403, "Only the person who started this chat can change it.");
         if (body.name !== undefined) b.name = String(body.name).trim();
-        db.members[b.id] = [...new Set([...(db.members[b.id] ?? []).filter((x) => !(body.removeUserIds ?? []).includes(x)), ...(body.addUserIds ?? [])])];
       }
       log(`${b.kind}.update`);
       return { ok: true };
@@ -436,7 +468,7 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       return { id: p.id };
     }
     if (seg[2] === "posts" && seg[3]) {
-      const p = db.posts.find((x) => x.id === seg[3]);
+      const p = db.posts.find((x) => x.id === seg[3] && x.kind !== "event");
       if (!p) throw new Fail(404, "Not found.");
       if (method === "DELETE") {
         p.deleted_at = iso(new Date());
