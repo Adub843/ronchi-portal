@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { defineConfig } from "vitest/config";
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
@@ -5,6 +6,10 @@ import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 // The portal config points at web/dist for the staff app. Tests don't need the built app,
 // but the folder has to exist.
 mkdirSync("web/dist", { recursive: true });
+mkdirSync("web-parts/dist", { recursive: true });
+
+// The parts site tests publish with this key; the Worker only ever sees its hash.
+export const TEST_ADMIN_KEY = "test-publish-key-0123456789abcdefghijklmnop";
 
 export default defineConfig({
   test: {
@@ -30,6 +35,22 @@ export default defineConfig({
           })),
         ],
         test: { name: "help", include: ["test/help/**/*.test.ts"], setupFiles: ["test/help/setup.ts"] },
+      },
+      // The customer parts site, with only parts-db and its own bucket.
+      {
+        plugins: [
+          cloudflareTest(async () => ({
+            wrangler: { configPath: "./wrangler.parts.jsonc" },
+            miniflare: {
+              bindings: {
+                TEST_MIGRATIONS: await readD1Migrations("migrations/parts"),
+                TEST_ADMIN_KEY,
+                ADMIN_KEY_HASH: createHash("sha256").update(TEST_ADMIN_KEY).digest("hex"),
+              },
+            },
+          })),
+        ],
+        test: { name: "parts", include: ["test/parts/**/*.test.ts"], setupFiles: ["test/parts/setup.ts"] },
       },
     ],
   },
