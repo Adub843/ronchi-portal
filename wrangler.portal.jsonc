@@ -15,7 +15,7 @@
   },
   "d1_databases": [
     // database_id is filled in once with `wrangler d1 create portal-db` (see REBUILD.md).
-    { "binding": "DB", "database_name": "portal-db", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations/portal" }
+    { "binding": "DB", "database_name": "portal-db", "database_id": "17153d9d-8595-4dbb-83f9-66515cbdceea", "migrations_dir": "migrations/portal" }
   ],
   "r2_buckets": [
     // Photos and files sent in boards and chats. Created once with `wrangler r2 bucket create ronchi-portal-files`.
@@ -40,7 +40,7 @@
       "name": "ronchi-portal",
       "vars": { "ORIGIN": "https://portal.ronchiamerica.com", "RP_ID": "portal.ronchiamerica.com", "RP_NAME": "Ronchi Portal" },
       "d1_databases": [
-        { "binding": "DB", "database_name": "portal-db", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations/portal" }
+        { "binding": "DB", "database_name": "portal-db", "database_id": "17153d9d-8595-4dbb-83f9-66515cbdceea", "migrations_dir": "migrations/portal" }
       ],
       "r2_buckets": [{ "binding": "FILES", "bucket_name": "ronchi-portal-files" }],
       "services": [{ "binding": "PARTS", "service": "ronchi-parts" }],
