@@ -44,12 +44,15 @@ If you are restoring from a backup instead, load the export first:
 
 In `wrangler.portal.jsonc` under `env.production.vars`:
 
-- `ORIGIN`: `https://portal.ronchiamerica.com`
-- `RP_ID`: `portal.ronchiamerica.com` (passkeys are tied to this; changing it later means
-  everyone makes a new passkey)
+- `ORIGIN`: the portal's address, now `https://ronchi-portal.business-console.workers.dev`
+- `RP_ID`: the same address without `https://` (passkeys are tied to this; changing it later
+  means everyone makes a new passkey)
 
 In `wrangler.parts.jsonc` under `env.production.vars`: `ORIGIN` is
-`https://parts.ronchiamerica.com` and `RP_ID` is `parts.ronchiamerica.com`.
+`https://ronchi-parts.business-console.workers.dev` and `RP_ID` is that address without `https://`.
+
+The portal runs as its own site on these workers.dev addresses for now (Aaron, 2026-11-24).
+If it later moves to `portal.ronchiamerica.com` (step 6), change both values and redeploy.
 
 ## 4b. Parts site
 
@@ -79,7 +82,10 @@ This runs all checks, builds the staff and customer apps, and deploys the three 
 in order: the parts site first (the portal's service binding needs it to exist), then the
 portal, then the help center.
 
-## 6. Custom domains
+## 6. Custom domains (later, optional)
+
+Only when the portal moves onto Ronchi's own domain. Change `ORIGIN` and `RP_ID` (step 3) first.
+
 
 Dashboard → Workers & Pages → `ronchi-portal` → Settings → Domains & Routes → Add →
 Custom domain → `portal.ronchiamerica.com`. Same for `ronchi-help` →

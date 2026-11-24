@@ -38,7 +38,8 @@
   "env": {
     "production": {
       "name": "ronchi-portal",
-      "vars": { "ORIGIN": "https://portal.ronchiamerica.com", "RP_ID": "portal.ronchiamerica.com", "RP_NAME": "Ronchi Portal" },
+      // Its own site for now (Aaron, 2026-11-24): the workers.dev address. Changing ORIGIN/RP_ID later means everyone sets up their passkey again.
+      "vars": { "ORIGIN": "https://ronchi-portal.business-console.workers.dev", "RP_ID": "ronchi-portal.business-console.workers.dev", "RP_NAME": "Ronchi Portal" },
       "d1_databases": [
         { "binding": "DB", "database_name": "portal-db", "database_id": "17153d9d-8595-4dbb-83f9-66515cbdceea", "migrations_dir": "migrations/portal" }
       ],
