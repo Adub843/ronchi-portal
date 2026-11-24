@@ -1,18 +1,20 @@
 -- Change-part orders (replaces the old Change Parts Console and its projects.json).
--- One row per change-part job. Business side only: the help center never sees this table.
+-- One row per change-part job, matching the Change Parts Management Master Sheet. Business side only: the help center never sees this table.
 CREATE TABLE cp_orders (
   id               TEXT PRIMARY KEY,
   customer         TEXT NOT NULL,
   machine          TEXT,              -- machine number as typed, e.g. 3069MB; linked to machines by serial
   part             TEXT,
   status           TEXT,
+  salesperson      TEXT,
+  quote            TEXT,
   customer_po      TEXT,
   ra_po            TEXT,
   aa               TEXT,
-  samples_received TEXT,              -- YYYY-MM-DD
-  samples_shipped  TEXT,              -- YYYY-MM-DD
+  samples_received TEXT,              -- as the sheets write it: Yes, No, a date or a note
+  samples_shipped  TEXT,
   fill_test        TEXT,
-  ship_date        TEXT,              -- YYYY-MM-DD
+  ship_date        TEXT,              -- free text ("Mid Nov 2026"); a real date is used to flag late jobs
   folder_url       TEXT,              -- SharePoint folder for the job
   notes            TEXT,
   revision         INTEGER NOT NULL DEFAULT 1,  -- goes up on every save, so two people can't overwrite each other

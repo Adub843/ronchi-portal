@@ -70,6 +70,8 @@ describe("change-part spreadsheet reading", () => {
     expect(normalDate("2026-11-24")).toBe("2026-11-24");
     expect(normalDate("2/30/2026")).toBeNull();
     expect(normalDate("TBD")).toBeNull();
+    expect(normalDate("December 11, 2026")).toBe("2026-12-11");
+    expect(normalDate("Mid Nov 2026")).toBeNull();
   });
   it("matches column names however they're written", () => {
     const { map, unknown } = mapHeader(["Cust. P.O. #", "Serial Number", "Customer", "Samples Rcvd", "Whatever"]);

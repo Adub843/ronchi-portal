@@ -4,7 +4,7 @@
 // page shows that history. Two people editing at once can't overwrite each other: each save
 // sends the revision it started from, and a stale one is refused.
 import { Hono } from "hono";
-import { CP_DATES, CP_FIELDS, CP_LABELS, CP_MAX, FOLDER_LINK, isOpen, normalDate, readOrdersCsv, type CpField, type CpOrderInput } from "../../shared/change-parts";
+import { CP_FIELDS, CP_LABELS, CP_MAX, FOLDER_LINK, isOpen, readOrdersCsv, type CpField, type CpOrderInput } from "../../shared/change-parts";
 import { randomId } from "../../shared/crypto";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
@@ -22,12 +22,7 @@ function clean(b: Record<string, unknown>): CpOrderInput {
     const raw = b[f];
     if (raw !== null && raw !== undefined && typeof raw !== "string") fail(400, `${CP_LABELS[f]} must be text.`);
     let v = (raw ?? "").trim();
-    if (v.length > CP_MAX[f] && !CP_DATES.has(f)) fail(400, `${CP_LABELS[f]} is too long (limit ${CP_MAX[f]} characters).`);
-    if (v && CP_DATES.has(f)) {
-      const d = normalDate(v);
-      if (!d) fail(400, `${CP_LABELS[f]} must be a date.`);
-      v = d;
-    }
+    if (v.length > CP_MAX[f]) fail(400, `${CP_LABELS[f]} is too long (limit ${CP_MAX[f]} characters).`);
     if (v && f === "folder_url" && !FOLDER_LINK.test(v)) fail(400, "The folder link must start with https://<company>.sharepoint.com/");
     if (f === "machine") v = v.toUpperCase();
     out[f] = v || null;

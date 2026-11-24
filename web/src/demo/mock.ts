@@ -4,7 +4,7 @@
 import logoUrl from "../assets/ronchi-logo.png";
 import { cleanName, fileInfo, fileProblem } from "../../../src/shared/files";
 import { PERMISSIONS, ROLES } from "../../../src/portal/lib/roles";
-import { CP_FIELDS, isOpen, normalDate, readOrdersCsv } from "../../../src/shared/change-parts";
+import { CP_FIELDS, isOpen, readOrdersCsv } from "../../../src/shared/change-parts";
 type Role = keyof typeof ROLES;
 
 // Ids for example records. Uses the browser's secure random source like the real server does.
@@ -141,7 +141,15 @@ function seed(): DB {
     row._h = [{ at, action: "cp_order.create", who: by.name, changes: null }];
     return row;
   };
-  const orders = [
+  // A preview built for one person can carry their real jobs (window.__CP_SEED, added to the built
+  // file only, never to this repository). Otherwise the example orders below are used.
+  const real = (globalThis as { __CP_SEED?: Record<string, string>[] }).__CP_SEED;
+  const orders = real ? real.map((x, i) => {
+    const at = iso(daysAgo(0, 8, 0));
+    const row: any = { id: id(), ...Object.fromEntries(Object.entries(x).map(([k, v]) => [k, v || null])), revision: 1, created_by: aaron.id, updated_by: aaron.id, created_at: at, updated_at: new Date(Date.parse(at) - i * 1000).toISOString() };
+    row._h = [{ at, action: "cp_order.create", who: "Imported from SharePoint", changes: null }];
+    return row;
+  }) : [
     o("Example Pharma Co.", "3069MB", "250 ml oval bottle set (star wheels, guides, scroll)", "In production", { customer_po: "EPC-44817", ra_po: "RA-2611", aa: "AA-1093", samples_received: dayIso(-41), samples_shipped: dayIso(-38), fill_test: "Passed in Italy", ship_date: dayIso(12), notes: "Example order. Customer wants it before their January shutdown." }, andrew, 2),
     o("Example Foods Inc.", "4222TP", "Piston resize kit 1 L", "Waiting on samples", { customer_po: "EF-2210", ra_po: "RA-2614", notes: "Example. 24 bottles and caps promised by Friday." }, michele, 5),
     o("Example Home Care", "4212MB", "Trigger sprayer cap chuck set", "Ready to ship", { customer_po: "EHC-90021", ra_po: "RA-2598", aa: "AA-1081", samples_received: dayIso(-70), samples_shipped: dayIso(-66), fill_test: "Passed", ship_date: dayIso(-4) }, andrew, 1),
@@ -149,7 +157,7 @@ function seed(): DB {
     o("Example Pharma Co.", "3811CP", "38 mm cap chucks", "Shipped", { customer_po: "EPC-43002", ra_po: "RA-2560", aa: "AA-1040", samples_received: dayIso(-120), samples_shipped: dayIso(-115), fill_test: "Passed", ship_date: dayIso(-30) }, andrew, 29),
     o("Example Beverage LLC", "", "Neck guides for 2 L PET", "In design", { customer_po: "EB-7781", samples_received: dayIso(-9), samples_shipped: dayIso(-7) }, andrew, 4),
   ];
-  orders[0]._h.unshift({ at: iso(daysAgo(1, 15, 20)), action: "cp_order.update", who: andrew.name, changes: { status: ["Fill test", "In production"], ship_date: [dayIso(5), dayIso(12)] } });
+  if (!real) orders[0]._h.unshift({ at: iso(daysAgo(1, 15, 20)), action: "cp_order.update", who: andrew.name, changes: { status: ["Fill test", "In production"], ship_date: [dayIso(5), dayIso(12)] } });
   return {
     users, invites: [], machines, boards: [service, torque, sales, eng, ...chats.map(({ people: _p, ...c }) => c)], posts, audit, prefs: null,
     reads: { [torque.id]: iso(new Date()), [withLola.id]: iso(new Date()), [crew.id]: iso(new Date()), [withSteve.id]: iso(ago(100)) },
@@ -253,12 +261,7 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       const out: any = {};
       for (const f of CP_FIELDS) {
         if (!(f in b)) continue;
-        let v = String(b[f] ?? "").trim();
-        if (v && (f === "samples_received" || f === "samples_shipped" || f === "ship_date")) {
-          const d = normalDate(v);
-          if (!d) throw new Fail(400, "Dates must be real dates.");
-          v = d;
-        }
+        const v = String(b[f] ?? "").trim();
         if (v && f === "folder_url" && !/^https:\/\/[a-z0-9-]+(?:-my)?\.sharepoint\.com\//i.test(v)) throw new Fail(400, "The folder link must start with https://<company>.sharepoint.com/");
         out[f] = (f === "machine" ? v.toUpperCase() : v) || null;
       }
