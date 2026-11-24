@@ -17,6 +17,10 @@
     // database_id is filled in once with `wrangler d1 create portal-db` (see REBUILD.md).
     { "binding": "DB", "database_name": "portal-db", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations/portal" }
   ],
+  "r2_buckets": [
+    // Photos and files sent in boards and chats. Created once with `wrangler r2 bucket create ronchi-portal-files`.
+    { "binding": "FILES", "bucket_name": "ronchi-portal-files" }
+  ],
   "ratelimits": [
     { "name": "AUTH_LIMIT", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } },
     { "name": "API_LIMIT", "namespace_id": "1002", "simple": { "limit": 300, "period": 60 } }
@@ -35,6 +39,7 @@
       "d1_databases": [
         { "binding": "DB", "database_name": "portal-db", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations/portal" }
       ],
+      "r2_buckets": [{ "binding": "FILES", "bucket_name": "ronchi-portal-files" }],
       "ratelimits": [
         { "name": "AUTH_LIMIT", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } },
         { "name": "API_LIMIT", "namespace_id": "1002", "simple": { "limit": 300, "period": 60 } }

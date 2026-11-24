@@ -1,6 +1,8 @@
 // DEMO ONLY. Used by `npm run build:demo` (the preview shown inside Claude), never by the real portal.
 // It answers the app's /api calls from example data kept in this browser, so the real screens
 // can be clicked through without a server. Signed in as Aaron Lewis, admin.
+import logoUrl from "../assets/ronchi-logo.png";
+import { cleanName, fileInfo, fileProblem } from "../../../src/shared/files";
 import { PERMISSIONS, ROLES } from "../../../src/portal/lib/roles";
 type Role = keyof typeof ROLES;
 
@@ -14,7 +16,7 @@ const daysAgo = (n: number, h: number, m = 0) => {
   return d;
 };
 
-interface User { id: string; email: string; name: string; role: Role; status: string; can_type_address: number; created_at: string }
+interface User { id: string; email: string; name: string; role: Role; status: string; created_at: string }
 interface DB {
   users: User[];
   invites: any[];
@@ -24,14 +26,36 @@ interface DB {
   audit: any[];
   prefs: any;
   reads: Record<string, string>; // board id -> when Aaron last read it
+  muted: Record<string, boolean>;
+  members: Record<string, string[]>; // chat id -> user ids
+  files: any[];
+}
+
+/** A small real PDF (one page of text), so example files open like the real thing. */
+function examplePdf(title: string): Blob {
+  const text = title.replace(/[()\\]/g, "");
+  const stream = `BT /F1 18 Tf 72 720 Td (${text}) Tj ET`;
+  const objs = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  let out = "%PDF-1.4\n";
+  const at: number[] = [];
+  objs.forEach((o, i) => { at.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xref = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${at.map((n) => `${String(n).padStart(10, "0")} 00000 n \n`).join("")}trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return new Blob([out], { type: "application/pdf" });
 }
 
 function seed(): DB {
   const t0 = iso(daysAgo(20, 9));
-  const u = (name: string, role: Role, email: string, typed = 0): User => ({ id: id(), name, role, email, status: "active", can_type_address: typed, created_at: t0 });
+  const u = (name: string, role: Role, email: string): User => ({ id: id(), name, role, email, status: "active", created_at: t0 });
   const users = [
-    u("Aaron Lewis", "admin", "a_lewis@ronchiamerica.com", 1),
-    u("Paolo Ferla", "admin", "paolo@ronchiamerica.com", 1),
+    u("Aaron Lewis", "admin", "a_lewis@ronchiamerica.com"),
+    u("Paolo Ferla", "admin", "paolo@ronchiamerica.com"),
     u("Lola Parker", "billing", "lola@ronchiamerica.com"),
     u("Meagan Hooper", "scheduling", "meagan@ronchiamerica.com"),
     u("Steve Williams", "service", "steve@ronchiamerica.com"),
@@ -48,7 +72,7 @@ function seed(): DB {
     m("3535MB", "Monoblock", "Example Personal Care", "New Albany, OH"),
   ];
   const b = (name: string, description: string | null, by: User, audience: string[] | null = null, machine_id: string | null = null, n = 5) =>
-    ({ id: id(), name, description, audience: audience ? JSON.stringify(audience) : null, machine_id, created_by: by.id, created_at: iso(daysAgo(n, 8)), archived_at: null });
+    ({ id: id(), kind: "board", name, description, audience: audience ? JSON.stringify(audience) : null, machine_id, created_by: by.id, created_at: iso(daysAgo(n, 8)), archived_at: null, locked: 0 });
   const service = b("Service team", "Daily updates from the field", paolo, null, null, 9);
   const torque = b("3069MB capper torque", "Torque drift after long runs", aaron, null, machines[0]!.id, 4);
   const sales = b("Sales and quotes", "Machine quotes and change-part pricing", andrew, ["sales", "admin"], null, 6);
@@ -81,8 +105,38 @@ function seed(): DB {
     { at: iso(daysAgo(0, 7, 30)), action: "login", who: "Aaron Lewis", ip: "your phone" },
     { at: iso(daysAgo(1, 9, 0)), action: "invite.create", who: "Paolo Ferla", ip: "office" },
   ];
-  void lola;
-  return { users, invites: [], machines, boards: [service, torque, sales, eng], posts, audit, prefs: null, reads: { [torque.id]: iso(new Date()) } };
+  // Private chats.
+  const chat = (name: string, by: User, people: User[], n: number) => ({ id: id(), kind: "chat", name, description: null, audience: null, machine_id: null, created_by: by.id, created_at: iso(daysAgo(n, 8)), archived_at: null, locked: 0, people });
+  const withSteve = chat("", steve, [aaron, steve], 6);
+  const withLola = chat("", lola, [aaron, lola], 3);
+  const crew = chat("Atlanta install crew", meagan, [aaron, steve, meagan], 5);
+  const chats = [withSteve, withLola, crew];
+  const files: any[] = [];
+  const attach = (post: any, name: string, blob: Blob, url?: string) => {
+    const info = fileInfo(name)!;
+    files.push({ id: id(), post_id: post.id, board_id: post.board_id, user_id: post.user_id, name, ext: info.ext, kind: info.kind, size: blob.size, created_at: post.created_at, deleted_at: null, url: url ?? URL.createObjectURL(blob) });
+  };
+  const c1 = p(withSteve, steve, "Service report for the 4222TP changeover. Signed by the plant manager.", ago(185));
+  const c2 = p(withSteve, aaron, "Thanks. I'll get it to Lola for the invoice.", ago(170));
+  const c3 = p(withSteve, steve, "Fill weights from this morning's test batch, all 12 heads.", ago(26));
+  const c4 = p(withLola, lola, "Is the 4222TP changeover ready to bill? I need the signed service report.", ago(160));
+  const c5 = p(withLola, aaron, "Yes. Steve sent it this morning, forwarding it now.", ago(150));
+  const g1 = p(crew, meagan, "Flights are booked for Thursday 6:10 AM out of Columbus. Hotel is the Hampton by the plant.", daysAgo(1, 16, 20));
+  const g2 = p(crew, steve, "I'll bring the torque wrench and the spare O-ring kit.", daysAgo(1, 16, 45));
+  const g3 = p(crew, aaron, "Sounds good. Plant contact wants us on site by 8.", daysAgo(1, 17, 2), g1.id);
+  const s9 = p(service, paolo, "Logo file for the service report header, please use this one from now on.", daysAgo(2, 11, 10));
+  posts.push(c1, c2, c3, c4, c5, g1, g2, g3, s9);
+  attach(c1, "Service report 4222TP changeover.pdf", examplePdf("Service report 4222TP changeover (example)"));
+  attach(c5, "Service report 4222TP changeover.pdf", examplePdf("Service report 4222TP changeover (example)"));
+  attach(c3, "Fill weights line 2 heads 1-12.csv", new Blob(["Head,Target g,Actual g\n" + Array.from({ length: 12 }, (_, i) => `${i + 1},500.0,${(499.6 + ((i * 7) % 9) / 10).toFixed(1)}`).join("\n")], { type: "text/csv" }));
+  attach(s9, "ronchi-logo.png", new Blob(["png"], { type: "image/png" }), logoUrl);
+  const members = Object.fromEntries(chats.map((c) => [c.id, c.people.map((x) => x.id)]));
+  void andrew;
+  return {
+    users, invites: [], machines, boards: [service, torque, sales, eng, ...chats.map(({ people: _p, ...c }) => c)], posts, audit, prefs: null,
+    reads: { [torque.id]: iso(new Date()), [withLola.id]: iso(new Date()), [crew.id]: iso(new Date()), [withSteve.id]: iso(ago(100)) },
+    muted: {}, members, files,
+  };
 }
 
 // Example data lives in memory only. Nothing is written to the browser's storage,
@@ -112,8 +166,9 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   if (path === "/auth/logout") throw new Fail(400, "Sign-out is turned off in this preview.");
   if (path === "/auth/add-device") return { link: "https://portal.ronchiamerica.com/welcome#example-one-time-link" };
   if (path === "/prefs") {
-    if (method === "PUT") db.prefs = body.reset ? null : { theme: body.theme, mode: body.mode ?? "auto", layout: body.layout ?? "L2", tiles: body.tiles ?? null };
-    return db.prefs ?? { theme: "ronchi", mode: "auto", layout: "L2", tiles: null };
+    const cur = db.prefs ?? { theme: "ronchi", mode: "auto", layout: "L2", tiles: null, lang: "en", popups: true };
+    if (method === "PUT") db.prefs = body.reset ? { ...cur, theme: "ronchi", mode: "auto", layout: "L2", tiles: null } : { theme: body.theme, mode: body.mode ?? "auto", layout: body.layout ?? "L2", tiles: body.tiles ?? null, lang: body.lang ?? "en", popups: body.popups !== false };
+    return db.prefs ?? cur;
   }
   // --- people ---
   if (path === "/users/roles") return { roles: ROLES };
@@ -143,7 +198,6 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     if (t.id === u.id && (body.status === "disabled" || (body.role && body.role !== "admin"))) throw new Fail(400, "You can't remove your own admin access. Ask another admin.");
     if (body.role) t.role = body.role;
     if (body.status) t.status = body.status;
-    if (body.canTypeAddress !== undefined) t.can_type_address = body.canTypeAddress ? 1 : 0;
     log("user.update");
     return { ok: true };
   }
@@ -171,56 +225,150 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     }
     return { machine: m, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at) };
   }
-  // --- boards ---
-  if (path === "/boards" && method === "GET") {
-    const live = (bid: string) => db.posts.filter((p) => p.board_id === bid && !p.deleted_at);
+  // --- boards and chats ---
+  const visible = (b: any) => !b.archived_at && (b.kind === "chat" ? (db.members[b.id] ?? []).includes(u.id) : true);
+  const live = (bid: string) => db.posts.filter((p) => p.board_id === bid && !p.deleted_at).sort((x, y) => x.created_at.localeCompare(y.created_at));
+  const liveFiles = (postId: string) => db.files.filter((f) => f.post_id === postId && !f.deleted_at);
+  const membersOf = (bid: string) => (db.members[bid] ?? []).map((uid) => db.users.find((x) => x.id === uid)!).map((x) => ({ id: x.id, name: x.name, role: x.role }));
+  const listRow = (b: any) => {
+    const posts = live(b.id);
+    const last = posts.at(-1);
+    const unread = posts.filter((p) => p.user_id !== u.id && p.created_at > (db.reads[b.id] ?? "")).length;
     return {
-      boards: db.boards
-        .filter((b) => !b.archived_at)
-        .map((b) => {
-          const posts = live(b.id).sort((x, y) => x.created_at.localeCompare(y.created_at));
-          const last = posts.at(-1);
-          const unread = posts.filter((p) => p.user_id !== u.id && p.created_at > (db.reads[b.id] ?? "")).length;
-          return { ...b, post_count: posts.length, last_post_at: last?.created_at ?? null, unread, last_message: last ? `${name(last.user_id)}: ${last.body.slice(0, 120)}` : null };
-        })
-        .sort((a, b) => (b.last_post_at ?? b.created_at).localeCompare(a.last_post_at ?? a.created_at)),
+      ...b, last_post_at: last?.created_at ?? null, unread, muted: db.muted[b.id] ? 1 : 0,
+      last_user_id: last?.user_id ?? null, last_author: last ? name(last.user_id) : null, last_body: last ? last.body.slice(0, 120) : null,
+      last_files: last ? liveFiles(last.id).length : 0, members: b.kind === "chat" ? membersOf(b.id) : undefined,
     };
+  };
+  const list = (kind: string, archived = false) =>
+    db.boards.filter((b) => b.kind === kind && (archived ? !!b.archived_at : visible(b))).map(listRow)
+      .sort((a, b) => (b.last_post_at ?? b.created_at).localeCompare(a.last_post_at ?? a.created_at));
+  if (path === "/boards" && method === "GET") return { boards: list(q.get("kind") === "chat" ? "chat" : "board") };
+  if (path === "/boards/archived") return { boards: list("board", true) };
+  if (path === "/boards/people") return { people: db.users.filter((x) => x.id !== u.id && x.status === "active").map((x) => ({ id: x.id, name: x.name, role: x.role })).sort((a, b) => a.name.localeCompare(b.name)) };
+  if (path === "/boards/updates") {
+    const at = iso(new Date());
+    const unread = { boards: list("board").reduce((n, b) => n + b.unread, 0), chats: list("chat").reduce((n, b) => n + b.unread, 0) };
+    const since = q.get("since");
+    if (!since) return { now: at, posts: [], unread };
+    const posts = db.posts
+      .filter((p) => p.created_at > since && p.user_id !== u.id && !p.deleted_at)
+      .map((p) => ({ p, b: db.boards.find((b) => b.id === p.board_id)! }))
+      .filter(({ b }) => visible(b) && !db.muted[b.id])
+      .map(({ p, b }) => ({ id: p.id, board_id: b.id, body: p.body.slice(0, 160), created_at: p.created_at, author: name(p.user_id), board_name: b.name, kind: b.kind, files: liveFiles(p.id).length }));
+    return { now: at, posts, unread };
   }
-  if (path === "/boards") {
+  if (path === "/boards/read-all") {
+    for (const b of db.boards) db.reads[b.id] = iso(new Date());
+    return { ok: true };
+  }
+  if (path === "/boards/chats") {
+    const others = (body.userIds ?? []).filter((x: string) => x !== u.id);
+    if (!others.length) throw new Fail(400, "Pick who to chat with.");
+    if (others.length === 1 && !body.name) {
+      const found = db.boards.find((b) => b.kind === "chat" && !b.name && (db.members[b.id] ?? []).length === 2 && db.members[b.id]!.includes(others[0]) && db.members[b.id]!.includes(u.id));
+      if (found) return { id: found.id };
+    }
+    const c = { id: id(), kind: "chat", name: body.name ?? "", description: null, audience: null, machine_id: null, created_by: u.id, created_at: iso(new Date()), archived_at: null, locked: 0 };
+    db.boards.push(c);
+    db.members[c.id] = [u.id, ...others];
+    return { id: c.id };
+  }
+  if (path === "/boards" && method === "POST") {
     if (!body.name?.trim()) throw new Fail(400, "Board name is required.");
-    const b = { id: id(), name: body.name.trim(), description: body.description || null, audience: body.audience?.length ? JSON.stringify([...new Set([...body.audience, u.role])]) : null, machine_id: null, created_by: u.id, created_at: iso(new Date()), archived_at: null };
+    const b = { id: id(), kind: "board", name: body.name.trim(), description: body.description || null, audience: body.audience?.length ? JSON.stringify([...new Set([...body.audience, u.role])]) : null, machine_id: null, created_by: u.id, created_at: iso(new Date()), archived_at: null, locked: 0 };
     db.boards.push(b);
     log("board.create");
     return { id: b.id };
   }
   if (seg[0] === "boards") {
     const b = db.boards.find((x) => x.id === seg[1]);
-    if (!b) throw new Fail(404, "Not found.");
+    if (!b || (b.kind === "chat" && !(db.members[b.id] ?? []).includes(u.id))) throw new Fail(404, "Not found.");
+    const moderate = b.kind === "chat" ? b.created_by === u.id : true;
     if (seg[2] === "read") {
       db.reads[b.id] = iso(new Date());
       return { ok: true };
     }
+    if (seg[2] === "mute") {
+      db.muted[b.id] = !!body.muted;
+      return { muted: !!body.muted };
+    }
     if (seg[2] === "archive") {
       b.archived_at = iso(new Date());
+      log("board.archive");
+      return { ok: true };
+    }
+    if (seg[2] === "unarchive") {
+      b.archived_at = null;
+      log("board.unarchive");
+      return { ok: true };
+    }
+    if (seg[2] === "leave") {
+      db.members[b.id] = (db.members[b.id] ?? []).filter((x) => x !== u.id);
+      return { ok: true };
+    }
+    if (seg[2] === "files") {
+      return { files: db.files.filter((f) => f.board_id === b.id && !f.deleted_at).map((f) => ({ ...f, author: name(f.user_id) })).sort((x, y) => y.created_at.localeCompare(x.created_at)) };
+    }
+    if (seg[2] === "export") {
+      const lines = [b.name || "Chat", `Exported ${iso(new Date())} by ${u.name}. Times are UTC.`, ""];
+      for (const p of live(b.id)) {
+        const f = liveFiles(p.id).map((x) => x.name).join(", ");
+        lines.push(`[${p.created_at.slice(0, 16).replace("T", " ")}] ${name(p.user_id)}: ${p.body}${f ? ` (files: ${f})` : ""}`);
+      }
+      return { __text: lines.join("\r\n") };
+    }
+    if (!seg[2] && method === "PATCH") {
+      if (b.kind === "board") {
+        if (body.name !== undefined) b.name = String(body.name).trim() || b.name;
+        if (body.description !== undefined) b.description = body.description || null;
+        if (body.audience !== undefined) b.audience = body.audience.length ? JSON.stringify([...new Set([...body.audience, u.role])]) : null;
+        if (body.locked !== undefined) b.locked = body.locked ? 1 : 0;
+      } else {
+        if (!moderate) throw new Fail(403, "Only the person who started this chat can change it.");
+        if (body.name !== undefined) b.name = String(body.name).trim();
+        db.members[b.id] = [...new Set([...(db.members[b.id] ?? []).filter((x) => !(body.removeUserIds ?? []).includes(x)), ...(body.addUserIds ?? [])])];
+      }
+      log(`${b.kind}.update`);
       return { ok: true };
     }
     if (seg[2] === "posts" && !seg[3]) {
-      if (!body.body?.trim()) throw new Fail(400, "Message is required.");
-      const p = { id: id(), board_id: b.id, parent_id: body.parentId ?? null, user_id: u.id, body: body.body, pinned: 0, created_at: iso(new Date()), edited_at: null, deleted_at: null };
+      const files: File[] = body.files ?? [];
+      if (!body.body?.trim() && !files.length) throw new Fail(400, "Message is required.");
+      for (const f of files) {
+        const problem = fileProblem(f.name, f.size);
+        if (problem) throw new Fail(400, `${f.name}: ${problem}`);
+      }
+      const p = { id: id(), board_id: b.id, parent_id: body.parentId || null, user_id: u.id, body: (body.body ?? "").trim(), pinned: 0, created_at: iso(new Date()), edited_at: null, deleted_at: null };
       db.posts.push(p);
+      for (const f of files) {
+        const info = fileInfo(f.name)!;
+        db.files.push({ id: id(), post_id: p.id, board_id: b.id, user_id: u.id, name: cleanName(f.name), ext: info.ext, kind: info.kind, size: f.size, created_at: p.created_at, deleted_at: null, url: URL.createObjectURL(f) });
+      }
       return { id: p.id };
     }
     if (seg[2] === "posts" && seg[3]) {
       const p = db.posts.find((x) => x.id === seg[3]);
       if (!p) throw new Fail(404, "Not found.");
-      if (method === "DELETE") p.deleted_at = iso(new Date());
+      if (method === "DELETE") {
+        p.deleted_at = iso(new Date());
+        for (const f of liveFiles(p.id)) f.deleted_at = p.deleted_at;
+      }
       if (method === "PATCH" && body.pinned !== undefined) p.pinned = body.pinned ? 1 : 0;
+      if (method === "PATCH" && body.body !== undefined) {
+        if (!String(body.body).trim()) throw new Fail(400, "Message is required.");
+        p.body = String(body.body).trim();
+        p.edited_at = iso(new Date());
+      }
       return { ok: true };
     }
     return {
       board: b,
-      canModerate: true,
-      posts: db.posts.filter((p) => p.board_id === b.id && !p.deleted_at).map((p) => ({ ...p, author: name(p.user_id) })).sort((x, y) => y.created_at.localeCompare(x.created_at)),
+      members: b.kind === "chat" ? membersOf(b.id) : undefined,
+      canModerate: moderate,
+      canPost: !b.archived_at && (!b.locked || moderate),
+      muted: !!db.muted[b.id],
+      posts: live(b.id).reverse().map((p) => ({ ...p, author: name(p.user_id), files: liveFiles(p.id) })),
     };
   }
   throw new Fail(404, "Not found.");
@@ -229,6 +377,15 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
 /** Answer /api/... calls from the example data instead of a server. */
 export function installDemo() {
   db = load();
+  // A couple of messages "arrive" while the preview is open, so the pop-up alerts can be seen.
+  const arrive = (afterMs: number, who: string, where: (b: any) => boolean, text: string) =>
+    setTimeout(() => {
+      const b = db.boards.find(where);
+      const u = db.users.find((x) => x.name === who);
+      if (b && u) db.posts.push({ id: id(), board_id: b.id, parent_id: null, user_id: u.id, body: text, pinned: 0, created_at: iso(new Date()), edited_at: null, deleted_at: null });
+    }, afterMs);
+  arrive(12000, "Steve Williams", (b) => b.kind === "chat" && !b.name && (db.members[b.id] ?? []).includes(db.users[4]!.id), "Line 2 is signed off. Heading back to the hotel, I'll call you in the morning.");
+  arrive(45000, "Meagan Hooper", (b) => b.name === "Atlanta install crew", "Rental car is confirmed at the airport, under Steve's name.");
   const realFetch = window.fetch.bind(window);
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, location.href);
@@ -237,15 +394,21 @@ export function installDemo() {
     const path = url.pathname.slice(at + 4);
     const method = (init?.method ?? "GET").toUpperCase();
     let body: any = {};
-    try {
-      body = init?.body ? JSON.parse(String(init.body)) : {};
-    } catch {
-      body = {};
+    if (init?.body instanceof FormData) {
+      const f = init.body;
+      body = { body: f.get("body") ?? "", parentId: f.get("parentId") ?? null, files: f.getAll("files") };
+    } else {
+      try {
+        body = init?.body ? JSON.parse(String(init.body)) : {};
+      } catch {
+        body = {};
+      }
     }
     await new Promise((r) => setTimeout(r, 60));
     try {
-      const data = route(method, path, url.searchParams, body);
+      const data = route(method, path, url.searchParams, body) as any;
       save();
+      if (data && typeof data.__text === "string") return new Response(data.__text, { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } });
       return new Response(JSON.stringify(data), { status: 200, headers: { "Content-Type": "application/json" } });
     } catch (e) {
       const status = e instanceof Fail ? e.status : 500;

@@ -19,6 +19,7 @@ npx wrangler login       # opens the browser; sign in as the Cloudflare account 
 ```bash
 npx wrangler d1 create portal-db
 npx wrangler d1 create help-db
+npx wrangler r2 bucket create ronchi-portal-files   # photos and files sent in chats (staff portal only)
 ```
 
 Each prints a `database_id`. Put the portal-db id into **both** places in

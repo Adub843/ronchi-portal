@@ -13,6 +13,7 @@ import { App } from "./App";
 // The preview shown inside Claude answers API calls from example data (see demo/mock.ts).
 // In the real portal this block is removed at build time.
 if (import.meta.env.MODE === "demo") {
+  document.documentElement.classList.add("demo");
   const demo = await import("./demo/mock");
   demo.installDemo();
 }
