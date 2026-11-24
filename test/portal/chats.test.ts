@@ -43,6 +43,79 @@ describe("private chats", () => {
   });
 });
 
+describe("adding and removing people", () => {
+  it("anyone in a group chat can add people; they see the history and an 'added' line", async () => {
+    const a = await person("tech");
+    const b = await person("tech");
+    const c = await person("engineering");
+    const { data } = await a.json("/api/boards/chats", { body: { userIds: [b.id], name: "Atlanta install" } });
+    await a.json(`/api/boards/${data.id}/posts`, { body: { body: "Bring the torque wrench" } });
+    expect((await c.fetch(`/api/boards/${data.id}`)).status).toBe(404);
+    const added = await b.json(`/api/boards/${data.id}/people`, { body: { userIds: [c.id] } });
+    expect(added.data).toEqual({ id: data.id, newChat: false });
+    const seen = (await c.json(`/api/boards/${data.id}`)).data;
+    expect(seen.members.map((m: any) => m.id).sort()).toEqual([a.id, b.id, c.id].sort());
+    const event = seen.posts.find((p: any) => p.kind === "event");
+    expect(event.user_id).toBe(b.id);
+    expect(JSON.parse(event.body)).toEqual({ type: "added", names: [c.name] });
+    // The line isn't a message: it doesn't count as unread, can't be edited, removed or replied to.
+    expect((await a.json("/api/boards?kind=chat")).data.boards.find((x: any) => x.id === data.id).unread).toBe(0);
+    expect((await b.fetch(`/api/boards/${data.id}/posts/${event.id}`, { method: "PATCH", body: { body: "x" } })).status).toBe(404);
+    expect((await a.fetch(`/api/boards/${data.id}/posts/${event.id}`, { method: "DELETE" })).status).toBe(404);
+    expect((await a.fetch(`/api/boards/${data.id}/posts`, { body: { body: "hi", parentId: event.id } })).status).toBe(400);
+    // Adding someone who is already there is refused.
+    expect((await a.fetch(`/api/boards/${data.id}/people`, { body: { userIds: [c.id] } })).status).toBe(400);
+  });
+
+  it("only the person who started the chat can remove people, and the removed person loses access", async () => {
+    const a = await person("tech");
+    const b = await person("tech");
+    const c = await person("tech");
+    const { data } = await a.json("/api/boards/chats", { body: { userIds: [b.id, c.id], name: "Line 4" } });
+    expect((await b.fetch(`/api/boards/${data.id}/people/${c.id}`, { method: "DELETE" })).status).toBe(403);
+    expect((await a.fetch(`/api/boards/${data.id}/people/${a.id}`, { method: "DELETE" })).status).toBe(400);
+    expect((await a.fetch(`/api/boards/${data.id}/people/${c.id}`, { method: "DELETE" })).status).toBe(200);
+    expect((await c.fetch(`/api/boards/${data.id}`)).status).toBe(404);
+    expect((await c.fetch(`/api/boards/${data.id}/posts`, { body: { body: "still here?" } })).status).toBe(404);
+    expect((await a.fetch(`/api/boards/${data.id}/people/${c.id}`, { method: "DELETE" })).status).toBe(404);
+    const posts = (await b.json(`/api/boards/${data.id}`)).data.posts;
+    expect(JSON.parse(posts.find((p: any) => p.kind === "event").body)).toEqual({ type: "removed", names: [c.name] });
+  });
+
+  it("adding someone to a one-to-one chat starts a new group, so the old messages stay private", async () => {
+    const a = await person("tech");
+    const b = await person("service");
+    const c = await person("sales");
+    const { data } = await a.json("/api/boards/chats", { body: { userIds: [b.id] } });
+    await a.json(`/api/boards/${data.id}/posts`, { body: { body: "Just between us" } });
+    const r = (await b.json(`/api/boards/${data.id}/people`, { body: { userIds: [c.id] } })).data;
+    expect(r.newChat).toBe(true);
+    expect(r.id).not.toBe(data.id);
+    expect((await c.fetch(`/api/boards/${data.id}`)).status).toBe(404);
+    const group = (await c.json(`/api/boards/${r.id}`)).data;
+    expect(group.members.length).toBe(3);
+    expect(group.posts.some((p: any) => p.body === "Just between us")).toBe(false);
+    expect(group.canModerate).toBe(false);
+    expect((await b.json(`/api/boards/${r.id}`)).data.canModerate).toBe(true);
+  });
+
+  it("when the person who started a chat leaves, the next person can manage it", async () => {
+    const a = await person("tech");
+    const b = await person("tech");
+    const c = await person("tech");
+    const { data } = await a.json("/api/boards/chats", { body: { userIds: [b.id, c.id], name: "Night shift" } });
+    await a.json(`/api/boards/${data.id}/leave`, { body: {} });
+    const seen = (await b.json(`/api/boards/${data.id}`)).data;
+    expect(seen.canModerate).toBe(true);
+    expect(JSON.parse(seen.posts.find((p: any) => p.kind === "event").body).type).toBe("left");
+    const text = await (await b.fetch(`/api/boards/${data.id}/export`)).text();
+    expect(text).toContain(`${a.name} left the chat`);
+    // Lines about people never pop up as alerts.
+    const since = new Date(Date.now() - 60000).toISOString();
+    expect((await c.json(`/api/boards/updates?since=${since}`)).data.posts).toEqual([]);
+  });
+});
+
 describe("files in chats", () => {
   it("sends a photo and a PDF, and only people who can see the chat can open them", async () => {
     const a = await person("tech");

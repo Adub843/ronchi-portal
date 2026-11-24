@@ -63,9 +63,9 @@ async function listFor(db: D1Database, u: SessionUser, kind: "board" | "chat", a
   const memberJoin = kind === "chat" ? "JOIN board_members me ON me.board_id = b.id AND me.user_id = ?1" : "";
   const { results } = await db.prepare(
     `SELECT b.*,
-            (SELECT MAX(created_at) FROM posts p WHERE p.board_id = b.id AND p.deleted_at IS NULL) AS last_post_at,
+            (SELECT MAX(created_at) FROM posts p WHERE p.board_id = b.id AND p.deleted_at IS NULL AND p.kind = 'post') AS last_post_at,
             m.serial AS machine_serial,
-            (SELECT COUNT(*) FROM posts p WHERE p.board_id = b.id AND p.deleted_at IS NULL AND p.user_id != ?1
+            (SELECT COUNT(*) FROM posts p WHERE p.board_id = b.id AND p.deleted_at IS NULL AND p.kind = 'post' AND p.user_id != ?1
                 AND p.created_at > COALESCE((SELECT last_read_at FROM board_reads r WHERE r.user_id = ?1 AND r.board_id = b.id), '')) AS unread,
             COALESCE((SELECT muted FROM board_reads r WHERE r.user_id = ?1 AND r.board_id = b.id), 0) AS muted,
             lp.user_id AS last_user_id, lu.name AS last_author, substr(lp.body, 1, 120) AS last_body,
@@ -74,7 +74,7 @@ async function listFor(db: D1Database, u: SessionUser, kind: "board" | "chat", a
               WHERE bm.board_id = b.id) AS members
        FROM boards b ${memberJoin}
        LEFT JOIN machines m ON m.id = b.machine_id
-       LEFT JOIN posts lp ON lp.id = (SELECT id FROM posts p WHERE p.board_id = b.id AND p.deleted_at IS NULL ORDER BY p.created_at DESC LIMIT 1)
+       LEFT JOIN posts lp ON lp.id = (SELECT id FROM posts p WHERE p.board_id = b.id AND p.deleted_at IS NULL AND p.kind = 'post' ORDER BY p.created_at DESC LIMIT 1)
        LEFT JOIN users lu ON lu.id = lp.user_id
       WHERE b.kind = ?2 AND b.archived_at IS ${archived ? "NOT NULL" : "NULL"}
       ORDER BY COALESCE(last_post_at, b.created_at) DESC`,
@@ -121,7 +121,7 @@ boards.get("/updates", async (c) => {
             COALESCE((SELECT muted FROM board_reads r WHERE r.user_id = ?1 AND r.board_id = b.id), 0) AS muted,
             EXISTS (SELECT 1 FROM board_members m WHERE m.board_id = b.id AND m.user_id = ?1) AS member
        FROM posts p JOIN boards b ON b.id = p.board_id JOIN users u ON u.id = p.user_id
-      WHERE p.created_at > ?2 AND p.user_id != ?1 AND p.deleted_at IS NULL AND b.archived_at IS NULL
+      WHERE p.created_at > ?2 AND p.user_id != ?1 AND p.deleted_at IS NULL AND p.kind = 'post' AND b.archived_at IS NULL
       ORDER BY p.created_at DESC LIMIT 50`,
   ).bind(u.id, since > floor ? since : floor).all<{ id: string; board_id: string; body: string; created_at: string; author: string; board_name: string; kind: "board" | "chat"; audience: string | null; files: number; muted: number; member: number }>();
   const posts = results
@@ -219,7 +219,7 @@ boards.get("/:id", async (c) => {
   const u = requirePerm(c, "boards.use");
   const board = await loadBoard(c.env.DB, u, c.req.param("id"));
   const { results: posts } = await c.env.DB.prepare(
-    `SELECT p.id, p.parent_id, p.body, p.pinned, p.created_at, p.edited_at, p.user_id, u.name AS author
+    `SELECT p.id, p.kind, p.parent_id, p.body, p.pinned, p.created_at, p.edited_at, p.user_id, u.name AS author
        FROM posts p JOIN users u ON u.id = p.user_id
       WHERE p.board_id = ? AND p.deleted_at IS NULL ORDER BY p.created_at DESC LIMIT 300`,
   ).bind(board.id).all<{ id: string }>();
@@ -286,25 +286,117 @@ boards.patch("/:id", async (c) => {
     stmts.push(c.env.DB.prepare("UPDATE boards SET name = ?, description = ?, audience = ?, locked = ? WHERE id = ?").bind(name, description, audience, locked, board.id));
   } else {
     if (b.name !== undefined) stmts.push(c.env.DB.prepare("UPDATE boards SET name = ? WHERE id = ?").bind(str(b.name, 80) ?? "", board.id));
-    const add = (await activeUsers(c.env.DB, b.addUserIds ?? [])).filter((x) => x !== u.id);
-    const remove = Array.isArray(b.removeUserIds) ? (b.removeUserIds as unknown[]).filter((x): x is string => typeof x === "string" && x !== u.id) : [];
-    const count = (await c.env.DB.prepare("SELECT COUNT(*) AS n FROM board_members WHERE board_id = ?").bind(board.id).first<{ n: number }>())!.n;
-    if (count + add.length > MAX_CHAT_PEOPLE) fail(400, `A chat can have up to ${MAX_CHAT_PEOPLE} people.`);
-    const at = now();
-    for (const id of add) stmts.push(c.env.DB.prepare("INSERT OR IGNORE INTO board_members (board_id, user_id, added_at) VALUES (?,?,?)").bind(board.id, id, at));
-    for (const id of remove) stmts.push(c.env.DB.prepare("DELETE FROM board_members WHERE board_id = ? AND user_id = ?").bind(board.id, id));
+    // Older screens sent people changes here too; they follow the same rules as the People panel.
+    if (Array.isArray(b.addUserIds) && b.addUserIds.length) await addPeople(c, u, board, b.addUserIds);
+    if (Array.isArray(b.removeUserIds)) {
+      for (const id of b.removeUserIds as unknown[]) if (typeof id === "string" && id !== u.id) await removePerson(c, u, board, id);
+    }
   }
   if (stmts.length) await c.env.DB.batch(stmts);
   await audit(c.env.DB, { userId: u.id, action: `${board.kind}.update`, targetType: board.kind, targetId: board.id, ip: c.get("ip") });
   return c.json({ ok: true });
 });
 
-/** Leave a group chat. */
+/** Record "Aaron added Steve" (or removed, or left) as a line in the chat. */
+function eventPost(db: D1Database, boardId: string, actorId: string, type: "added" | "removed" | "left", names: string[]) {
+  return db.prepare("INSERT INTO posts (id, board_id, user_id, body, kind, created_at) VALUES (?,?,?,?,'event',?)")
+    .bind(randomId(), boardId, actorId, JSON.stringify({ type, names }), now());
+}
+
+/** The words for an event line, in English (used for the .txt export). */
+export function eventText(actor: string, body: string): string {
+  try {
+    const e = JSON.parse(body) as { type: string; names: string[] };
+    const names = e.names.join(", ");
+    if (e.type === "added") return `${actor} added ${names}`;
+    if (e.type === "removed") return `${actor} removed ${names}`;
+    if (e.type === "left") return `${actor} left the chat`;
+  } catch {
+    /* fall through */
+  }
+  return actor;
+}
+
+/** A one-to-one chat: no group name and just two people. */
+async function isDirect(db: D1Database, board: BoardRow): Promise<boolean> {
+  if (board.name) return false;
+  const n = (await db.prepare("SELECT COUNT(*) AS n FROM board_members WHERE board_id = ?").bind(board.id).first<{ n: number }>())!.n;
+  return n <= 2;
+}
+
+/**
+ * Add people to a chat. Anyone in the chat can add people.
+ * A one-to-one chat stays private between its two people, so adding someone to it starts a new
+ * group chat with all of them instead. Returns the chat the people ended up in.
+ */
+async function addPeople(c: Context<AppEnv>, u: SessionUser, board: BoardRow, ids: unknown): Promise<string> {
+  if (board.kind !== "chat") fail(400, "People can only be added to chats.");
+  const db = c.env.DB;
+  const { results: current } = await db.prepare("SELECT user_id FROM board_members WHERE board_id = ?").bind(board.id).all<{ user_id: string }>();
+  const have = new Set(current.map((m) => m.user_id));
+  const add = (await activeUsers(db, ids)).filter((x) => !have.has(x));
+  if (!add.length) fail(400, "Pick someone who isn't in this chat yet.");
+  if (have.size + add.length > MAX_CHAT_PEOPLE) fail(400, `A chat can have up to ${MAX_CHAT_PEOPLE} people.`);
+  const { results: named } = await db.prepare(`SELECT name FROM users WHERE id IN (${add.map(() => "?").join(",")}) ORDER BY name`).bind(...add).all<{ name: string }>();
+  const names = named.map((x) => x.name);
+  const at = now();
+  const member = db.prepare("INSERT OR IGNORE INTO board_members (board_id, user_id, added_at) VALUES (?,?,?)");
+  if (await isDirect(db, board)) {
+    const id = randomId();
+    await db.batch([
+      db.prepare("INSERT INTO boards (id, kind, name, created_by, created_at) VALUES (?,'chat','',?,?)").bind(id, u.id, at),
+      ...[...have, ...add].map((m) => member.bind(id, m, at)),
+    ]);
+    await audit(db, { userId: u.id, action: "chat.create", targetType: "chat", targetId: id, detail: { from: board.id }, ip: c.get("ip") });
+    return id;
+  }
+  await db.batch([...add.map((m) => member.bind(board.id, m, at)), eventPost(db, board.id, u.id, "added", names)]);
+  await audit(db, { userId: u.id, action: "chat.add_people", targetType: "chat", targetId: board.id, detail: { add }, ip: c.get("ip") });
+  return board.id;
+}
+
+/** Take someone out of a chat. Only the person who started the chat can do this. */
+async function removePerson(c: Context<AppEnv>, u: SessionUser, board: BoardRow, userId: string): Promise<void> {
+  if (board.kind !== "chat") fail(400, "People can only be removed from chats.");
+  if (!moderates(u, board)) fail(403, "Only the person who started this chat can remove people.");
+  if (userId === u.id) fail(400, "To take yourself out, leave the chat.");
+  const db = c.env.DB;
+  const who = await db.prepare("SELECT u.name FROM board_members m JOIN users u ON u.id = m.user_id WHERE m.board_id = ? AND m.user_id = ?").bind(board.id, userId).first<{ name: string }>();
+  if (!who) fail(404, "That person isn't in this chat.");
+  await db.batch([
+    db.prepare("DELETE FROM board_members WHERE board_id = ? AND user_id = ?").bind(board.id, userId),
+    eventPost(db, board.id, u.id, "removed", [who.name]),
+  ]);
+  await audit(db, { userId: u.id, action: "chat.remove_person", targetType: "chat", targetId: board.id, detail: { userId }, ip: c.get("ip") });
+}
+
+/** Add people. Answers with the chat they're now in (a new group when the chat was one-to-one). */
+boards.post("/:id/people", async (c) => {
+  const u = requirePerm(c, "boards.use");
+  const board = await loadBoard(c.env.DB, u, c.req.param("id"));
+  const id = await addPeople(c, u, board, (await body(c)).userIds);
+  return c.json({ id, newChat: id !== board.id });
+});
+
+boards.delete("/:id/people/:userId", async (c) => {
+  const u = requirePerm(c, "boards.use");
+  const board = await loadBoard(c.env.DB, u, c.req.param("id"));
+  await removePerson(c, u, board, c.req.param("userId"));
+  return c.json({ ok: true });
+});
+
+/** Leave a group chat. If the person who started it leaves, the longest-standing member takes over. */
 boards.post("/:id/leave", async (c) => {
   const u = requirePerm(c, "boards.use");
   const board = await loadBoard(c.env.DB, u, c.req.param("id"));
   if (board.kind !== "chat") fail(400, "Only chats can be left.");
-  await c.env.DB.prepare("DELETE FROM board_members WHERE board_id = ? AND user_id = ?").bind(board.id, u.id).run();
+  const db = c.env.DB;
+  const stmts = [db.prepare("DELETE FROM board_members WHERE board_id = ? AND user_id = ?").bind(board.id, u.id), eventPost(db, board.id, u.id, "left", [])];
+  if (board.created_by === u.id) {
+    const next = await db.prepare("SELECT user_id FROM board_members WHERE board_id = ? AND user_id != ? ORDER BY added_at, rowid LIMIT 1").bind(board.id, u.id).first<{ user_id: string }>();
+    if (next) stmts.push(db.prepare("UPDATE boards SET created_by = ? WHERE id = ?").bind(next.user_id, board.id));
+  }
+  await db.batch(stmts);
   return c.json({ ok: true });
 });
 
@@ -341,7 +433,7 @@ boards.post("/:id/posts", async (c) => {
     if (problem) fail(400, `${cleanName(f.name)}: ${problem}`);
   }
   if (parentId) {
-    const parent = await c.env.DB.prepare("SELECT id FROM posts WHERE id = ? AND board_id = ? AND deleted_at IS NULL").bind(parentId, board.id).first();
+    const parent = await c.env.DB.prepare("SELECT id FROM posts WHERE id = ? AND board_id = ? AND deleted_at IS NULL AND kind = 'post'").bind(parentId, board.id).first();
     if (!parent) fail(400, "The message you're replying to is gone.");
   }
   const id = randomId();
@@ -370,7 +462,7 @@ boards.post("/:id/posts", async (c) => {
 boards.patch("/:id/posts/:postId", async (c) => {
   const u = requirePerm(c, "boards.use");
   const board = await loadBoard(c.env.DB, u, c.req.param("id"));
-  const post = await c.env.DB.prepare("SELECT id, user_id FROM posts WHERE id = ? AND board_id = ? AND deleted_at IS NULL").bind(c.req.param("postId"), board.id).first<{ id: string; user_id: string }>();
+  const post = await c.env.DB.prepare("SELECT id, user_id FROM posts WHERE id = ? AND board_id = ? AND deleted_at IS NULL AND kind = 'post'").bind(c.req.param("postId"), board.id).first<{ id: string; user_id: string }>();
   if (!post) fail(404, "Not found.");
   const b = await body(c);
   if (b.body !== undefined) {
@@ -388,7 +480,7 @@ boards.patch("/:id/posts/:postId", async (c) => {
 boards.delete("/:id/posts/:postId", async (c) => {
   const u = requirePerm(c, "boards.use");
   const board = await loadBoard(c.env.DB, u, c.req.param("id"));
-  const post = await c.env.DB.prepare("SELECT id, user_id FROM posts WHERE id = ? AND board_id = ? AND deleted_at IS NULL").bind(c.req.param("postId"), board.id).first<{ id: string; user_id: string }>();
+  const post = await c.env.DB.prepare("SELECT id, user_id FROM posts WHERE id = ? AND board_id = ? AND deleted_at IS NULL AND kind = 'post'").bind(c.req.param("postId"), board.id).first<{ id: string; user_id: string }>();
   if (!post) fail(404, "Not found.");
   if (post.user_id !== u.id && !moderates(u, board)) fail(403, "You can only remove your own messages.");
   // Soft delete: hidden from the chat, kept for the record (files too).
@@ -425,12 +517,15 @@ boards.get("/:id/export", async (c) => {
   const board = await loadBoard(c.env.DB, u, c.req.param("id"));
   if (board.kind === "board" && !moderates(u, board)) fail(403, "Only the board's creator or a moderator can export it.");
   const { results } = await c.env.DB.prepare(
-    `SELECT p.created_at, u.name, p.body, (SELECT group_concat(a.name, ', ') FROM attachments a WHERE a.post_id = p.id AND a.deleted_at IS NULL) AS files
+    `SELECT p.created_at, p.kind, u.name, p.body, (SELECT group_concat(a.name, ', ') FROM attachments a WHERE a.post_id = p.id AND a.deleted_at IS NULL) AS files
        FROM posts p JOIN users u ON u.id = p.user_id WHERE p.board_id = ? AND p.deleted_at IS NULL ORDER BY p.created_at`,
-  ).bind(board.id).all<{ created_at: string; name: string; body: string; files: string | null }>();
+  ).bind(board.id).all<{ created_at: string; kind: string; name: string; body: string; files: string | null }>();
   const title = board.name || "Chat";
   const lines = [`${title}`, `Exported ${now()} by ${u.name}. Times are UTC.`, ""];
-  for (const r of results) lines.push(`[${r.created_at.slice(0, 16).replace("T", " ")}] ${r.name}: ${r.body}${r.files ? ` (files: ${r.files})` : ""}`);
+  for (const r of results) {
+    const when = `[${r.created_at.slice(0, 16).replace("T", " ")}]`;
+    lines.push(r.kind === "event" ? `${when} ${eventText(r.name, r.body)}` : `${when} ${r.name}: ${r.body}${r.files ? ` (files: ${r.files})` : ""}`);
+  }
   await audit(c.env.DB, { userId: u.id, action: `${board.kind}.export`, targetType: board.kind, targetId: board.id, ip: c.get("ip") });
   const fileName = `${title.replace(/[^A-Za-z0-9 _-]/g, "").trim() || "chat"}.txt`;
   return new Response(lines.join("\r\n"), {

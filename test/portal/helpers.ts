@@ -67,5 +67,5 @@ export async function person(role: string, opts: { name?: string } = {}) {
   const link = await createInvite(env, { email, name: opts.name ?? `${role} ${n}`, role, createdBy: null });
   await b.acceptInvite(link);
   const me = await b.json("/api/auth/me");
-  return Object.assign(b, { id: me.data.user.id as string, email });
+  return Object.assign(b, { id: me.data.user.id as string, name: me.data.user.name as string, email });
 }
