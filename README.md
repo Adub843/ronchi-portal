@@ -1,13 +1,21 @@
 # Ronchi Portal
 
 The control hub for Ronchi America: one sign-in for staff (computer or phone), plus a
-separate public help center for customers. Written so any web developer can pick it up.
+separate public help center and a customer parts site. Written so any web developer can pick it up.
 
 - **Staff portal** (`portal.ronchiamerica.com`): sign-in with passkeys, message boards,
   and the machine registry. Later steps add the knowledge base, training,
   orders, the schedule and remote support (see the plan).
 - **Help center** (`help.ronchiamerica.com`): an open search of Ronchi-made articles.
   No login, and no way to reach business data (see "The wall" below).
+- **Parts site** (`parts.ronchiamerica.com`): the interactive parts catalog for customers.
+  Each customer company signs in with passkeys and sees only its own machines: 2D
+  exploded drawings with clickable balloons, 3D models to rotate, hide, isolate,
+  see through, explode and cut, search, carts, shared lists and quote requests.
+  Staff build the catalogs in the portal (**Parts catalog**) from manual chapter 11 and
+  CAD, then publish them across. Same wall as the help center.
+
+Parts catalog plan: https://claude.ai/artifact/Q3W9nmRCZfQmvY6cPo9bha
 
 Plan: https://claude.ai/artifact/RVQFd7dgM7uPNsj9gaFSJQ
 
@@ -22,7 +30,10 @@ All mainstream, nothing homemade:
 | Database | Cloudflare D1 (SQLite) |
 | Staff app | React + Vite, served by the portal Worker |
 | Sign-in | Passkeys via [SimpleWebAuthn](https://simplewebauthn.dev) |
-| Tests | Vitest, run inside the real Workers runtime |
+| Files | Cloudflare R2 |
+| Manual reading | [pdf.js](https://mozilla.github.io/pdf.js/), in the browser |
+| 3D | [three.js](https://threejs.org); STEP is turned into glTF in the browser by [occt-import-js](https://github.com/kovacsv/occt-import-js) (OpenCascade, LGPL 2.1, loaded as its own unmodified file) |
+| Tests | Vitest, run inside the real Workers runtime; Playwright for browser checks |
 
 ## Folders
 
@@ -32,13 +43,21 @@ src/portal/          staff portal Worker
   env.ts             what Cloudflare gives the Worker
   lib/roles.ts       who can do what (one table)
   lib/session.ts     sign-in cookies
-  routes/            one file per feature: auth, users, machines, boards, prefs
+  routes/            one file per feature: auth, users, machines, boards, prefs, catalog, customers
+  lib/parts-site.ts  the only way the portal talks to the parts site (publish, customer logins)
 src/help/            customer help center Worker (may import only src/help and src/shared)
-src/shared/          code both sides use: ids, CSV export, privacy check, themes, headers
+src/parts/           customer parts site Worker (may import only src/parts and src/shared)
+  lib/access.ts      which machines a signed-in customer may see; every customer route uses it
+  routes/admin.ts    the publish door the portal uses, locked by key
+src/shared/          code all sides use: ids, CSV export, privacy check, themes, headers,
+  catalog/           the catalog's data shapes and the chapter 11 reader
 web/                 staff app (React). web/src/pages has one file per screen
+web/catalog/         the 2D and 3D viewers, shared by the staff app and the parts site
+web-parts/           customer parts app (React)
 migrations/portal/   database tables for the business store (portal-db)
-migrations/help/     database tables for the customer store (help-db)
-test/                automatic tests (unit, portal, help)
+migrations/help/     database tables for the help store (help-db)
+migrations/parts/    database tables for the parts site (parts-db)
+test/                automatic tests (unit, portal, help, parts)
 scripts/             first-admin.mjs makes the very first admin invite
 docs/                RECOVERY.md and REBUILD.md
 ```
@@ -58,6 +77,20 @@ Open the printed `http://localhost:8787/welcome#...` link and create a passkey
 (Windows Hello, Touch ID, or your phone). The help center runs with `npm run dev:help`
 on http://localhost:8788.
 
+The parts site runs with `npm run dev:parts` on http://localhost:8789. To publish to it
+from a local portal, both need the same key. Put it in `.dev.vars` files (never committed):
+
+```bash
+KEY=local-publish-key-0123456789abcdefghijklmnop
+echo "PARTS_ADMIN_KEY=$KEY" > .dev.vars.portal
+echo "ADMIN_KEY_HASH=$(node -e "console.log(require('crypto').createHash('sha256').update('$KEY').digest('hex'))")" > .dev.vars.parts
+npx wrangler dev -c wrangler.parts.jsonc --port 8789 --inspector-port 9331 --env-file .dev.vars.parts
+npx wrangler dev -c wrangler.portal.jsonc --port 8787 --inspector-port 9332 --env-file .dev.vars.portal
+```
+
+Customers are added in the portal under **Customers**; the sign-up link it makes opens
+the local parts site.
+
 For front-end work with instant reload, run `npm run dev` in one window and
 `npm run dev:web` in another, then use http://localhost:5173.
 
@@ -66,7 +99,8 @@ For front-end work with instant reload, run `npm run dev` in one window and
 `npm run build:demo` builds the same staff app with `web/src/demo/mock.ts` answering the API
 from example data, as one file (`web/dist-demo/ronchi-portal-preview.html`). That's the
 clickable preview shown inside Claude. The real build never includes the demo code or its
-example data.
+example data. The preview lists machines under **Parts catalog** but can't import, edit or
+publish; that needs the real portal.
 
 ## Checks
 
@@ -114,7 +148,8 @@ peer list. All peers the project needs are listed directly in `package.json`.)
 
 ## The wall (customers vs. business)
 
-The help center is a separate Worker with a separate database:
+The help center and the parts site are each a separate Worker with a separate database.
+The help center:
 
 - `wrangler.help.jsonc` binds only `help-db`. It has no binding, URL or key for `portal-db`.
 - `help-db` holds only published, customer-safe articles (`migrations/help`).
@@ -122,14 +157,29 @@ The help center is a separate Worker with a separate database:
 - `src/shared/privacy.ts` refuses any text with a customer name, site or machine number.
   Step 2's Publish button runs it before copying an article across.
 
+The parts site:
+
+- `wrangler.parts.jsonc` binds only `parts-db` and the `ronchi-parts-files` bucket. No
+  other Worker binds them, and the parts site has no service bindings, so it can't call
+  out. The portal calls in through one service binding with a key whose hash only the
+  parts site holds; wrong keys get "not found" and are logged.
+- `parts-db` holds parts, drawings and models, and the customers' own logins, carts and
+  quote requests. No prices, costs, staff names or staff notes (a test checks the table
+  list). Publishing refuses any sheet with a customer name or site from the registry.
+- Each company sees only the machines staff link to it. Every customer request goes
+  through `src/parts/lib/access.ts`; another company's machine, sheet, file or quote
+  answers "not found". `test/parts` signs in as two companies and tries each route
+  across the wall.
+- Code in `src/parts` may import only from `src/parts` and `src/shared`.
+
 `test/unit/wall.test.ts` checks all of these on every build, so a change that breaks
 the wall fails the build.
 
 ## Going live
 
-See [docs/REBUILD.md](docs/REBUILD.md). In short: create the two D1 databases, put their
-ids in the two wrangler files, create the file store with
-`wrangler r2 bucket create ronchi-portal-files`, `npm run db:migrate:remote`, `npm run deploy`, then
-`npm run invite:first-admin` and set up the two custom domains in Cloudflare.
+See [docs/REBUILD.md](docs/REBUILD.md). In short: create the three D1 databases and two R2
+buckets, put the ids in the three wrangler files, set the parts site's publish key,
+`npm run db:migrate:remote`, `npm run deploy`, then `npm run invite:first-admin` and set up
+the three custom domains in Cloudflare.
 
 If something breaks: [docs/RECOVERY.md](docs/RECOVERY.md).
