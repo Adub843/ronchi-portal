@@ -4,10 +4,14 @@ The control hub for Ronchi America: one sign-in for staff (computer or phone), p
 separate public help center and a customer parts site. Written so any web developer can pick it up.
 
 - **Staff portal** (`ronchi-portal.business-console.workers.dev` for now): sign-in with passkeys, message boards,
-  and the machine registry. Later steps add the knowledge base, training,
-  orders, the schedule and remote support (see the plan).
+  the machine registry, change-part orders and the knowledge base (one search box with filters, Issue
+  and Fix articles, quick notes, search by machine number or customer). Later steps add workbook
+  Submit, the schedule and remote support (see the plan).
 - **Help center** (`ronchi-help.business-console.workers.dev`): an open search of Ronchi-made articles.
-  No login, and no way to reach business data (see "The wall" below).
+  No login, and no way to reach business data (see "The wall" below). Articles arrive only by the
+  knowledge base's one-way Publish, after a scan for customer names, sites, machine numbers, emails,
+  phone numbers and passwords; the machine number of a quick note is never sent. Someone who searches
+  a machine number is sent to sign in to the parts site, which knows the machines on their account.
 - **Parts site** (`ronchi-parts.business-console.workers.dev`): the interactive parts catalog for customers.
   Each customer company signs in with passkeys and sees only its own machines: 2D
   exploded drawings with clickable balloons, 3D models to rotate, hide, isolate,
@@ -147,6 +151,9 @@ peer list. All peers the project needs are listed directly in `package.json`.)
   served only to people who can see that chat. The served type comes from the file's
   extension (src/shared/files.ts), never from the uploader's browser; web pages, SVG and
   programs are refused, and every file is served with a sandbox policy so it can't run code.
+- **Knowledge base publish** goes one way through the HELP service binding with its own key
+  (`scripts/set-help-key.mjs`); the help center can't call back. A publisher can confirm a word is
+  not a customer detail (a customer called "Method"), but never a machine number or a password.
 - **Languages:** English, Spanish and Italian for the app's screens (web/src/i18n-dict.ts).
   Messages are never translated. A test fails if any screen text is missing a translation.
 

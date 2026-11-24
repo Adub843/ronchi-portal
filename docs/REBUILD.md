@@ -72,6 +72,22 @@ Don't write the key down anywhere else. If it's ever lost or leaked, make a new 
 same way (RECOVERY.md section 7). Until both secrets are set, the portal's catalog shows
 "The customer parts site isn't connected yet" and nothing can be published.
 
+## 4c. Help center
+
+The knowledge base publishes customer-safe articles to the help center the same way: a private
+service binding (HELP) and its own long random key. The help center keeps only the hash.
+
+```bash
+node scripts/set-help-key.mjs
+```
+
+Until both secrets are set, Publish in the knowledge base says "The customer help center isn't
+connected yet". Staff can still use the knowledge base.
+
+To load the Training Center documents, open Knowledge base, choose **Import documents (JSON)**
+and pick `knowledge-base/Knowledge base documents.json` from the project files. Importing again
+updates articles by their code (RA-OPL-002...) and never makes copies.
+
 ## 5. Deploy
 
 ```bash
@@ -79,8 +95,8 @@ npm run deploy
 ```
 
 This runs all checks, builds the staff and customer apps, and deploys the three Workers
-in order: the parts site first (the portal's service binding needs it to exist), then the
-portal, then the help center.
+in order: the parts site and the help center first (the portal's service bindings need them
+to exist), then the portal.
 
 ## 6. Custom domains (later, optional)
 

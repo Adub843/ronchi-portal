@@ -29,6 +29,12 @@ export function Home({ me, unread }: { me: Me; unread: Unread }) {
             </span>
           </Link>
         )}
+        {can(me, "kb.view") && (
+          <Link to="/kb" className="panel tile">
+            <h2>{t("Knowledge base")}</h2>
+            <span className="muted">{t("One Point Lessons, how-tos, known issues and quick notes. Search by the problem or the machine.")}</span>
+          </Link>
+        )}
         {can(me, "machines.view") && (
           <Link to="/machines" className="panel tile">
             <h2>{t("Machines")}</h2>
@@ -44,7 +50,7 @@ export function Home({ me, unread }: { me: Me; unread: Unread }) {
         )}
         <div className="panel tile">
           <h2>{t("Coming next")}</h2>
-          <span className="muted">{t("Knowledge base, training center, workbook Submit, parts catalog, orders, schedule and remote support arrive in the next steps.")}</span>
+          <span className="muted">{t("Workbook Submit, service report filing, schedule and remote support arrive in the next steps.")}</span>
         </div>
       </div>
     </>

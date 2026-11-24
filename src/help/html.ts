@@ -9,6 +9,11 @@ export function esc(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
 }
 
+// Customers who search by their company name or machine number are sent to their own parts account,
+// which knows the machines on their account. The help center itself never knows who owns what.
+export const PARTS_SITE = "https://ronchi-parts.business-console.workers.dev/";
+const MACHINE_NUMBER = /^\s*(\d{4}[A-Z]{1,3}|RA-?\d{4}[A-Z]{0,2})\s*$/i;
+
 const KIND_LABEL: Record<string, string> = { opl: "One Point Lesson", howto: "How-to", issue_fix: "Issue and fix", training: "Training" };
 
 const STYLE = `
@@ -21,7 +26,8 @@ header .wrap{display:flex;align-items:center;gap:12px;padding-block:12px}
 header img{height:26px;width:auto}header span{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
 .hero{background:var(--steel);color:var(--steel-ink);border-radius:12px;padding:22px;margin:18px 0}
 .hero h1{margin:0 0 4px;font-size:clamp(24px,4vw,32px);line-height:1.1}
-.hero p{margin:0;opacity:.8}
+.hero p{margin:0;opacity:.8}.hero p.sub{margin-top:6px;font-size:13px}.hero a{color:inherit}
+.hint p{margin:12px 0}
 form{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
 input[type=search]{flex:1;min-width:0;font:16px inherit;font-family:inherit;padding:12px 14px;border:0;border-radius:4px}
 button{font:600 15px inherit;font-family:inherit;padding:12px 18px;border:0;border-radius:4px;background:var(--accent);color:#fff;cursor:pointer}
@@ -50,11 +56,20 @@ export function page(q: string, results: string | null): string {
   const body = results ?? `<div class="panel"><p>Too many searches from your network. Wait a minute and try again.</p></div>`;
   return shell("Ronchi Help Center", `
 <section class="hero"><h1>How can we help?</h1><p>Describe the problem or the fix. Search covers One Point Lessons, how-tos and known issues.</p>
+<p class="sub">Searching by your company name or machine number? <a href="${PARTS_SITE}">Sign in to Ronchi Parts</a> to see your own machines.</p>
 <form method="get" action="/" role="search"><input type="search" name="q" value="${esc(q)}" placeholder="for example: capper torque drifting" aria-label="Search the help center" maxlength="200"><button type="submit">Search</button></form></section>
 ${body}`);
 }
 
+function machineHint(q: string): string {
+  return MACHINE_NUMBER.test(q)
+    ? `<div class="panel hint"><p><strong>Looking for machine ${esc(q.trim().toUpperCase())}?</strong> Sign in to Ronchi Parts to see the manuals, parts and documents for the machines on your account. <a href="${PARTS_SITE}">Sign in to Ronchi Parts</a></p></div>`
+    : "";
+}
+
 export function resultsHtml(q: string, rows: ArticleRow[]): string {
+  const hint = machineHint(q);
+  if (hint) return hint;
   if (!rows.length) {
     return `<div class="panel"><p>${q ? `Nothing matched “${esc(q)}”. Try fewer or different words.` : "Articles will appear here as Ronchi publishes them."}</p></div>`;
   }

@@ -34,8 +34,42 @@ describe("customer help center", () => {
     expect(res.headers.get("x-frame-options")).toBe("DENY");
   });
 
+  it("sends a customer who searches a machine number to their parts account, and shows nothing about the machine", async () => {
+    const html = await (await get("/?q=3979MB")).text();
+    expect(html).toContain("Sign in to Ronchi Parts");
+    expect(html).toContain("https://ronchi-parts.business-console.workers.dev/");
+  });
+
   it("search input can't break the query", () => {
     expect(toFtsQuery(`torque" OR 1=1 --`)).toBe(`"torque"* "or"* "1"*`.replace(` "1"*`, ""));
     expect(toFtsQuery("NEAR(a b)")).toBe(`"near"*`);
+  });
+});
+
+describe("publish door (staff portal only)", () => {
+  const key = env.TEST_ADMIN_KEY;
+  const put = (number: string, body: unknown, auth = `Bearer ${key}`) =>
+    app.request(`https://help.example/admin/articles/${number}`, { method: "PUT", headers: { authorization: auth, "content-type": "application/json" }, body: JSON.stringify(body) }, env);
+  const article = { kind: "opl", title: "Limiting torque on the ECAM", machine_type: "Capper", category: "Mechanical", issue: "", fix: "", body: "1. Open the torque page" };
+
+  it("is closed without the publish key", async () => {
+    expect((await put("RA-OPL-001", article, "Bearer wrong-key-wrong-key-wrong-key-123")).status).toBe(404);
+    expect((await put("RA-OPL-001", article, "")).status).toBe(404);
+    expect((await get("/a/RA-OPL-001")).status).toBe(404);
+  });
+
+  it("publishes, updates and removes an article by its code", async () => {
+    expect((await put("RA-OPL-001", article)).status).toBe(200);
+    expect(await (await get("/?q=ecam")).text()).toContain("RA-OPL-001");
+    expect((await put("RA-OPL-001", { ...article, title: "Limit ECAM torque" })).status).toBe(200);
+    expect(await (await get("/a/RA-OPL-001")).text()).toContain("Limit ECAM torque");
+    const del = await app.request("https://help.example/admin/articles/RA-OPL-001", { method: "DELETE", headers: { authorization: `Bearer ${key}` } }, env);
+    expect(del.status).toBe(200);
+    expect((await get("/a/RA-OPL-001")).status).toBe(404);
+  });
+
+  it("refuses anything that isn't an article", async () => {
+    expect((await put("not-a-code", article)).status).toBe(400);
+    expect((await put("RA-OPL-002", { ...article, kind: "customer_list" })).status).toBe(400);
   });
 });
