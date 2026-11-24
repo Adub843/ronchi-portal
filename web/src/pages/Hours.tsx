@@ -4,6 +4,11 @@ import { api, can, fmtDate, fmtTime, type Me } from "../api";
 import { Empty, ErrorNote, PageHead, toast, useLoad } from "../components/ui";
 import { DEMO } from "../router";
 
+/** Only a YYYY-MM-DD date ever goes into the export link. */
+function isoOnly(value: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+}
+
 function isoDay(d: Date) {
   return d.toISOString().slice(0, 10);
 }
@@ -25,7 +30,8 @@ export function Hours({ me }: { me: Me }) {
     }
   }
 
-  const exportUrl = (kind: string, format: string) => `/api/clock/hours/export?from=${from}&to=${to}&kind=${kind}&format=${format}`;
+  const exportUrl = (kind: string, format: string) =>
+    `/api/clock/hours/export?${new URLSearchParams({ from: isoOnly(from), to: isoOnly(to), kind, format }).toString()}`;
   const byPunch = new Map<string, any>((hours.data?.punches ?? []).map((p: any) => [p.id, p]));
 
   return (

@@ -80,8 +80,8 @@ export function App() {
       {import.meta.env.MODE === "demo" && (
         <div className="note">
           <div className="wrap row">
-            <span>Preview with example data, signed in as you. Changes stay in this browser only. Customers, sites and hours shown are examples.</span>
-            <button className="linkish" onClick={async () => { (await import("./demo/mock")).resetDemo(); location.hash = "#home"; location.reload(); }}>Reset examples</button>
+            <span>Preview with example data, signed in as you. Customers, sites and hours shown are examples. Changes are not saved and reset when you reload.</span>
+            <button className="linkish" onClick={() => { location.hash = "#home"; location.reload(); }}>Reset examples</button>
           </div>
         </div>
       )}

@@ -5,8 +5,9 @@ import { dailyTotals, toShifts, type Punch } from "../../../src/portal/lib/hours
 import { PERMISSIONS, ROLES } from "../../../src/portal/lib/roles";
 type Role = keyof typeof ROLES;
 
-const KEY = "ronchi-portal-demo-v2";
-const id = () => "d" + Math.random().toString(36).slice(2, 12);
+// Ids for example records. Uses the browser's secure random source like the real server does.
+const id = () => "d" + [...crypto.getRandomValues(new Uint8Array(8))].map((b) => (b % 36).toString(36)).join("");
+const jitter = () => crypto.getRandomValues(new Uint16Array(1))[0]! / 65535 / 50;
 const iso = (d: Date) => d.toISOString();
 const daysAgo = (n: number, h: number, m = 0) => {
   const d = new Date();
@@ -74,7 +75,7 @@ function seed(): DB {
   const shift = (user: User, dAgo: number, inH: number, outH: number, typed?: string) => {
     for (const [kind, h] of [["in", inH], ["out", outH]] as const) {
       const at = daysAgo(dAgo, Math.floor(h), Math.round((h % 1) * 60));
-      punches.push({ id: id(), user_id: user.id, kind, at: iso(at), location_source: typed ? "typed" : "gps", lat: typed ? null : 32.85 + Math.random() / 50, lng: typed ? null : -79.97 + Math.random() / 50, accuracy_m: typed ? null : 12, address: typed ?? null, note: null });
+      punches.push({ id: id(), user_id: user.id, kind, at: iso(at), location_source: typed ? "typed" : "gps", lat: typed ? null : 32.85 + jitter(), lng: typed ? null : -79.97 + jitter(), accuracy_m: typed ? null : 12, address: typed ?? null, note: null });
     }
   };
   for (let d = 13; d >= 1; d--) {
@@ -98,22 +99,14 @@ function seed(): DB {
   return { users, invites: [], machines, boards: [service, torque, sales, eng], posts, punches, edits, audit, prefs: null };
 }
 
+// Example data lives in memory only. Nothing is written to the browser's storage,
+// and a reload starts again from the examples.
 let db: DB;
 function load(): DB {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw) as DB;
-  } catch {
-    /* storage unavailable: start fresh */
-  }
   return seed();
 }
 function save() {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(db));
-  } catch {
-    /* ignore */
-  }
+  /* in memory only */
 }
 
 class Fail extends Error {
