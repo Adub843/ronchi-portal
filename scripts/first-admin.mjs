@@ -8,6 +8,7 @@
 // The link is not saved anywhere; only a hash of it goes into the database.
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 const args = process.argv.slice(2);
 const arg = (name) => {
@@ -46,7 +47,18 @@ d1(
     `)`,
 );
 
-const origin = local ? "http://localhost:8787" : JSON.parse(
-  execFileSync("node", ["-e", "const s=require('fs').readFileSync('wrangler.portal.jsonc','utf8').replace(/\\/\\/.*$/gm,'');console.log(JSON.stringify(JSON.parse(s).env.production.vars.ORIGIN))"], { encoding: "utf8" }),
-);
+// The live address is the ORIGIN on the production vars line (the last ORIGIN in the file).
+// Read with a regex: stripping // comments would also cut the "//" in "https://".
+const origins = [...readFileSync("wrangler.portal.jsonc", "utf8").matchAll(/"ORIGIN":\s*"([^"]+)"/g)].map((m) => m[1]);
+const origin = local ? "http://localhost:8787" : origins.at(-1);
+if (!origin?.startsWith("https://")) {
+  console.error("Couldn't find the live ORIGIN in wrangler.portal.jsonc.");
+  process.exit(1);
+}
 console.log(`\nFirst admin invite for ${name} (${email}). Works once, for 24 hours:\n\n  ${origin}/welcome#${token}\n`);
+// --open: also open the link in this computer's browser, so nobody has to copy it.
+if (args.includes("--open")) {
+  const url = `${origin}/welcome#${token}`;
+  if (process.platform === "win32") execFileSync("rundll32", ["url.dll,FileProtocolHandler", url]);
+  else execFileSync(process.platform === "darwin" ? "open" : "xdg-open", [url]);
+}
