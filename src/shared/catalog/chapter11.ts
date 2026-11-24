@@ -232,7 +232,9 @@ export function readPage(page: PageText): ParsedSheet {
       rev = rest[0].str;
       rest.shift();
     }
-    const names = splitNames(rest.filter((t) => !/^\d+\/\d+$/.test(t.str)), splitX);
+    // The title block sits away from the table, so the table's column line doesn't apply there:
+    // split the Italian and English names at the widest gap instead.
+    const names = splitNames(rest.filter((t) => !/^\d+\/\d+$/.test(t.str)), null);
     sheet.code = line[ci]!.str.toUpperCase();
     sheet.rev = rev;
     sheet.titleIt = names.it;

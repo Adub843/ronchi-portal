@@ -269,3 +269,6 @@ body:has(.chat-compose) .alerts{bottom:calc(96px + env(safe-area-inset-bottom,0p
 .edit-rows td{padding:4px}
 .imp summary{cursor:pointer;padding:6px 0}
 .imp ul{margin:4px 0 10px;font-size:13px}
+.panel input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]),.panel select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--solid);color:var(--ink)}
+.panel .edit-rows input,.panel .edit-rows select{padding:4px 6px}
+@media (max-width:640px){nav.side{overflow-x:auto;scrollbar-width:none}}

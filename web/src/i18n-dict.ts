@@ -31,7 +31,8 @@ export const DYNAMIC: string[] = [
  "Only the person who started this chat can change it.",
  "You can only edit your own messages.",
  "You can only remove your own messages.",
- "Sign-out is turned off in this preview."
+ "Sign-out is turned off in this preview.",
+ "The parts catalog needs the real portal; it isn't part of this preview."
 ];
 
 export const ES: Record<string, string> = {
@@ -438,6 +439,7 @@ export const ES: Record<string, string> = {
  "Received": "Recibida",
  "Quoted": "Cotizada",
  "Closed": "Cerrada",
+ "The parts catalog needs the real portal; it isn't part of this preview.": "El catálogo de piezas necesita el portal real; no forma parte de esta vista previa.",
 };
 
 export const IT: Record<string, string> = {
@@ -844,4 +846,5 @@ export const IT: Record<string, string> = {
  "Received": "Ricevuta",
  "Quoted": "Quotata",
  "Closed": "Chiusa",
+ "The parts catalog needs the real portal; it isn't part of this preview.": "Il catalogo ricambi richiede il portale reale; non fa parte di questa anteprima.",
 };

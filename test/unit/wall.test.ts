@@ -91,6 +91,12 @@ describe("customer parts site wall", () => {
     }
   });
 
+  it("parts-db never shares a database id with the staff or help databases, so a mix-up can't point it at their data", () => {
+    const idsOf = (cfg: any) => envsOf(cfg).flatMap((e) => (e.d1_databases ?? []).map((d: any) => d.database_id));
+    const others = new Set([...idsOf(portalConfig), ...idsOf(helpConfig)]);
+    for (const id of idsOf(partsConfig)) expect(others.has(id), `parts-db id ${id} is also used by another Worker`).toBe(false);
+  });
+
   it("the portal reaches the parts site only through its service binding, never the other way", () => {
     for (const e of envsOf(portalConfig)) {
       for (const s of e.services ?? []) expect(s.service).toBe("ronchi-parts");

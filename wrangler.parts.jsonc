@@ -17,8 +17,9 @@
     "run_worker_first": true
   },
   "d1_databases": [
-    // database_id is filled in once with `wrangler d1 create parts-db` (see REBUILD.md).
-    { "binding": "PARTS_DB", "database_name": "parts-db", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations/parts" }
+    // database_id is filled in once with `wrangler d1 create parts-db` (see REBUILD.md). Until then the
+    // placeholder must differ from portal-db's, or local development would share one database file.
+    { "binding": "PARTS_DB", "database_name": "parts-db", "database_id": "00000000-0000-0000-0000-000000000002", "migrations_dir": "migrations/parts" }
   ],
   "r2_buckets": [
     // Published drawings and 3D models. Created once with `wrangler r2 bucket create ronchi-parts-files`.
@@ -36,7 +37,7 @@
       "name": "ronchi-parts",
       "vars": { "ORIGIN": "https://parts.ronchiamerica.com", "RP_ID": "parts.ronchiamerica.com", "RP_NAME": "Ronchi Parts" },
       "d1_databases": [
-        { "binding": "PARTS_DB", "database_name": "parts-db", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations/parts" }
+        { "binding": "PARTS_DB", "database_name": "parts-db", "database_id": "00000000-0000-0000-0000-000000000002", "migrations_dir": "migrations/parts" }
       ],
       "r2_buckets": [{ "binding": "PARTS_FILES", "bucket_name": "ronchi-parts-files" }],
       "ratelimits": [

@@ -85,6 +85,7 @@ export function Model3D({
     };
   }, [src]);
 
+  useEffect(() => void (engine.current && (engine.current.known = knownCodes)), [knownCodes, state]);
   useEffect(() => engine.current?.setSelected(selected), [selected, state]);
   useEffect(() => engine.current?.setHidden(hidden), [hidden, state]);
   useEffect(() => engine.current?.setXray(xray), [xray, state]);
@@ -222,6 +223,7 @@ class Engine {
   sphere = new THREE.Sphere();
   plane = new THREE.Plane();
   selectedIds = new Set<string>();
+  known = new Set<string>();
   hidden = new Set<string>();
   xray = false;
   hl = new THREE.MeshStandardMaterial({ color: 0xe30613, emissive: 0x7a0008, metalness: 0.2, roughness: 0.45 });
@@ -294,9 +296,9 @@ class Engine {
   /** The units that move apart when exploding: the first level with more than two parts. */
   buildPieces(root: THREE.Object3D) {
     let level: THREE.Object3D[] = [root];
-    for (let i = 0; i < 6 && level.length < 3; i++) {
+    for (let i = 0; i < 8 && level.length < 3; i++) {
       const next = level.flatMap((o) => (o.children.length ? o.children : [o]));
-      if (next.length === level.length) break;
+      if (next.length === level.length && next.every((o, j) => o === level[j])) break; // nothing deeper
       level = next;
     }
     const centre = this.sphere.center;
@@ -371,7 +373,7 @@ class Engine {
   view(v: View) {
     const [x, y, z] = VIEWS[v];
     const dir = new THREE.Vector3(x, y, z).normalize();
-    const dist = this.sphere.radius / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2)) * 1.05;
+    const dist = this.sphere.radius / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2)) * 1.2;
     this.camera.position.copy(this.sphere.center).addScaledVector(dir, dist);
     this.camera.near = dist / 100;
     this.camera.far = dist * 100;
@@ -386,7 +388,7 @@ class Engine {
     const vis = new THREE.Box3();
     for (const m of this.meshes) if (m.visible) vis.expandByObject(m);
     const s = vis.isEmpty() ? this.sphere : vis.getBoundingSphere(new THREE.Sphere());
-    const dist = s.radius / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2)) * 1.05;
+    const dist = s.radius / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2)) * 1.2;
     this.camera.position.copy(s.center).addScaledVector(dir, dist);
     this.controls.target.copy(s.center);
     this.controls.update();
@@ -402,10 +404,16 @@ class Engine {
     const hit = ray.intersectObjects(this.meshes.filter((m) => m.visible), false)
       .find((h) => !clip || clip.distanceToPoint(h.point) >= 0);
     if (!hit) return this.onHit(null);
-    // The deepest node above the mesh that has a part code; else the mesh's own name.
-    let o: THREE.Object3D | null = hit.object;
-    while (o && !this.codes.get(o.uuid)) o = o.parent;
-    this.onHit(o ? { name: o.name, code: this.codes.get(o.uuid)! } : { name: hit.object.name || "–", code: null });
+    // Walk up from the mesh: the first part that's on this sheet's parts list wins (a clutch disc
+    // selects the clutch on the capping head's list); otherwise the deepest part with a code.
+    let deepest: THREE.Object3D | null = null;
+    for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) {
+      const code = this.codes.get(o.uuid);
+      if (!code) continue;
+      if (this.known.has(code)) return this.onHit({ name: o.name, code });
+      deepest ??= o;
+    }
+    this.onHit(deepest ? { name: deepest.name, code: this.codes.get(deepest.uuid)! } : { name: hit.object.name || "–", code: null });
   }
 
   resize() {
