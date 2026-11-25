@@ -431,6 +431,14 @@ body:has(.chat-compose) .alerts{bottom:calc(96px + env(safe-area-inset-bottom,0p
 .people-tabs{width:fit-content;display:flex}
 .acts{display:flex;flex-wrap:wrap;gap:6px}
 
+/* Instruction notes with a small × to close them (Tip in components/ui.tsx). */
+.tip{display:flex;align-items:flex-start;gap:6px;width:fit-content;max-width:100%}
+span.tip{display:inline-flex}
+.tip .tip-text{flex:1;min-width:0}
+.tip-x{flex:none;display:inline-grid;place-items:center;width:22px;height:22px;margin:-2px -4px 0 0;padding:0;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;opacity:.7}
+.tip-x:hover{opacity:1;background:var(--line);color:var(--ink)}
+.tip-x:focus-visible{opacity:1;outline:2px solid var(--accent);outline-offset:1px}
+@media (pointer:coarse){.tip-x{width:32px;height:32px;margin:-7px -8px -7px 0;opacity:1}}
 /* Quick links on Home */
 .quick{margin:0 0 18px}
 .quick-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}

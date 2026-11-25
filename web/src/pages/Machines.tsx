@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api, can, fmtTime, type Me } from "../api";
 import { t } from "../i18n";
-import { Empty, ErrorNote, Link, PageHead, toast, useLoad } from "../components/ui";
+import { Empty, ErrorNote, Link, PageHead, toast, useLoad, Tip } from "../components/ui";
 import { navigate } from "../router";
 import { StatusPill } from "./ChangeParts";
 
@@ -26,7 +26,7 @@ export function Machines({ me }: { me: Me }) {
 
   return (
     <>
-      <PageHead title={t("Machines")} sub={t("Every Ronchi machine in the field, by machine number.")}>
+      <PageHead title={t("Machines")} sub={t("Every Ronchi machine in the field, by machine number.")} tip="machines.head">
         {can(me, "machines.add") && can(me, "machines.edit") && <button className="btn" onClick={() => setImporting(!importing)}>{importing ? t("Cancel") : t("Import CSV")}</button>}
         {can(me, "machines.add") && <button className="btn primary" onClick={() => setAdding(!adding)}>{adding ? t("Cancel") : t("Add machine")}</button>}
       </PageHead>
@@ -120,7 +120,7 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
           <div className="panel">
             <h2>{t("Boards")}</h2>
             {data.boards.length ? data.boards.map((b: any) => <p key={b.id}><Link to={`/boards/${b.id}`}>{b.name}</Link></p>) : <Empty>{t("No boards for this machine yet.")}</Empty>}
-            <p className="muted">{t("Manuals, service reports, history and remote sessions attach here in later steps.")}</p>
+            <Tip id="machines.later">{t("Manuals, service reports, history and remote sessions attach here in later steps.")}</Tip>
           </div>
           {data.orders && (
             <div className="panel" style={{ gridColumn: "1 / -1" }}>
