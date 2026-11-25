@@ -2,10 +2,10 @@
 // page on or off for them, see the pages they get, and review who has what across the whole team.
 // The server checks everything (PUT /api/users/:id/access); this page only shows and asks.
 import { useMemo, useState } from "react";
-import { api } from "../api";
+import { api, fmtTime } from "../api";
 import { t } from "../i18n";
 import { menuFor } from "../nav";
-import { useLoad } from "../components/ui";
+import { toast, useLoad } from "../components/ui";
 import { roleDisplayName } from "../roles";
 import { Access, type PermList } from "./People";
 
@@ -14,6 +14,19 @@ type Person = { id: string; name: string; role: string; status: string; removed_
 export function AccessCenter({ sectionsOff, switches }: { sectionsOff: ReadonlySet<string>; switches: { workbook: boolean } }) {
   const people = useLoad<{ users: Person[] }>(() => api("/users"));
   const list = useLoad<PermList>(() => api("/users/permissions"));
+  const stats = useLoad<{ people: { id: string; last_seen: string | null; last_login: string | null }[] }>(() => api("/settings/stats"));
+  const lastUsed = (id: string) => { const r = stats.data?.people.find((x) => x.id === id); return r ? (r.last_seen ?? r.last_login) : undefined; };
+  const unused = (id: string) => { const l = lastUsed(id); return stats.data ? !l || Date.now() - Date.parse(l) > 30 * 86400_000 : false; };
+  async function suspend(p: Person, on: boolean) {
+    if (on && !window.confirm(t("Suspend {name}? They are signed out everywhere and can't sign in until you turn them back on. Nothing they made is deleted.", { name: p.name }))) return;
+    try {
+      await api(`/users/${encodeURIComponent(p.id)}`, { method: "PATCH", body: { status: on ? "disabled" : "active" } });
+      toast(on ? t("{name} is suspended.", { name: p.name }) : t("{name} can sign in again.", { name: p.name }));
+      people.reload();
+    } catch (x) {
+      toast((x as Error).message);
+    }
+  }
   const names = useLoad<{ roles: Record<string, string> }>(() => api("/users/roles"));
   const roleName = (id: string) => (id === "admin" ? t("Admin") : roleDisplayName(id, names.data?.roles[id] ?? id));
   const [pick, setPick] = useState<string | null>(null);
@@ -38,12 +51,13 @@ export function AccessCenter({ sectionsOff, switches }: { sectionsOff: ReadonlyS
       {review ? (
         <div className="tbl">
           <table className="access-review">
-            <thead><tr><th>{t("Name")}</th><th>{t("Role")}</th>{groups.map((g) => <th key={g.group}>{t(g.group)}</th>)}</tr></thead>
+            <thead><tr><th>{t("Name")}</th><th>{t("Role")}</th><th>{t("Last used")}</th>{groups.map((g) => <th key={g.group}>{t(g.group)}</th>)}</tr></thead>
             <tbody>
               {shown.map((p) => (
                 <tr key={p.id}>
                   <td><button className="linklike" onClick={() => { setPick(p.id); setReview(false); }}><b>{p.name}</b></button>{p.status !== "active" && <> <span className="pill p-acc">{t("disabled")}</span></>}</td>
                   <td>{roleName(p.role)}</td>
+                  <td className={unused(p.id) ? "lvl-stale" : ""}>{lastUsed(p.id) ? fmtTime(lastUsed(p.id)!) : t("Not yet")}{unused(p.id) && <> · {t("unused 30+ days")}</>}</td>
                   {groups.map((g) => {
                     const level = levelOf(p, g.perms);
                     return <td key={g.group} className={`lvl lvl-${level}`}>{levelLabel(level)}</td>;
@@ -60,7 +74,7 @@ export function AccessCenter({ sectionsOff, switches }: { sectionsOff: ReadonlyS
               <li key={p.id}>
                 <button className={`access-person${p.id === pick ? " on" : ""}`} aria-current={p.id === pick || undefined} onClick={() => setPick(p.id)}>
                   <b>{p.name}</b>
-                  <small className="muted">{roleName(p.role)}{Object.keys(p.access).length ? ` · ${t("{n} change(s)", { n: Object.keys(p.access).length })}` : ""}</small>
+                  <small className="muted">{p.status !== "active" ? `${t("Suspended")} · ` : ""}{roleName(p.role)}{Object.keys(p.access).length ? ` · ${t("{n} change(s)", { n: Object.keys(p.access).length })}` : ""}</small>
                 </button>
               </li>
             ))}
@@ -70,6 +84,13 @@ export function AccessCenter({ sectionsOff, switches }: { sectionsOff: ReadonlyS
             {person && person.role === "admin" && <p className="muted">{t("Admins always have everything. Change their role on People first.")}</p>}
             {person && person.role !== "admin" && (
               <>
+                <div className="row wrap" style={{ gap: 8 }}>
+                  <span className="muted">{lastUsed(person.id) ? t("Last used the portal {when}", { when: fmtTime(lastUsed(person.id)!) }) : t("Hasn't used the portal yet")}{unused(person.id) && <b className="lvl-stale"> · {t("unused 30+ days")}</b>}</span>
+                  <span className="spacer" />
+                  {person.status === "active"
+                    ? <button className="btn small danger" onClick={() => suspend(person, true)}>{t("Suspend login")}</button>
+                    : <button className="btn small primary" onClick={() => suspend(person, false)}>{t("Turn login back on")}</button>}
+                </div>
                 <div className="access-sees">
                   <span className="muted">{t("Pages {name} sees:", { name: person.name })}</span>{" "}
                   {menuFor(new Set(person.permissions), switches).map((n) => <span key={n.to} className="pill">{t(n.label)}</span>)}

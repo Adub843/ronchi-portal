@@ -170,7 +170,7 @@ users.put("/:id/access", async (c) => {
   }
   await c.env.DB.batch(stmts);
   const after = await changesFor(c.env.DB, id);
-  await audit(c.env.DB, { userId: admin.id, action: "user.access", targetType: "user", targetId: id, detail: { before, after, ...(until ? { until } : {}), ...(role !== target.role ? { role: [target.role, role], copiedFrom: b.copyFrom } : {}) }, ip: c.get("ip") });
+  await audit(c.env.DB, { userId: admin.id, action: "user.access", targetType: "user", targetId: id, detail: { before, after, ...(until ? { until } : {}), ...(typeof b.reason === "string" && b.reason.trim() ? { reason: b.reason.trim().slice(0, 200) } : {}), ...(role !== target.role ? { role: [target.role, role], copiedFrom: b.copyFrom } : {}) }, ip: c.get("ip") });
   return c.json({ changes: after, role, permissions: [...effective(role, after, rolePerms)] });
 });
 

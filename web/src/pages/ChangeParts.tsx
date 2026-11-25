@@ -113,7 +113,7 @@ function OrderList({ me }: { me: Me }) {
   return (
     <>
       <PageHead title={t("Change parts")} sub={t("Every change-part job, from the first request to shipped.")} tip="change-parts.head">
-        <button className="btn" onClick={exportCsv} disabled={!shown.length}>{t("Export CSV")}</button>
+        {can(me, "orders.export") && <button className="btn" onClick={exportCsv} disabled={!shown.length}>{t("Export CSV")}</button>}
         {can(me, "orders.import") && <button className="btn" onClick={() => setPanel(panel === "import" ? null : "import")}>{panel === "import" ? t("Cancel") : t("Import CSV")}</button>}
         {can(me, "orders.add") && <button className="btn primary" onClick={() => setPanel(panel === "new" ? null : "new")}>{panel === "new" ? t("Cancel") : t("New order")}</button>}
       </PageHead>

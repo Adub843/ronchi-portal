@@ -70,7 +70,9 @@ describe("Command center: each person's access", () => {
     const aaron = await owner();
     const tech = await person("tech");
     const soon = new Date(Date.now() + 3600_000).toISOString();
-    expect((await aaron.fetch(`/api/users/${tech.id}/access`, { method: "PUT", body: { changes: { "orders.view": true }, until: soon } })).status).toBe(200);
+    expect((await aaron.fetch(`/api/users/${tech.id}/access`, { method: "PUT", body: { changes: { "orders.view": true }, until: soon, reason: "Covering for Andrew this week" } })).status).toBe(200);
+    const log = await aaron.json("/api/users/audit/recent");
+    expect(JSON.parse(log.data.entries.find((e: any) => e.action === "user.access").detail).reason).toBe("Covering for Andrew this week");
     expect((await tech.fetch("/api/change-parts")).status).toBe(200);
     const list = await aaron.json("/api/users");
     expect(list.data.users.find((u: any) => u.id === tech.id).until).toEqual({ "orders.view": soon });
@@ -91,5 +93,23 @@ describe("Command center: each person's access", () => {
     expect(me.role).toBe("sales");
     expect(me.permissions).toContain("orders.view");
     expect(me.permissions).not.toContain("files.send");
+  });
+});
+
+describe("Command center: risky actions have their own switches", () => {
+  it("exporting a chat, publishing a catalog and exporting orders can be switched off for one person", async () => {
+    const aaron = await owner();
+    const tech = await person("tech");
+    const other = await person("tech");
+    const chat = await tech.json("/api/boards/chats", { body: { userIds: [other.id] } });
+    expect((await tech.fetch(`/api/boards/${chat.data.id}/export`)).status).toBe(200);
+    await aaron.json(`/api/users/${tech.id}/access`, { method: "PUT", body: { changes: { "boards.export": false } } });
+    expect((await tech.fetch(`/api/boards/${chat.data.id}/export`)).status).toBe(403);
+
+    const eng = await person("engineering");
+    expect((await eng.json("/api/auth/me")).data.user.permissions).toEqual(expect.arrayContaining(["catalog.publish", "boards.export"]));
+    await aaron.json(`/api/users/${eng.id}/access`, { method: "PUT", body: { changes: { "catalog.publish": false } } });
+    expect((await eng.fetch("/api/catalog/machines/m1/publish", { body: {} })).status).toBe(403);
+    expect((await (await person("sales")).json("/api/auth/me")).data.user.permissions).toContain("orders.export");
   });
 });

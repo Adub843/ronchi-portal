@@ -247,6 +247,7 @@ export function Access({ person, roleName, list, onSaved, onClose, people, secti
   const [until, setUntil] = useState<Record<string, string>>(person.until ?? {});
   const [lasts, setLasts] = useState("always");
   const [copy, setCopy] = useState("");
+  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const fromRole = new Set(list.byRole[person.role] ?? []);
   useEffect(() => { setChanges(person.access ?? {}); setUntil(person.until ?? {}); }, [person.id, person.access, person.until]);
@@ -255,7 +256,7 @@ export function Access({ person, roleName, list, onSaved, onClose, people, secti
     setBusy(true);
     try {
       const hours = LASTS.find((l) => l.id === lasts)?.hours ?? null;
-      const withEnd = body.changes && hours ? { ...body, until: new Date(Date.now() + hours * 3600_000).toISOString() } : body;
+      const withEnd = { ...(body.changes && hours ? { ...body, until: new Date(Date.now() + hours * 3600_000).toISOString() } : body), ...(reason.trim() ? { reason: reason.trim() } : {}) };
       const r = await api(`/users/${encodeURIComponent(person.id)}/access`, { method: "PUT", body: withEnd });
       setChanges(r.changes);
       if (body.copyFrom) toast(t("Copied. They now have the same role and access."));
@@ -314,6 +315,7 @@ export function Access({ person, roleName, list, onSaved, onClose, people, secti
             {LASTS.map((l) => <option key={l.id} value={l.id}>{l.label()}</option>)}
           </select>
         </label>
+        <input aria-label={t("Reason (saved in the activity log)")} placeholder={t("Reason (saved in the activity log)")} value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} style={{ minWidth: 220 }} />
         {people && (
           <span className="row" style={{ gap: 6 }}>
             <select aria-label={t("Copy role and access from")} value={copy} onChange={(e) => setCopy(e.target.value)}>
