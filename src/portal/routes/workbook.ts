@@ -282,7 +282,7 @@ workbook.put("/:jobId/hours", async (c) => {
      SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE ${STILL_OPEN}
      ON CONFLICT(job_id, user_id, day) DO UPDATE SET travel_wd = excluded.travel_wd, travel_we = excluded.travel_we, regular = excluded.regular,
        training = excluded.training, overtime = excluded.overtime, warranty = excluded.warranty, miles = excluded.miles, note = excluded.note, updated_at = excluded.updated_at`,
-  ).bind(randomId(), job.id, who, d, h.travel_wd, h.travel_we, h.regular, h.training, h.overtime, h.warranty, h.miles, note, at, at, job.id).run());
+  ).bind(randomId(), job.id, who, d, h.travel_wd, h.travel_we, h.regular, 0, h.overtime, h.warranty, h.miles, note, at, at, job.id).run());
   await auditJob(c, c.get("user")!, job.id, "workbook.hours", { for: who, day: d, ...h });
   return c.json({ ok: true });
 });

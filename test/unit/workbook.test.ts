@@ -1,10 +1,15 @@
 // Rules carried over from the old Field Service Workbook (src/shared/workbook.ts).
 import { describe, expect, it } from "vitest";
-import { billableFor, cleanHours, hoursTotal, isDay, issueLines, mondayOf, reportText, toCents } from "../../src/shared/workbook";
+import { billableFor, cleanHours, HOUR_TYPES, hoursTotal, isDay, issueLines, mondayOf, reportText, toCents } from "../../src/shared/workbook";
 
 describe("billable hours (customer billing, not a time clock)", () => {
   it("takes hours by type and miles, rounding to hundredths", () => {
-    expect(cleanHours({ regular: "8", overtime: 2.333, travel_wd: "", miles: "42.26" })).toEqual({ travel_wd: 0, travel_we: 0, regular: 8, training: 0, overtime: 2.33, warranty: 0, miles: 42.3 });
+    expect(cleanHours({ regular: "8", overtime: 2.333, travel_wd: "", miles: "42.26" })).toEqual({ travel_wd: 0, travel_we: 0, regular: 8, overtime: 2.33, warranty: 0, miles: 42.3 });
+  });
+  it("has no Training column (Aaron, 2026-11-25: training is not billable)", () => {
+    expect(HOUR_TYPES.map((h) => h.label)).toEqual(["Weekday travel", "Weekend travel", "Regular", "Overtime", "Warranty"]);
+    expect(cleanHours({ regular: 8, training: 4 })).not.toHaveProperty("training");
+    expect(hoursTotal({ regular: 8, training: 4 } as any)).toBe(8);
   });
   it("refuses negative hours, more than 24 in a day, and text", () => {
     expect(() => cleanHours({ regular: -1 })).toThrow("between 0 and 24");
@@ -52,7 +57,7 @@ describe("Submit", () => {
       job: { job_number: "26-0287-S1", customer: "Acme", machine: "3069MB", location: "Pottstown" },
       report: { scope: "Line Down", summary: "Replaced the starwheel.", open_issues: "Order a spare", sign_name: "Dana Smith", sign_title: "Maintenance Manager", sign_date: "2026-11-25", signature: "data:image/png;base64,xx" },
       entries: [{ day: "2026-11-24", who: "Aaron Lewis", work: "Line Down", description: "Found worn starwheel", done: "N", pct: "51–75%", issues: "Starwheel worn" }],
-      hours: [{ day: "2026-11-24", who: "Aaron Lewis", travel_wd: 2, travel_we: 0, regular: 8, training: 0, overtime: 1, warranty: 0, miles: 40 }],
+      hours: [{ day: "2026-11-24", who: "Aaron Lewis", travel_wd: 2, travel_we: 0, regular: 8, overtime: 1, warranty: 0, miles: 40 }],
       expenses: [{ day: "2026-11-24", who: "Aaron Lewis", type: "Hotel", amount_cents: 12900, billable: "Y", description: "Hampton Inn" }],
       photos: 3, by: "Aaron Lewis", link: "https://portal/jobs/j1/work-order",
     });

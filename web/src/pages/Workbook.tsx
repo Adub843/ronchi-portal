@@ -254,7 +254,7 @@ function Photos({ jobId, photos, fill, onChange }: { jobId: string; photos: any[
 
 // ---- Billable hours: what the customer is billed for, per engineer per day ----
 
-const H_EMPTY = { travel_wd: "", travel_we: "", regular: "", training: "", overtime: "", warranty: "", miles: "" };
+const H_EMPTY = { travel_wd: "", travel_we: "", regular: "", overtime: "", warranty: "", miles: "" };
 
 function BillableHours({ job, rows, fill, me, canSchedule, onChange }: { job: any; rows: any[]; fill: boolean; me: Me; canSchedule: boolean; onChange: () => void }) {
   const firstDay = job.work_days.includes(today()) ? today() : job.work_days[0] ?? today();
