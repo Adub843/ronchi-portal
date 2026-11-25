@@ -126,7 +126,7 @@ export function App() {
     "sep",
     { label: t("Portal training"), onSelect: () => navigate("/learn") },
     { label: t("Settings"), onSelect: () => navigate("/settings") },
-    { label: t("Admin controls"), hint: t("Admin"), onSelect: () => navigate("/settings/admin"), hidden: !can(me, "settings.manage") },
+    { label: t("Command center"), hint: t("Owner"), onSelect: () => navigate("/settings/admin"), hidden: !can(me, "settings.manage") },
     { label: t("People and access"), hint: t("Admin"), onSelect: () => navigate("/people"), hidden: !can(me, "users.manage") },
     { label: t("Archived boards"), hint: t("Admin"), onSelect: () => navigate("/boards"), hidden: !can(me, "boards.moderate") || !can(me, "users.manage") },
     "sep",

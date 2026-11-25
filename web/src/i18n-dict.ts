@@ -2033,7 +2033,7 @@ export const IT: Record<string, string> = {
   "Someone else changed this sale while you were working on it. Reload to see their changes.": "Qualcun altro ha cambiato questa vendita mentre ci lavoravi. Ricarica per vedere le modifiche."
 };
 
-// Settings > Admin controls (i18n-admin.ts).
+// Settings > Command center (i18n-admin.ts).
 Object.assign(ES, ADMIN_ES);
 Object.assign(IT, ADMIN_IT);
 // The access screen lists the admin-controls permission by name (src/portal/lib/roles.ts).
