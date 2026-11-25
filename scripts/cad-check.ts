@@ -29,13 +29,16 @@ if (!res.success) {
 }
 let named = 0, unnamed = 0;
 const unnamedSamples = new Set<string>();
+// Same shape as the portal's 3D tree: a node's own shapes are leaf children named after the shape,
+// so a parts list whose "assembly" is one CAD part (a welded frame, say) is found too.
 const build = (n: OcctNode): Tree => {
-  for (const i of n.meshes) {
+  const leaves: Tree[] = n.meshes.map((i) => {
     const nm = res.meshes[i]?.name || n.name;
     if (codeOf(nm, {})) named++;
     else { unnamed++; if (unnamedSamples.size < 15) unnamedSamples.add(nm); }
-  }
-  return { name: n.name ?? "", children: n.children.map(build), parts: n.meshes.length };
+    return { name: nm, children: [], parts: 1 };
+  });
+  return { name: n.name ?? "", children: [...leaves, ...n.children.map(build)], parts: n.meshes.length };
 };
 const tree = build(res.root);
 const hits = findAssemblies(tree, codes);
