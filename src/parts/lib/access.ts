@@ -19,7 +19,7 @@ export async function requireMachine(db: D1Database, u: Customer, serial: string
 
 export interface SheetRecord {
   id: string; serial: string; parent_id: string | null; section: string; grp: string | null; code: string | null; rev: string | null;
-  title: string; title_it: string; sort: number; image_w: number | null; image_h: number | null; model_size: number | null; mesh_map: string | null;
+  title: string; title_it: string; sort: number; image_w: number | null; image_h: number | null; model_size: number | null; mesh_map: string | null; views: string | null;
 }
 
 export async function requireSheet(db: D1Database, u: Customer, id: string): Promise<SheetRecord> {

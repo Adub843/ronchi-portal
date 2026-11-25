@@ -6,6 +6,7 @@ import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
 import { IC } from "./icons";
 import { Drawing2D, type Balloon } from "./Drawing2D";
 import { PartsList, type Row } from "./PartsList";
+import { ViewPictures } from "./ViewPictures";
 import { partName, w, type Lang } from "./words";
 
 // three.js is large; it loads only when someone opens a 3D model.
@@ -17,12 +18,13 @@ export interface Sheet {
   title: string;
   drawing: { w: number; h: number } | null;
   model: { size: number; meshMap: Record<string, string> } | null;
+  views?: string[];   // 3D views rendered in Fusion (iso, front, top, right)
   prev: string | null;
   next: string | null;
 }
 
 export function SheetView({
-  sheet, rows, fileUrl, lang, onOpenSheet, partLink, whereUsed, action, extra, version = "", onPlace, siblings, tools, subtitle,
+  sheet, rows, fileUrl, lang, onOpenSheet, partLink, whereUsed, action, extra, version = "", onPlace, siblings, tools, subtitle, pictureUrl, viewUrl,
 }: {
   sheet: Sheet;
   rows: Row[];
@@ -39,8 +41,14 @@ export function SheetView({
   siblings?: { id: string; code: string | null; title: string }[];   // the other parts lists in this group
   tools?: ReactNode;      // buttons at the end of the title bar (favorite star, staff tools)
   subtitle?: string;      // shown at the end of the viewer's toolbar (the Italian sheet name)
+  pictureUrl?: (code: string, version: string) => string;   // a part's picture, for the parts list
+  viewUrl?: (view: string) => string;                        // one of the sheet's 3D views
 }) {
-  const [tab, setTab] = useState<"drawing" | "model">(sheet.drawing || !sheet.model ? "drawing" : "model");
+  const views = viewUrl ? (sheet.views ?? []) : [];
+  const [picked, setTab] = useState<"drawing" | "model" | "views" | null>(null);
+  // The tab picked, or the first one this sheet has (a drawing, 3D or views can be added later).
+  const has = { drawing: !!sheet.drawing, model: !!sheet.model, views: views.length > 0 };
+  const tab = picked && has[picked] ? picked : has.drawing ? "drawing" : has.model ? "model" : has.views ? "views" : "drawing";
   const [rowId, setRowId] = useState<string | null>(null);
   const [find, setFind] = useState("");
   const [sibs, setSibs] = useState(false);
@@ -51,10 +59,12 @@ export function SheetView({
   const q = version ? `?v=${encodeURIComponent(version)}` : "";
   const title = [sheet.code, sheet.title].filter(Boolean).join(" - ");
 
-  const lead = sheet.drawing && sheet.model ? (
+  const tabs = [sheet.drawing && "drawing", sheet.model && "model", views.length && "views"].filter(Boolean).length;
+  const lead = tabs > 1 ? (
     <span className="cv-switch" role="tablist" aria-label={w(lang, "Drawing or 3D")}>
-      <button type="button" role="tab" aria-selected={tab === "drawing"} title={w(lang, "Drawing")} aria-label={w(lang, "Drawing")} onClick={() => setTab("drawing")}>{IC.drawing}</button>
-      <button type="button" role="tab" aria-selected={tab === "model"} title={w(lang, "3D")} aria-label={w(lang, "3D")} onClick={() => setTab("model")}>{IC.model}</button>
+      {sheet.drawing && <button type="button" role="tab" aria-selected={tab === "drawing"} title={w(lang, "Drawing")} aria-label={w(lang, "Drawing")} onClick={() => setTab("drawing")}>{IC.drawing}</button>}
+      {sheet.model && <button type="button" role="tab" aria-selected={tab === "model"} title={w(lang, "3D")} aria-label={w(lang, "3D")} onClick={() => setTab("model")}>{IC.model}</button>}
+      {views.length > 0 && <button type="button" role="tab" aria-selected={tab === "views"} title={w(lang, "Pictures")} aria-label={w(lang, "Pictures")} onClick={() => setTab("views")}>{IC.camera}</button>}
     </span>
   ) : null;
 
@@ -132,7 +142,10 @@ export function SheetView({
               />
             </Suspense>
           )}
-          {!sheet.drawing && !sheet.model && <p className="cv-msg cv-empty">{w(lang, "No drawing for this parts list yet. The list on the right is complete.")}</p>}
+          {tab === "views" && views.length > 0 && viewUrl && (
+            <ViewPictures key={`${sheet.id}${q}`} views={views} src={(v) => viewUrl(v) + q} lang={lang} lead={lead} label={subtitle} alt={title} />
+          )}
+          {!sheet.drawing && !sheet.model && !views.length && <p className="cv-msg cv-empty">{w(lang, "No drawing for this parts list yet. The list on the right is complete.")}</p>}
           {sheet.prev && <button type="button" className="mv-side-arrow left" onClick={() => onOpenSheet(sheet.prev!)} aria-label={w(lang, "Previous sheet")} title={w(lang, "Previous sheet")}>{IC.prev}</button>}
           {sheet.next && <button type="button" className="mv-side-arrow right" onClick={() => onOpenSheet(sheet.next!)} aria-label={w(lang, "Next sheet")} title={w(lang, "Next sheet")}>{IC.next}</button>}
         </div>
@@ -147,9 +160,10 @@ export function SheetView({
           action={action}
           extra={extra}
           query={find}
-          head={{ code: sheet.code, title: sheet.title }}
+          head={{ code: sheet.code, title: sheet.title, picture: views.length && viewUrl ? viewUrl(views[0]!) + q : null }}
           onShow3D={(r) => { setTab("model"); setRowId(r.id); }}
           has3D={(code) => inModel.has(code)}
+          pictureUrl={pictureUrl}
         />
       </div>
     </div>

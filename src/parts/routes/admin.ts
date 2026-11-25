@@ -7,7 +7,7 @@
 import { Hono } from "hono";
 import { MACHINE_NUMBER } from "../../shared/machine-number";
 import { randomId, sameText, sha256Hex } from "../../shared/crypto";
-import { cleanPartCode, SECTIONS } from "../../shared/catalog/model";
+import { cleanPartCode, cleanViews, SECTIONS, SHEET_VIEWS } from "../../shared/catalog/model";
 import type { PartsApp } from "../env";
 import { audit, body, fail, mustStr, now, str } from "../lib/http";
 import { createCustomerInvite } from "./auth";
@@ -27,6 +27,8 @@ admin.use("*", async (c, next) => {
 const SERIAL = MACHINE_NUMBER;
 const ID = /^[A-Za-z0-9_-]{8,40}$/;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[a-z]{2,24}$/i;
+/** Every file a published sheet can have, for deleting sheets that are gone. */
+const sheetFiles = (id: string) => [`sheets/${id}/drawing`, `sheets/${id}/model.glb`, ...SHEET_VIEWS.map((v) => `sheets/${id}/view-${v}`)];
 const num = (v: unknown, max: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? v : null);
 
 // ---------- Companies, machines, logins ----------
@@ -158,6 +160,7 @@ admin.post("/publish", async (c) => {
       title: str(s.title, 300) ?? "", titleIt: str(s.titleIt, 300) ?? "",
       imageW: num(s.imageW, 20000), imageH: num(s.imageH, 20000), modelSize: num(s.modelSize, 200_000_000),
       meshMap: s.meshMap && typeof s.meshMap === "object" ? JSON.stringify(s.meshMap).slice(0, 500_000) : null,
+      views: JSON.stringify(cleanViews(s.views)),
       rows: rows.map((r, j) => {
         const code = cleanPartCode(r.code);
         if (!code) fail(400, `Bad part code on sheet ${id}.`);
@@ -169,7 +172,7 @@ admin.post("/publish", async (c) => {
   const parts = (b.parts as Record<string, unknown>[]).map((p) => {
     const code = cleanPartCode(p.code);
     if (!code) fail(400, "Bad part code.");
-    return { code, rev: str(p.rev, 4), nameEn: str(p.nameEn, 300) ?? "", nameIt: str(p.nameIt, 300) ?? "", maker: str(p.maker, 100), makerPn: str(p.makerPn, 100), wear: p.wear ? 1 : 0 };
+    return { code, rev: str(p.rev, 4), nameEn: str(p.nameEn, 300) ?? "", nameIt: str(p.nameIt, 300) ?? "", maker: str(p.maker, 100), makerPn: str(p.makerPn, 100), wear: p.wear ? 1 : 0, pictureAt: str(p.pictureAt, 40) };
   });
 
   // Drawings and models of sheets that are gone get deleted from storage too.
@@ -184,21 +187,21 @@ admin.post("/publish", async (c) => {
   ];
   for (const p of parts) {
     stmts.push(db.prepare(
-      `INSERT INTO parts (code, rev, name_en, name_it, maker, maker_pn, wear) VALUES (?,?,?,?,?,?,?)
-       ON CONFLICT (code) DO UPDATE SET rev = excluded.rev, name_en = excluded.name_en, name_it = excluded.name_it, maker = excluded.maker, maker_pn = excluded.maker_pn, wear = excluded.wear`,
-    ).bind(p.code, p.rev, p.nameEn, p.nameIt, p.maker, p.makerPn, p.wear));
+      `INSERT INTO parts (code, rev, name_en, name_it, maker, maker_pn, wear, picture_at) VALUES (?,?,?,?,?,?,?,?)
+       ON CONFLICT (code) DO UPDATE SET rev = excluded.rev, name_en = excluded.name_en, name_it = excluded.name_it, maker = excluded.maker, maker_pn = excluded.maker_pn, wear = excluded.wear, picture_at = excluded.picture_at`,
+    ).bind(p.code, p.rev, p.nameEn, p.nameIt, p.maker, p.makerPn, p.wear, p.pictureAt));
   }
   for (const s of sheets) {
     stmts.push(db.prepare(
-      "INSERT INTO sheets (id, serial, parent_id, section, grp, code, rev, title, title_it, sort, image_w, image_h, model_size, mesh_map) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-    ).bind(s.id, serial, s.parentId, s.section, s.grp, s.code, s.rev, s.title, s.titleIt, s.sort, s.imageW, s.imageH, s.modelSize, s.meshMap));
+      "INSERT INTO sheets (id, serial, parent_id, section, grp, code, rev, title, title_it, sort, image_w, image_h, model_size, mesh_map, views) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    ).bind(s.id, serial, s.parentId, s.section, s.grp, s.code, s.rev, s.title, s.titleIt, s.sort, s.imageW, s.imageH, s.modelSize, s.meshMap, s.views));
     for (const r of s.rows) {
       stmts.push(db.prepare("INSERT INTO sheet_rows (id, sheet_id, pos, code, qty, unit, hotspots, sort) VALUES (?,?,?,?,?,?,?,?)").bind(r.id, s.id, r.pos, r.code, r.qty, r.unit, r.hotspots, r.sort));
     }
   }
   // D1 runs a batch as one transaction: customers see the old catalog or the new one, never half.
   for (let i = 0; i < stmts.length; i += 5000) await db.batch(stmts.slice(i, i + 5000));
-  if (gone.length) await c.env.PARTS_FILES.delete(gone.flatMap((id) => [`sheets/${id}/drawing`, `sheets/${id}/model.glb`]));
+  if (gone.length) await c.env.PARTS_FILES.delete(gone.flatMap(sheetFiles));
   await audit(db, { action: "catalog.publish", target: serial, detail: { sheets: sheets.length, parts: parts.length, by: str(b.by, 100) } });
   return c.json({ ok: true, sheets: sheets.length, parts: parts.length });
 });
@@ -217,6 +220,31 @@ admin.put("/files/sheets/:id/:file{drawing|model}", async (c) => {
   return c.json({ ok: true });
 });
 
+/** Pictures rendered in Fusion: a sheet's 3D view, or a part's picture (shared by every machine with the part). */
+async function pictureUpload(c: { req: { header: (n: string) => string | undefined; arrayBuffer: () => Promise<ArrayBuffer> } }) {
+  const type = (c.req.header("content-type") ?? "").split(";")[0]!.trim();
+  if (type !== "image/png" && type !== "image/webp") fail(400, "Wrong file type.");
+  const bytes = await c.req.arrayBuffer();
+  if (bytes.byteLength > 5 * 1024 * 1024) fail(413, "File too big.");
+  return { type, bytes };
+}
+
+admin.put(`/files/sheets/:id/views/:view{${SHEET_VIEWS.join("|")}}`, async (c) => {
+  const id = c.req.param("id");
+  if (!ID.test(id)) fail(400, "Bad sheet id.");
+  const { type, bytes } = await pictureUpload(c);
+  await c.env.PARTS_FILES.put(`sheets/${id}/view-${c.req.param("view")}`, bytes, { httpMetadata: { contentType: type } });
+  return c.json({ ok: true });
+});
+
+admin.put("/files/parts/:code/picture", async (c) => {
+  const code = cleanPartCode(c.req.param("code"));
+  if (!code) fail(400, "Bad part code.");
+  const { type, bytes } = await pictureUpload(c);
+  await c.env.PARTS_FILES.put(`parts/${code}/picture`, bytes, { httpMetadata: { contentType: type } });
+  return c.json({ ok: true });
+});
+
 /** Take a machine's catalog off the parts site (owners keep the machine on their list, with nothing in it). */
 admin.delete("/machines/:serial", async (c) => {
   const serial = c.req.param("serial").toUpperCase();
@@ -227,7 +255,7 @@ admin.delete("/machines/:serial", async (c) => {
     c.env.PARTS_DB.prepare("DELETE FROM sheets WHERE serial = ?").bind(serial),
     c.env.PARTS_DB.prepare("DELETE FROM machines WHERE serial = ?").bind(serial),
   ]);
-  if (old.results.length) await c.env.PARTS_FILES.delete(old.results.flatMap((r) => [`sheets/${r.id}/drawing`, `sheets/${r.id}/model.glb`]));
+  if (old.results.length) await c.env.PARTS_FILES.delete(old.results.flatMap((r) => sheetFiles(r.id)));
   await audit(c.env.PARTS_DB, { action: "catalog.unpublish", target: serial });
   return c.json({ ok: true });
 });

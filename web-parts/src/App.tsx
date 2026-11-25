@@ -435,7 +435,7 @@ function MachineCatalog({ serial, rest }: { serial: string; rest: string[] }) {
       level={levelFrom(rest)}
       base={`/m/${data.machine.serial}/catalog`}
       sheetTo={(s) => `/s/${s.id}`}
-      thumb={(s) => (s.has_drawing ? `/api/sheets/${enc(s.id)}/drawing` : null)}
+      thumb={(s) => (s.has_drawing ? `/api/sheets/${enc(s.id)}/drawing` : s.views?.length ? `/api/sheets/${enc(s.id)}/views/${s.views[0]}` : null)}
       L={Link}
       lang={getLang()}
       crumbs={[...machineCrumbs(data.machine.serial), { label: t("Available content"), to: `/m/${data.machine.serial}` }]}
@@ -499,6 +499,8 @@ function Sheet({ id }: { id: string }) {
         rows={rows}
         lang={getLang()}
         fileUrl={(kind) => `/api/sheets/${enc(id)}/${kind}`}
+        viewUrl={(v) => `/api/sheets/${enc(id)}/views/${v}`}
+        pictureUrl={(code, v) => `/api/parts/${enc(code)}/picture?v=${enc(v)}`}
         onOpenSheet={(sid) => navigate(`/s/${sid}`)}
         partLink={(code) => <Link to={`/p/${code}`}>{code}</Link>}
         whereUsed={(code) => <Link to={`/p/${code}`}>{t("Show where this part is used")}</Link>}
@@ -584,6 +586,7 @@ function Book({ serial }: { serial: string }) {
             <section key={p.sheet.id} className="book-page">
               <h2><span className="mono">{p.sheet.code ?? ""}</span> {p.sheet.title} <small className="muted mono">{serial}</small></h2>
               {p.sheet.drawing && <img src={`/api/sheets/${enc(p.sheet.id)}/drawing`} alt={p.sheet.title} />}
+              {!p.sheet.drawing && !!p.sheet.views?.length && <img src={`/api/sheets/${enc(p.sheet.id)}/views/${p.sheet.views[0]}`} alt={p.sheet.title} />}
               <table className="book-rows">
                 <thead><tr><th>{t("Pos.")}</th><th>{t("Part number")}</th><th>{t("Description")}</th><th>{t("Qty")}</th></tr></thead>
                 <tbody>

@@ -14,6 +14,7 @@ export interface TreeSheet {
   rows: number;
   has_drawing?: number | boolean;
   has_model?: number | boolean;
+  views?: string[];   // 3D views rendered in Fusion; the first is the parts list's picture
 }
 
 const SECTION_WORD = { machine: "Machine components", format: "Format components", elevator: "Elevators", kit: "Kits" } as const;

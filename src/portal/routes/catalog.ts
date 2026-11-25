@@ -7,7 +7,7 @@
 // names, sites, staff notes, or anything else from portal-db.
 import { Hono } from "hono";
 import { randomId } from "../../shared/crypto";
-import { cleanPartCode, SECTIONS } from "../../shared/catalog/model";
+import { cleanPartCode, cleanViews, SECTIONS, SHEET_VIEWS } from "../../shared/catalog/model";
 import { scanForCustomerData } from "../../shared/privacy";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
@@ -20,13 +20,14 @@ const ID = /^[A-Za-z0-9_-]{8,40}$/;
 const num = (v: unknown, max: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? v : null);
 const MAX_SHEETS = 2000;
 const MAX_ROWS = 2000;
+const PIC = "pic_";
 
 type Db = D1Database;
 
 interface SheetRec {
   id: string; machine_id: string; parent_id: string | null; section: string; grp: string | null; code: string | null; rev: string | null;
   title: string; title_it: string; source: string; page: number | null; sort: number;
-  image_w: number | null; image_h: number | null; model_size: number | null; mesh_map: string | null;
+  image_w: number | null; image_h: number | null; model_size: number | null; mesh_map: string | null; views: string | null;
 }
 
 async function machineById(db: Db, id: string) {
@@ -88,6 +89,61 @@ function upsertPart(db: Db, p: { code: string; rev: string | null; nameEn: strin
 }
 
 const fileKey = (sheetId: string, file: string) => `catalog/${sheetId}/${file === "model" ? "model.glb" : "drawing"}`;
+const viewKey = (sheetId: string, view: string) => `catalog/${sheetId}/view-${view}`;
+const pictureKey = (code: string) => `catalog/parts/${code}/picture`;
+/** Every file a sheet can have in R2, for deleting a sheet. */
+const sheetFiles = (sheetId: string) => [fileKey(sheetId, "drawing"), fileKey(sheetId, "model"), ...SHEET_VIEWS.map((v) => viewKey(sheetId, v))];
+const VIEW_ROUTE = `:view{${SHEET_VIEWS.join("|")}}`;
+const PICTURE_MAX = 5 * 1024 * 1024;
+
+/** Check a file really is what its type says (its first bytes), not just its label. */
+function looksLike(type: string, bytes: ArrayBuffer): boolean {
+  const head = new Uint8Array(bytes.slice(0, 12));
+  const ascii = String.fromCharCode(...head);
+  if (type === "model/gltf-binary") return ascii.startsWith("glTF");
+  if (type === "image/png") return head[0] === 0x89 && ascii.slice(1, 4) === "PNG";
+  if (type === "image/webp") return ascii.startsWith("RIFF") && ascii.slice(8, 12) === "WEBP";
+  return false;
+}
+
+/** A typed assembly number: empty clears it, a bad one is refused (never quietly wiped). */
+function typedCode(v: unknown): string | null {
+  if (v === null || (typeof v === "string" && !v.trim())) return null;
+  const code = cleanPartCode(v);
+  if (!code) fail(400, `"${String(v).slice(0, 30)}" isn't a Ronchi part number.`);
+  return code;
+}
+
+/** A picture upload: PNG or WebP, checked, at most 5 MB. */
+async function pictureBody(c: { req: { header: (n: string) => string | undefined; arrayBuffer: () => Promise<ArrayBuffer> } }) {
+  const type = (c.req.header("content-type") ?? "").split(";")[0]!.trim();
+  if (type !== "image/png" && type !== "image/webp") fail(400, "Pictures must be PNG or WebP images.");
+  const bytes = await c.req.arrayBuffer();
+  if (!bytes.byteLength) fail(400, "The file is empty.");
+  if (bytes.byteLength > PICTURE_MAX) fail(413, "That picture is too big (5 MB at most).");
+  if (!looksLike(type, bytes)) fail(400, "That file isn't what its type says.");
+  return { type, bytes };
+}
+
+/** Copy one R2 object, streamed (a 3D model can be close to 100 MB). False when it isn't there. */
+async function copyFile(bucket: R2Bucket, from: string, to: string): Promise<boolean> {
+  const obj = await bucket.get(from);
+  if (!obj) return false;
+  const { readable, writable } = new FixedLengthStream(obj.size);
+  const [, ok] = await Promise.all([obj.body.pipeTo(writable), bucket.put(to, readable, { httpMetadata: obj.httpMetadata })]);
+  return !!ok;
+}
+
+function imageResponse(obj: R2ObjectBody, maxAge: number) {
+  return new Response(obj.body, {
+    headers: {
+      "Content-Type": obj.httpMetadata?.contentType === "image/png" ? "image/png" : "image/webp",
+      "Content-Length": String(obj.size),
+      "Cache-Control": `private, max-age=${maxAge}`,
+      "Content-Security-Policy": "default-src 'none'; sandbox",
+    },
+  });
+}
 
 // ---------- Machines ----------
 
@@ -108,17 +164,17 @@ catalog.get("/machines/:id", async (c) => {
   const m = await machineById(c.env.DB, c.req.param("id"));
   const { results: sheets } = await c.env.DB.prepare(
     `SELECT id, parent_id, section, grp, code, rev, title, title_it, source, page, sort, updated_at,
-            image_w IS NOT NULL AS has_drawing, model_size IS NOT NULL AS has_model,
+            image_w IS NOT NULL AS has_drawing, model_size IS NOT NULL AS has_model, views,
             (SELECT COUNT(*) FROM catalog_rows r WHERE r.sheet_id = s.id) AS rows
        FROM catalog_sheets s WHERE machine_id = ? ORDER BY sort`,
-  ).bind(m.id).all();
+  ).bind(m.id).all<{ views: string | null }>();
   const { results: imports } = await c.env.DB.prepare(
     `SELECT i.id, i.file_name, i.pages, i.sheets, i.rows, i.warnings, i.created_at, u.name AS by_name
        FROM catalog_imports i JOIN users u ON u.id = i.user_id WHERE i.machine_id = ? ORDER BY i.created_at DESC LIMIT 20`,
   ).bind(m.id).all();
   return c.json({
     machine: { id: m.id, serial: m.serial, model: m.model, customer: m.customer, site: m.site, notes: m.notes, catalog_published_at: m.catalog_published_at },
-    sheets,
+    sheets: sheets.map((s) => ({ ...s, views: cleanViews(s.views) })),
     imports: imports.map((i: any) => ({ ...i, warnings: i.warnings ? JSON.parse(i.warnings) : [] })),
   });
 });
@@ -156,7 +212,20 @@ catalog.post("/machines/:id/import", async (c) => {
   });
   const byKey = new Map(incoming.map((s) => [s.key, s.id]));
 
-  const old = await db.prepare("SELECT id FROM catalog_sheets WHERE machine_id = ? AND source = 'manual'").bind(m.id).all<{ id: string }>();
+  const old = await db.prepare("SELECT id, code, model_size, mesh_map, views FROM catalog_sheets WHERE machine_id = ? AND source = 'manual'").bind(m.id)
+    .all<{ id: string; code: string | null; model_size: number | null; mesh_map: string | null; views: string | null }>();
+  // 3D models and views added to the old parts lists move to the new parts list with the same
+  // assembly number (the manual brings a new drawing, never 3D).
+  const with3d = new Map<string, (typeof old.results)[number]>();
+  for (const o of old.results) if (o.code && (o.model_size || cleanViews(o.views).length) && !with3d.has(o.code)) with3d.set(o.code, o);
+  const carried = new Map<string, (typeof old.results)[number]>(); // new sheet id -> old sheet
+  for (const s of incoming) {
+    const o = s.code ? with3d.get(s.code) : undefined;
+    if (o) {
+      carried.set(s.id, o);
+      with3d.delete(s.code!);
+    }
+  }
   const base = await db.prepare("SELECT COALESCE(MAX(sort), -1) AS n FROM catalog_sheets WHERE machine_id = ? AND source <> 'manual'").bind(m.id).first<{ n: number }>();
 
   const stmts: D1PreparedStatement[] = [
@@ -178,10 +247,12 @@ catalog.post("/machines/:id/import", async (c) => {
   for (const s of order) {
     const sort = (base?.n ?? -1) + 1 + incoming.indexOf(s);
     const parentId = s.parentKey ? (byKey.get(s.parentKey) ?? null) : null;
+    const was = carried.get(s.id);
     stmts.push(db.prepare(
-      `INSERT INTO catalog_sheets (id, machine_id, parent_id, section, grp, code, rev, title, title_it, source, page, sort, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?, 'manual', ?,?,?,?)`,
-    ).bind(s.id, m.id, parentId === s.id ? null : parentId, s.section, s.grp, s.code, s.rev, s.title, s.titleIt, s.page, sort, t, t));
+      `INSERT INTO catalog_sheets (id, machine_id, parent_id, section, grp, code, rev, title, title_it, source, page, sort, model_size, mesh_map, views, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?, 'manual', ?,?,?,?,?,?,?)`,
+    ).bind(s.id, m.id, parentId === s.id ? null : parentId, s.section, s.grp, s.code, s.rev, s.title, s.titleIt, s.page, sort,
+      was?.model_size ?? null, was?.mesh_map ?? null, was ? JSON.stringify(cleanViews(was.views)) : null, t, t));
     for (const r of s.rows) {
       stmts.push(db.prepare("INSERT INTO catalog_rows (id, sheet_id, pos, code, qty, unit, hotspots, sort) VALUES (?,?,?,?,?,?,?,?)")
         .bind(r.id, s.id, r.pos, r.code, r.qty, r.unit, r.hotspots, r.sort));
@@ -196,7 +267,19 @@ catalog.post("/machines/:id/import", async (c) => {
   stmts.push(db.prepare("INSERT INTO catalog_imports (id, machine_id, file_name, pages, sheets, rows, warnings, user_id, created_at) VALUES (?,?,?,?,?,?,?,?,?)")
     .bind(randomId(), m.id, fileName, num(b.pages, 100000) ?? 0, incoming.length, rowCount, JSON.stringify(warnings), u.id, t));
   await runAll(db, stmts);
-  if (old.results.length) await c.env.FILES.delete(old.results.flatMap((r) => [fileKey(r.id, "drawing"), fileKey(r.id, "model")]));
+  for (const [id, was] of carried) {
+    const moves = [...(was.model_size ? [[fileKey(was.id, "model"), fileKey(id, "model")]] : []), ...cleanViews(was.views).map((v) => [viewKey(was.id, v), viewKey(id, v)])];
+    let lost = false;
+    for (const [from, to] of moves) if (!(await copyFile(c.env.FILES, from!, to!))) lost = true;
+    // A file that was already missing: don't promise it on the new parts list.
+    if (lost) {
+      const views: string[] = [];
+      for (const v of cleanViews(was.views)) if (await c.env.FILES.head(viewKey(id, v))) views.push(v);
+      const model = was.model_size && (await c.env.FILES.head(fileKey(id, "model"))) ? was.model_size : null;
+      await db.prepare("UPDATE catalog_sheets SET model_size = ?, views = ? WHERE id = ?").bind(model, JSON.stringify(views), id).run();
+    }
+  }
+  if (old.results.length) await c.env.FILES.delete(old.results.flatMap((r) => sheetFiles(r.id)));
   await audit(db, { userId: u.id, action: "catalog.import", targetType: "machine", targetId: m.id, detail: { fileName, sheets: incoming.length, rows: rowCount }, ip: c.get("ip") });
   return c.json({ sheets: incoming.map((s) => ({ key: s.key, id: s.id })) });
 });
@@ -213,7 +296,7 @@ catalog.post("/machines/:id/sheets", async (c) => {
   const sort = await c.env.DB.prepare("SELECT COALESCE(MAX(sort), -1) + 1 AS n FROM catalog_sheets WHERE machine_id = ?").bind(m.id).first<{ n: number }>();
   await c.env.DB.prepare(
     `INSERT INTO catalog_sheets (id, machine_id, parent_id, section, grp, code, title, title_it, source, sort, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-  ).bind(id, m.id, parentId?.id ?? null, SECTIONS.includes(b.section as never) ? b.section : "machine", str(b.grp, 200), cleanPartCode(b.code),
+  ).bind(id, m.id, parentId?.id ?? null, SECTIONS.includes(b.section as never) ? b.section : "machine", str(b.grp, 200), b.code === undefined ? null : typedCode(b.code),
     mustStr(b.title, 300, "Title"), str(b.titleIt, 300) ?? "", b.source === "cad" ? "cad" : "hand", sort?.n ?? 0, t, t).run();
   await audit(c.env.DB, { userId: u.id, action: "catalog.sheet.create", targetType: "catalog_sheet", targetId: id, ip: c.get("ip") });
   return c.json({ id });
@@ -227,7 +310,7 @@ catalog.get("/sheets/:id", async (c) => {
   const s = await sheetById(db, c.req.param("id"));
   const m = await machineById(db, s.machine_id);
   const { results: rows } = await db.prepare(
-    `SELECT r.id, r.pos, r.code, r.qty, r.unit, r.hotspots, p.rev, p.name_en, p.name_it, p.maker, p.maker_pn, p.wear,
+    `SELECT r.id, r.pos, r.code, r.qty, r.unit, r.hotspots, p.rev, p.name_en, p.name_it, p.maker, p.maker_pn, p.wear, p.picture_at AS picture,
             (SELECT id FROM catalog_sheets c WHERE c.machine_id = ? AND c.code = r.code AND c.id <> r.sheet_id LIMIT 1) AS sub_sheet,
             (SELECT COUNT(*) FROM catalog_notes n WHERE n.code = r.code AND n.deleted_at IS NULL) AS notes
        FROM catalog_rows r LEFT JOIN catalog_parts p ON p.code = r.code WHERE r.sheet_id = ? ORDER BY r.sort`,
@@ -249,6 +332,7 @@ catalog.get("/sheets/:id", async (c) => {
       source: s.source, page: s.page,
       drawing: s.image_w ? { w: s.image_w, h: s.image_h } : null,
       model: s.model_size ? { size: s.model_size, meshMap: s.mesh_map ? JSON.parse(s.mesh_map) : {} } : null,
+      views: cleanViews(s.views),
       prev: at > 0 ? ids[at - 1] : null,
       next: at >= 0 && at < ids.length - 1 ? ids[at + 1] : null,
       path,
@@ -291,7 +375,7 @@ catalog.patch("/sheets/:id", async (c) => {
     b.titleIt === undefined ? s.title_it : (str(b.titleIt, 300) ?? ""),
     SECTIONS.includes(b.section as never) ? b.section : s.section,
     b.grp === undefined ? s.grp : str(b.grp, 200),
-    b.code === undefined ? s.code : cleanPartCode(b.code),
+    b.code === undefined ? s.code : typedCode(b.code),
     b.rev === undefined ? s.rev : str(b.rev, 4),
     parentId, meshMap,
     num(b.sort, 1_000_000) ?? s.sort,
@@ -330,7 +414,7 @@ catalog.delete("/sheets/:id", async (c) => {
     db.prepare("DELETE FROM catalog_rows WHERE sheet_id = ?").bind(s.id),
     db.prepare("DELETE FROM catalog_sheets WHERE id = ?").bind(s.id),
   ]);
-  await c.env.FILES.delete([fileKey(s.id, "drawing"), fileKey(s.id, "model")]);
+  await c.env.FILES.delete(sheetFiles(s.id));
   await audit(db, { userId: u.id, action: "catalog.sheet.delete", targetType: "catalog_sheet", targetId: s.id, detail: { title: s.title }, ip: c.get("ip") });
   return c.json({ ok: true });
 });
@@ -346,13 +430,7 @@ catalog.put("/sheets/:id/:file{drawing|model}", async (c) => {
   const bytes = await c.req.arrayBuffer();
   if (!bytes.byteLength) fail(400, "The file is empty.");
   if (bytes.byteLength > (file === "model" ? 95 : 20) * 1024 * 1024) fail(413, "That file is too big.");
-  // Check the file really is what it says (first bytes), not just its label.
-  const head = new Uint8Array(bytes.slice(0, 12));
-  const ascii = String.fromCharCode(...head);
-  const ok = type === "model/gltf-binary" ? ascii.startsWith("glTF")
-    : type === "image/png" ? head[0] === 0x89 && ascii.slice(1, 4) === "PNG"
-    : ascii.startsWith("RIFF") && ascii.slice(8, 12) === "WEBP";
-  if (!ok) fail(400, "That file isn't what its type says.");
+  if (!looksLike(type, bytes)) fail(400, "That file isn't what its type says.");
   await c.env.FILES.put(fileKey(s.id, file), bytes, { httpMetadata: { contentType: type } });
   if (file === "model") {
     await c.env.DB.prepare("UPDATE catalog_sheets SET model_size = ?, updated_at = ? WHERE id = ?").bind(bytes.byteLength, now(), s.id).run();
@@ -380,6 +458,92 @@ catalog.get("/sheets/:id/:file{drawing|model}", async (c) => {
       "Content-Security-Policy": "default-src 'none'; sandbox",
     },
   });
+});
+
+// ---------- Pictures from Fusion (scripts/fusion-renders.mjs) ----------
+
+/** A parts list's 3D view (iso, front, top, right), rendered in Fusion. */
+catalog.put(`/sheets/:id/views/${VIEW_ROUTE}`, async (c) => {
+  const u = requirePerm(c, "catalog.edit");
+  const s = await sheetById(c.env.DB, c.req.param("id"));
+  const view = c.req.param("view")!;
+  const { type, bytes } = await pictureBody(c);
+  await c.env.FILES.put(viewKey(s.id, view), bytes, { httpMetadata: { contentType: type } });
+  const views = cleanViews([...cleanViews(s.views), view]);
+  await c.env.DB.prepare("UPDATE catalog_sheets SET views = ?, updated_at = ? WHERE id = ?").bind(JSON.stringify(views), now(), s.id).run();
+  await audit(c.env.DB, { userId: u.id, action: "catalog.view.upload", targetType: "catalog_sheet", targetId: s.id, detail: { view, bytes: bytes.byteLength }, ip: c.get("ip") });
+  return c.json({ ok: true, views });
+});
+
+catalog.get(`/sheets/:id/views/${VIEW_ROUTE}`, async (c) => {
+  requirePerm(c, "catalog.view");
+  const s = await sheetById(c.env.DB, c.req.param("id"));
+  const view = c.req.param("view")!;
+  if (!cleanViews(s.views).includes(view as never)) fail(404, "Not found.");
+  const obj = await c.env.FILES.get(viewKey(s.id, view));
+  if (!obj) fail(404, "Not found.");
+  return imageResponse(obj, 300);
+});
+
+catalog.delete("/sheets/:id/views", async (c) => {
+  const u = requirePerm(c, "catalog.edit");
+  const s = await sheetById(c.env.DB, c.req.param("id"));
+  await c.env.FILES.delete(SHEET_VIEWS.map((v) => viewKey(s.id, v)));
+  await c.env.DB.prepare("UPDATE catalog_sheets SET views = NULL, updated_at = ? WHERE id = ?").bind(now(), s.id).run();
+  await audit(c.env.DB, { userId: u.id, action: "catalog.view.delete", targetType: "catalog_sheet", targetId: s.id, ip: c.get("ip") });
+  return c.json({ ok: true });
+});
+
+/** A part's picture. It belongs to the part number, so every machine with the part shows it. */
+catalog.put("/parts/:code/picture", async (c) => {
+  const u = requirePerm(c, "catalog.edit");
+  const code = cleanPartCode(c.req.param("code"));
+  if (!code) fail(404, "Not found.");
+  // Only parts that are in a catalog: a picture is never the first thing known about a part.
+  const known = await c.env.DB.prepare(
+    "SELECT 1 FROM catalog_parts WHERE code = ? UNION SELECT 1 FROM catalog_rows WHERE code = ? UNION SELECT 1 FROM catalog_sheets WHERE code = ? LIMIT 1",
+  ).bind(code, code, code).first();
+  if (!known) fail(404, "That part isn't in any catalog.");
+  const { type, bytes } = await pictureBody(c);
+  await c.env.FILES.put(pictureKey(code), bytes, { httpMetadata: { contentType: type } });
+  const t = now();
+  await c.env.DB.prepare(
+    "INSERT INTO catalog_parts (code, picture_at, updated_at) VALUES (?,?,?) ON CONFLICT (code) DO UPDATE SET picture_at = excluded.picture_at, updated_at = excluded.updated_at",
+  ).bind(code, t, t).run();
+  await audit(c.env.DB, { userId: u.id, action: "catalog.picture.upload", targetType: "catalog_part", targetId: code, detail: { bytes: bytes.byteLength }, ip: c.get("ip") });
+  return c.json({ ok: true, picture: t });
+});
+
+catalog.get("/parts/:code/picture", async (c) => {
+  requirePerm(c, "catalog.view");
+  const code = cleanPartCode(c.req.param("code"));
+  if (!code) fail(404, "Not found.");
+  const p = await c.env.DB.prepare("SELECT picture_at FROM catalog_parts WHERE code = ?").bind(code).first<{ picture_at: string | null }>();
+  if (!p?.picture_at) fail(404, "Not found.");
+  const obj = await c.env.FILES.get(pictureKey(code));
+  if (!obj) fail(404, "Not found.");
+  return imageResponse(obj, 300);
+});
+
+catalog.delete("/parts/:code/picture", async (c) => {
+  const u = requirePerm(c, "catalog.edit");
+  const code = cleanPartCode(c.req.param("code"));
+  if (!code) fail(404, "Not found.");
+  await c.env.FILES.delete(pictureKey(code));
+  await c.env.DB.prepare("UPDATE catalog_parts SET picture_at = NULL, updated_at = ? WHERE code = ?").bind(now(), code).run();
+  await audit(c.env.DB, { userId: u.id, action: "catalog.picture.delete", targetType: "catalog_part", targetId: code, ip: c.get("ip") });
+  return c.json({ ok: true });
+});
+
+/** Every part number in a machine's catalog (rows and assemblies), for matching Fusion's names. */
+catalog.get("/machines/:id/codes", async (c) => {
+  requirePerm(c, "catalog.view");
+  const m = await machineById(c.env.DB, c.req.param("id"));
+  const { results } = await c.env.DB.prepare(
+    `SELECT DISTINCT r.code FROM catalog_rows r JOIN catalog_sheets s ON s.id = r.sheet_id WHERE s.machine_id = ?
+     UNION SELECT code FROM catalog_sheets WHERE machine_id = ? AND code IS NOT NULL`,
+  ).bind(m.id, m.id).all<{ code: string }>();
+  return c.json({ codes: [...new Set(results.map((r) => r.code.toUpperCase()))] });
 });
 
 // ---------- Parts, search, notes ----------
@@ -412,7 +576,7 @@ catalog.get("/parts/:code", async (c) => {
   requirePerm(c, "catalog.view");
   const code = cleanPartCode(c.req.param("code"));
   if (!code) fail(404, "Not found.");
-  const part = await c.env.DB.prepare("SELECT code, rev, name_en, name_it, maker, maker_pn, wear, updated_at FROM catalog_parts WHERE code = ?").bind(code).first();
+  const part = await c.env.DB.prepare("SELECT code, rev, name_en, name_it, maker, maker_pn, wear, picture_at, updated_at FROM catalog_parts WHERE code = ?").bind(code).first();
   const { results: usedOn } = await c.env.DB.prepare(
     `SELECT m.id AS machine_id, m.serial, m.model, s.id AS sheet_id, s.title AS sheet_title, r.pos, r.qty, r.unit
        FROM catalog_rows r JOIN catalog_sheets s ON s.id = r.sheet_id JOIN machines m ON m.id = s.machine_id
@@ -493,10 +657,10 @@ catalog.post("/machines/:id/publish", async (c) => {
     `SELECT r.sheet_id, r.id, r.pos, r.code, r.qty, r.unit, r.hotspots FROM catalog_rows r JOIN catalog_sheets s ON s.id = r.sheet_id WHERE s.machine_id = ? ORDER BY r.sort`,
   ).bind(m.id).all<{ sheet_id: string; id: string; pos: string; code: string; qty: number | null; unit: string | null; hotspots: string | null }>();
   const codes = [...new Set([...rows.map((r) => r.code), ...sheets.map((s) => s.code).filter((v): v is string => !!v)])];
-  const parts: { code: string; rev: string | null; name_en: string; name_it: string; maker: string | null; maker_pn: string | null; wear: number }[] = [];
+  const parts: { code: string; rev: string | null; name_en: string; name_it: string; maker: string | null; maker_pn: string | null; wear: number; picture_at: string | null }[] = [];
   for (let i = 0; i < codes.length; i += 90) {
     const chunk = codes.slice(i, i + 90);
-    const r = await db.prepare(`SELECT code, rev, name_en, name_it, maker, maker_pn, wear FROM catalog_parts WHERE code IN (${chunk.map(() => "?").join(",")})`).bind(...chunk).all<typeof parts[number]>();
+    const r = await db.prepare(`SELECT code, rev, name_en, name_it, maker, maker_pn, wear, picture_at FROM catalog_parts WHERE code IN (${chunk.map(() => "?").join(",")})`).bind(...chunk).all<typeof parts[number]>();
     parts.push(...r.results);
   }
 
@@ -504,6 +668,8 @@ catalog.post("/machines/:id/publish", async (c) => {
   const text = [
     m.model ?? "",
     ...sheets.flatMap((s) => [s.title, s.title_it, s.grp ?? ""]),
+    // The 3D part names go to customers with the model, so they're checked too.
+    ...sheets.flatMap((s) => (s.mesh_map ? Object.keys(JSON.parse(s.mesh_map) as Record<string, string>) : [])),
     ...parts.flatMap((p) => [p.name_en, p.name_it, p.maker ?? "", p.maker_pn ?? ""]),
   ].join("\n");
   const found = scanForCustomerData(text, await privateTerms(db))
@@ -521,15 +687,20 @@ catalog.post("/machines/:id/publish", async (c) => {
       machine: { serial: m.serial, model: m.model },
       sheets: sheets.map((s) => ({
         id: s.id, parentId: s.parent_id, section: s.section, grp: s.grp, code: s.code, rev: s.rev, title: s.title, titleIt: s.title_it,
-        imageW: s.image_w, imageH: s.image_h, modelSize: s.model_size, meshMap: s.mesh_map ? JSON.parse(s.mesh_map) : null,
+        imageW: s.image_w, imageH: s.image_h, modelSize: s.model_size, meshMap: s.mesh_map ? JSON.parse(s.mesh_map) : null, views: cleanViews(s.views),
         rows: (bySheet.get(s.id) ?? []).map((r) => ({ id: r.id, pos: r.pos, code: r.code, qty: r.qty, unit: r.unit, hotspots: r.hotspots ? JSON.parse(r.hotspots) : [] })),
       })),
-      parts: parts.map((p) => ({ code: p.code, rev: p.rev, nameEn: p.name_en, nameIt: p.name_it, maker: p.maker, makerPn: p.maker_pn, wear: !!p.wear })),
+      parts: parts.map((p) => ({ code: p.code, rev: p.rev, nameEn: p.name_en, nameIt: p.name_it, maker: p.maker, makerPn: p.maker_pn, wear: !!p.wear, pictureAt: p.picture_at })),
     },
   });
   await db.prepare("UPDATE machines SET catalog_published_at = ? WHERE id = ?").bind(now(), m.id).run();
   await audit(db, { userId: u.id, action: "catalog.publish", targetType: "machine", targetId: m.id, detail: res, ip: c.get("ip") });
-  const files = sheets.filter((s) => s.image_w || s.model_size).map((s) => s.id);
+  // Files still to copy: each sheet with a drawing, model or views, and each part picture as
+  // "pic_<code>" (sheet ids are random, so they never start with "pic_" and a part code).
+  const files = [
+    ...sheets.filter((s) => s.image_w || s.model_size || cleanViews(s.views).length).map((s) => s.id),
+    ...parts.filter((p) => p.picture_at).map((p) => `${PIC}${p.code}`),
+  ];
   return c.json({ ok: true, sheets: res.sheets, parts: res.parts, files });
 });
 
@@ -544,8 +715,28 @@ catalog.post("/machines/:id/publish/files", async (c) => {
   const ids = Array.isArray(b.sheets) ? (b.sheets as unknown[]).filter((v): v is string => typeof v === "string" && ID.test(v)).slice(0, 10) : [];
   let copied = 0;
   for (const id of ids) {
-    const s = await c.env.DB.prepare("SELECT id, image_w, model_size FROM catalog_sheets WHERE id = ? AND machine_id = ?").bind(id, m.id).first<{ id: string; image_w: number | null; model_size: number | null }>();
+    const code = id.startsWith(PIC) ? cleanPartCode(id.slice(PIC.length)) : null;
+    if (code) {
+      // Only a picture of a part in this machine's catalog.
+      const p = await c.env.DB.prepare(
+        `SELECT p.picture_at FROM catalog_parts p WHERE p.code = ? AND p.picture_at IS NOT NULL AND (
+           EXISTS (SELECT 1 FROM catalog_rows r JOIN catalog_sheets s ON s.id = r.sheet_id WHERE r.code = p.code AND s.machine_id = ?)
+           OR EXISTS (SELECT 1 FROM catalog_sheets s WHERE s.code = p.code AND s.machine_id = ?))`,
+      ).bind(code, m.id, m.id).first();
+      const obj = p ? await c.env.FILES.get(pictureKey(code)) : null;
+      if (!obj) continue;
+      await partsCall(c.env, `/files/parts/${encodeURIComponent(code)}/picture`, { method: "PUT", raw: obj.body, type: obj.httpMetadata?.contentType ?? "image/webp" });
+      copied++;
+      continue;
+    }
+    const s = await c.env.DB.prepare("SELECT id, image_w, model_size, views FROM catalog_sheets WHERE id = ? AND machine_id = ?").bind(id, m.id).first<{ id: string; image_w: number | null; model_size: number | null; views: string | null }>();
     if (!s) continue;
+    for (const view of cleanViews(s.views)) {
+      const obj = await c.env.FILES.get(viewKey(s.id, view));
+      if (!obj) continue;
+      await partsCall(c.env, `/files/sheets/${s.id}/views/${view}`, { method: "PUT", raw: obj.body, type: obj.httpMetadata?.contentType ?? "image/webp" });
+      copied++;
+    }
     for (const file of ["drawing", "model"] as const) {
       if (file === "drawing" ? !s.image_w : !s.model_size) continue;
       const obj = await c.env.FILES.get(fileKey(s.id, file));

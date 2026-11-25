@@ -1,6 +1,6 @@
 // The catalog a customer sees: their machines, each machine's drawings and parts, search and
 // where-used. Every route goes through lib/access.ts, so a company only ever reaches its own machines.
-import { cleanPartCode } from "../../shared/catalog/model";
+import { cleanPartCode, cleanViews, SHEET_VIEWS } from "../../shared/catalog/model";
 import { Hono } from "hono";
 import type { PartsApp } from "../env";
 import { companySerials, requireMachine, requireSheet } from "../lib/access";
@@ -24,18 +24,18 @@ catalog.get("/machines/:serial", async (c) => {
   const u = requireCustomer(c);
   const m = await requireMachine(c.env.PARTS_DB, u, c.req.param("serial"));
   const { results } = await c.env.PARTS_DB.prepare(
-    `SELECT id, parent_id, section, grp, code, rev, title, sort, image_w IS NOT NULL AS has_drawing, model_size IS NOT NULL AS has_model,
+    `SELECT id, parent_id, section, grp, code, rev, title, sort, image_w IS NOT NULL AS has_drawing, model_size IS NOT NULL AS has_model, views,
             (SELECT COUNT(*) FROM sheet_rows r WHERE r.sheet_id = s.id) AS rows
        FROM sheets s WHERE serial = ? ORDER BY sort`,
-  ).bind(m.serial).all();
-  return c.json({ machine: m, sheets: results });
+  ).bind(m.serial).all<{ views: string | null }>();
+  return c.json({ machine: m, sheets: results.map((s) => ({ ...s, views: cleanViews(s.views) })) });
 });
 
 catalog.get("/sheets/:id", async (c) => {
   const u = requireCustomer(c);
   const s = await requireSheet(c.env.PARTS_DB, u, c.req.param("id"));
   const { results: rows } = await c.env.PARTS_DB.prepare(
-    `SELECT r.id, r.pos, r.code, r.qty, r.unit, r.hotspots, p.rev, p.name_en, p.name_it, p.maker, p.maker_pn, p.wear,
+    `SELECT r.id, r.pos, r.code, r.qty, r.unit, r.hotspots, p.rev, p.name_en, p.name_it, p.maker, p.maker_pn, p.wear, p.picture_at AS picture,
             (SELECT id FROM sheets c WHERE c.serial = ? AND c.code = r.code AND c.id <> r.sheet_id LIMIT 1) AS sub_sheet
        FROM sheet_rows r LEFT JOIN parts p ON p.code = r.code WHERE r.sheet_id = ? ORDER BY r.sort`,
   ).bind(s.serial, s.id).all();
@@ -55,6 +55,7 @@ catalog.get("/sheets/:id", async (c) => {
       id: s.id, serial: s.serial, section: s.section, group: s.grp, code: s.code, rev: s.rev, title: s.title,
       drawing: s.image_w ? { w: s.image_w, h: s.image_h } : null,
       model: s.model_size ? { size: s.model_size, meshMap: s.mesh_map ? JSON.parse(s.mesh_map) : {} } : null,
+      views: cleanViews(s.views),
       prev: at > 0 ? ids[at - 1] : null,
       next: at >= 0 && at < ids.length - 1 ? ids[at + 1] : null,
       path,
@@ -78,6 +79,44 @@ catalog.get("/sheets/:id/:file{drawing|model}", async (c) => {
       "Content-Security-Policy": "default-src 'none'; sandbox",
     },
   });
+});
+
+function picture(obj: R2ObjectBody) {
+  return new Response(obj.body, {
+    headers: {
+      "Content-Type": obj.httpMetadata?.contentType === "image/png" ? "image/png" : "image/webp",
+      "Content-Length": String(obj.size),
+      "Cache-Control": "private, max-age=3600",
+      "Content-Security-Policy": "default-src 'none'; sandbox",
+    },
+  });
+}
+
+/** One of a sheet's 3D views (rendered in Fusion), only for a sheet on one of the company's machines. */
+catalog.get(`/sheets/:id/views/:view{${SHEET_VIEWS.join("|")}}`, async (c) => {
+  const u = requireCustomer(c);
+  const s = await requireSheet(c.env.PARTS_DB, u, c.req.param("id"));
+  const view = c.req.param("view")!;
+  if (!cleanViews(s.views).includes(view as never)) fail(404, "Not found.");
+  const obj = await c.env.PARTS_FILES.get(`sheets/${s.id}/view-${view}`);
+  if (!obj) fail(404, "Not found.");
+  return picture(obj);
+});
+
+/** A part's picture, only when the part is on one of the company's machines. */
+catalog.get("/parts/:code/picture", async (c) => {
+  const u = requireCustomer(c);
+  const code = cleanPartCode(c.req.param("code"));
+  if (!code) fail(404, "Not found.");
+  const ok = await c.env.PARTS_DB.prepare(
+    `SELECT 1 FROM parts p WHERE p.code = ? AND p.picture_at IS NOT NULL AND EXISTS (
+       SELECT 1 FROM sheets s JOIN company_machines cm ON cm.serial = s.serial AND cm.company_id = ?
+        WHERE s.code = p.code OR EXISTS (SELECT 1 FROM sheet_rows r WHERE r.sheet_id = s.id AND r.code = p.code))`,
+  ).bind(code, u.companyId).first();
+  if (!ok) fail(404, "Not found.");
+  const obj = await c.env.PARTS_FILES.get(`parts/${code}/picture`);
+  if (!obj) fail(404, "Not found.");
+  return picture(obj);
 });
 
 /** Search the company's own machines by part code or name. */
@@ -121,7 +160,7 @@ catalog.get("/parts/:code", async (c) => {
       WHERE r.code = ? ORDER BY s.serial, s.sort`,
   ).bind(u.companyId, code).all();
   if (!used.length) fail(404, "Not found.");
-  const part = await c.env.PARTS_DB.prepare("SELECT code, rev, name_en, name_it, maker, maker_pn, wear FROM parts WHERE code = ?").bind(code).first();
+  const part = await c.env.PARTS_DB.prepare("SELECT code, rev, name_en, name_it, maker, maker_pn, wear, picture_at FROM parts WHERE code = ?").bind(code).first();
   return c.json({ part: part ?? { code }, usedOn: used });
 });
 
