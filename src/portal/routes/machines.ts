@@ -32,7 +32,27 @@ machines.get("/:id", async (c) => {
   const orders = has(c.get("user"), "orders.view")
     ? (await c.env.DB.prepare("SELECT id, part, status, ship_date, updated_at FROM cp_orders WHERE instr(upper(machine), ?) > 0 AND phase = 'order' AND removed_at IS NULL ORDER BY updated_at DESC").bind(m.serial).all()).results
     : null;
-  return c.json({ machine: m, boards: boards.results, orders });
+  // The rest of the portal's record for this machine, each part only for people allowed to see it:
+  // its jobs (the workbook's work orders), knowledge-base notes and the parts catalog.
+  const u = c.get("user");
+  const db = c.env.DB;
+  const serial = String(m.serial);
+  const [jobs, notes, catalog] = await Promise.all([
+    has(u, "jobs.view")
+      ? db.prepare("SELECT id, job_number, customer, status, first_day, last_day FROM jobs WHERE machine = ? COLLATE NOCASE AND status != 'cancelled' ORDER BY first_day IS NULL, first_day DESC LIMIT 100").bind(serial).all().then((r) => r.results)
+      : null,
+    has(u, "kb.view")
+      ? db.prepare("SELECT id, code, kind, title, updated_at FROM kb_articles WHERE serial = ? COLLATE NOCASE AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 50").bind(serial).all().then((r) => r.results)
+      : null,
+    has(u, "catalog.view")
+      ? db.prepare("SELECT COUNT(*) AS sheets FROM catalog_sheets WHERE machine_id = ?").bind(m.id).first<{ sheets: number }>().then((r) => ({ sheets: r?.sheets ?? 0 }))
+      : null,
+  ]);
+  // Spare parts orders for this machine, only for people who may see parts orders.
+  const partsOrders = has(u, "partsorders.view")
+    ? (await db.prepare("SELECT id, 'P-' || seq AS number, customer, status, customer_po, updated_at FROM parts_orders WHERE machine = ? AND removed_at IS NULL ORDER BY updated_at DESC LIMIT 100").bind(serial.toUpperCase()).all()).results
+    : undefined;
+  return c.json({ machine: m, boards: boards.results, orders, jobs, notes, catalog, partsOrders });
 });
 
 function fields(b: Record<string, unknown>) {
@@ -73,10 +93,20 @@ machines.patch("/:id", async (c) => {
   const id = c.req.param("id");
   const before = await c.env.DB.prepare("SELECT * FROM machines WHERE id = ?").bind(id).first();
   if (!before) fail(404, "Not found.");
-  const f = fields(await body(c));
-  await c.env.DB.prepare("UPDATE machines SET model = ?, customer = ?, site = ?, notes = ?, sharepoint_url = ?, updated_at = ? WHERE id = ?")
-    .bind(f.model, f.customer, f.site, f.notes, f.sharepoint_url, now(), id)
+  const b = await body(c);
+  // Someone else saved this machine after this person opened it: don't overwrite their change.
+  if (typeof b.updated_at === "string" && b.updated_at !== before.updated_at) fail(409, "Someone else changed this machine while you were editing. Reload to see their change, then edit again.");
+  const all = fields(b);
+  // Only the fields that were sent change; a field left out keeps what it had.
+  const sent: Record<string, string> = { model: "model", customer: "customer", site: "site", notes: "notes", sharepointUrl: "sharepoint_url" };
+  const f = Object.fromEntries(Object.entries(sent).filter(([k]) => k in b).map(([, col]) => [col, all[col as keyof typeof all]]));
+  const cols = Object.keys(f);
+  if (!cols.length) return c.json({ ok: true });
+  // Only lands if nobody saved in between (two saves at the same moment: the second is told to reload).
+  const r = await c.env.DB.prepare(`UPDATE machines SET ${cols.map((k) => `${k} = ?`).join(", ")}, updated_at = ? WHERE id = ? AND updated_at = ?`)
+    .bind(...cols.map((k) => f[k] ?? null), now(), id, before.updated_at)
     .run();
+  if (!r.meta.changes) fail(409, "Someone else changed this machine while you were editing. Reload to see their change, then edit again.");
   await audit(c.env.DB, { userId: u.id, action: "machine.update", targetType: "machine", targetId: id, detail: { before, after: f }, ip: c.get("ip") });
   return c.json({ ok: true });
 });

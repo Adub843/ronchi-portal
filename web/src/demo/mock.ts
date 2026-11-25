@@ -7,8 +7,10 @@ import { adjustable, effective, isPermission, PERMISSION_GROUPS, PERMISSIONS, ro
 import { clean, defaults, LOCKED_RULES, publicPart, SECTIONS, type PortalSettings } from "../../../src/portal/lib/settings";
 import { CP_FIELDS, CP_SALE_FIELDS, isOpen, isSaleOpen, readOrdersCsv } from "../../../src/shared/change-parts";
 import { KbFail, kbRoute, resetKb } from "./kb-mock";
-import { JobsFail, jobsRoute, resetJobs } from "./jobs-mock";
+import { demoJobs, JobsFail, jobsRoute, resetJobs, resetWorkbook, workbookRoute } from "./jobs-mock";
+import { resetShipping, ShippingFail, shippingRoute } from "./shipping-mock";
 import { resetSoftware, SoftwareFail, softwareRoute } from "./software-mock";
+import { demoPartsOrder, PartsOrdersFail, partsOrdersFor, partsOrdersRoute, resetPartsOrders } from "./parts-orders-mock";
 type Role = keyof typeof ROLES;
 
 // Ids for example records. Uses the browser's secure random source like the real server does.
@@ -91,7 +93,7 @@ function seed(): DB {
     u("Olivia", "r-shipping", "Olivia"),
   ];
   // A role made in People > Roles: Olivia helps with shipping, receiving and the shop.
-  const roles: RoleRow[] = [{ id: "r-shipping", name: "Shipping, receiving and shop", perms: JSON.stringify(["boards.use", "catalog.view", "chats.start", "files.send", "kb.view", "machines.view", "orders.view"]) }];
+  const roles: RoleRow[] = [{ id: "r-shipping", name: "Shipping, receiving and shop", perms: JSON.stringify(["boards.use", "catalog.view", "chats.start", "files.send", "kb.view", "machines.view", "orders.view", "shipping.view", "shipping.edit"]) }];
   const [aaron, paolo, lola, meagan, , steve, andrew, michele] = users as [User, User, User, User, User, User, User, User];
   const m = (serial: string, model: string, customer: string, site: string, notes = "") => ({ id: id(), serial, model, customer, site, notes, sharepoint_url: null, created_at: t0, updated_at: t0 });
   const machines = [
@@ -450,9 +452,26 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     return { ok: true };
   }
   // --- parts catalog (the preview has no manuals or customer parts site, so it starts empty) ---
+  if (seg[0] === "parts-orders") {
+    if (q.get("machine") && method === "GET" && seg.length === 1) return { orders: [] };
+    try {
+      return partsOrdersRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id });
+    } catch (e) {
+      if (e instanceof PartsOrdersFail) throw new Fail(e.status, e.message);
+      throw e;
+    }
+  }
   if (seg[0] === "jobs" || seg[0] === "switches") {
     try {
       return jobsRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, users: db.users, machines: db.machines, newId: id, pdf: examplePdf });
+    } catch (e) {
+      if (e instanceof JobsFail) throw new Fail(e.status, e.message);
+      throw e;
+    }
+  }
+  if (seg[0] === "workbook") {
+    try {
+      return workbookRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, users: db.users, machines: db.machines, newId: id, pdf: examplePdf });
     } catch (e) {
       if (e instanceof JobsFail) throw new Fail(e.status, e.message);
       throw e;
@@ -500,11 +519,24 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     const m = db.machines.find((x) => x.id === seg[1]);
     if (!m) throw new Fail(404, "Not found.");
     if (method === "PATCH") {
-      Object.assign(m, { model: body.model || null, customer: body.customer || null, site: body.site || null, notes: body.notes || null, sharepoint_url: body.sharepointUrl || null, updated_at: iso(new Date()) });
+      if (typeof body.updated_at === "string" && body.updated_at !== m.updated_at) throw new Fail(409, "Someone else changed this machine while you were editing. Reload to see their change, then edit again.");
+      const cols: Record<string, string> = { model: "model", customer: "customer", site: "site", notes: "notes", sharepointUrl: "sharepoint_url" };
+      for (const [k, col] of Object.entries(cols)) if (k in body) (m as any)[col] = body[k] || null;
+      m.updated_at = iso(new Date());
       log("machine.update");
       return { ok: true };
     }
-    return { machine: m, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at), orders: db.orders.filter((x) => x.machine === m.serial && !x.removed_at && x.phase !== "sale").map(({ _h, ...x }) => x) };
+    const perms = effective(u.role, u.access, savedPerms(u.role)) as Set<string>;
+    const jobs = perms.has("jobs.view") ? demoJobs().filter((j) => j.machine === m.serial && j.status !== "cancelled").sort((a, b) => (b.first_day ?? "").localeCompare(a.first_day ?? "")).map((j) => ({ id: j.id, job_number: j.job_number, customer: j.customer, status: j.status, first_day: j.first_day, last_day: j.last_day })) : undefined;
+    return { machine: m, jobs, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at), orders: db.orders.filter((x) => x.machine === m.serial && !x.removed_at && x.phase !== "sale").map(({ _h, ...x }) => x), partsOrders: partsOrdersFor(m.serial, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id }) };
+  }
+  if (seg[0] === "shipping") {
+    try {
+      return shippingRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, users: db.users, orders: db.orders, jobs: demoJobs, partsOrder: (pid: string) => demoPartsOrder(pid, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id }), machines: db.machines, newId: id, pdf: examplePdf });
+    } catch (e) {
+      if (e instanceof ShippingFail) throw new Fail(e.status, e.message);
+      throw e;
+    }
   }
   // --- change-part orders ---
   if (seg[0] === "change-parts") {
@@ -815,6 +847,9 @@ export function resetDemo() {
   db = seed();
   resetKb();
   resetJobs();
+  resetWorkbook();
+  resetPartsOrders();
+  resetShipping();
   resetSoftware();
   save();
 }

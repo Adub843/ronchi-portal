@@ -62,7 +62,7 @@ describe("tech jobs", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toBe(t1.email);
     expect(sent[0].from).toEqual({ email: "jobs@ronchi.test", name: "Ronchi Portal" });
-    expect(sent[0].text).toContain(`${env.ORIGIN}/work-orders/${r.data.id}`);
+    expect(sent[0].text).toContain(`${env.ORIGIN}/jobs/${r.data.id}/work-order`);
     expect(sent[0].text).toContain("Meagan Hooper scheduled you");
     const j = await m.json(`/api/jobs/${r.data.id}`);
     const p = await m.json(`/api/jobs/${r.data.id}`, { method: "PATCH", body: { revision: j.data.job.revision, techIds: [t1.id, t2.id] } });
@@ -94,7 +94,7 @@ describe("tech jobs", () => {
     const r = await m.json("/api/jobs", { body: jobBody({ techIds: [t1.id] }) });
     expect(r.data.emails[0]).toMatchObject({ status: "not_set_up", to: t1.email });
     expect(r.data.emails[0].subject).toContain("Acme Bottling");
-    expect(r.data.emails[0].text).toContain(`/work-orders/${r.data.id}`);
+    expect(r.data.emails[0].text).toContain(`/jobs/${r.data.id}/work-order`);
     const j = await m.json(`/api/jobs/${r.data.id}`);
     expect(j.data.techs[0].email_status).toBe("not_set_up");
   });
@@ -213,7 +213,7 @@ describe("Ronchi workbook: work orders", () => {
       const r = await m.json("/api/jobs", { body: jobBody({ techIds: [tech.id] }) });
       expect(r.status).toBe(200);
       expect(sent[0].text).toContain(`${env.ORIGIN}/jobs/${r.data.id}`);
-      expect(sent[0].text).not.toContain("work-orders");
+      expect(sent[0].text).not.toContain("work-order");
       expect((await tech.json(`/api/jobs/${r.data.id}/workbook`)).status).toBe(404);
       const form = new FormData();
       form.append("files", new File(["x"], "a.pdf"));

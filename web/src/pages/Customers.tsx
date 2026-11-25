@@ -1,6 +1,7 @@
 // Customer logins for the parts site, and the quote requests they send.
 // Each customer company sees only the machines listed here. People sign up with a one-time link
 // that staff send them (by email or text); they sign in with a passkey, never a password.
+import { MakePartsOrder } from "./PartsOrders";
 import { useState } from "react";
 import { api, can, fmtTime, type Me } from "../api";
 import { t } from "../i18n";
@@ -153,10 +154,10 @@ function Company({ co, open, invite, onToggle, onChange }: { co: any; open: bool
   );
 }
 
-export function Quotes({ id }: { id?: string }) {
+export function Quotes({ id, me }: { id?: string; me?: Me }) {
   const [status, setStatus] = useState("");
   const { data, error } = useLoad(() => api(`/quotes${status ? `?status=${status}` : ""}`), [status]);
-  if (id) return <QuotePage id={id} />;
+  if (id) return <QuotePage id={id} me={me} />;
   return (
     <>
       <PageHead title={t("Quote requests")} sub={t("Parts lists customers sent from the parts site.")} tip="quotes.head">
@@ -187,7 +188,7 @@ export function Quotes({ id }: { id?: string }) {
   );
 }
 
-function QuotePage({ id }: { id: string }) {
+function QuotePage({ id, me }: { id: string; me?: Me }) {
   const { data, error, reload } = useLoad(() => api(`/quotes/${enc(id)}`), [id]);
   if (error) return <ErrorNote error={error} />;
   if (!data) return null;
@@ -195,6 +196,7 @@ function QuotePage({ id }: { id: string }) {
   return (
     <>
       <PageHead title={q.number} sub={`${q.company} · ${q.sent_by} · ${fmtTime(q.created_at)}`}>
+        {me && can(me, "partsorders.add") && <MakePartsOrder quoteId={id} />}
         <select value={q.status} aria-label={t("Status")} onChange={async (e) => {
           try {
             await api(`/quotes/${enc(id)}`, { method: "PATCH", body: { status: e.target.value } });

@@ -255,6 +255,8 @@ shop.post("/lists/:id/lines", async (c) => {
   const u = requireCustomer(c);
   const list = await companyList(c, u, c.req.param("id"));
   const line = await cleanLine(c, u, await body(c));
+  const count = await c.env.PARTS_DB.prepare("SELECT COUNT(*) AS n FROM lines WHERE list_id = ?").bind(list.id).first<{ n: number }>();
+  if ((count?.n ?? 0) >= 500) fail(400, "A list holds up to 500 lines. Start a new list.");
   await c.env.PARTS_DB.prepare("INSERT INTO lines (id, list_id, code, description, qty, serial, note, created_at) VALUES (?,?,?,?,?,?,?,?)")
     .bind(randomId(), list.id, line.code, line.description, line.qty, line.serial, line.note, now()).run();
   return c.json({ ok: true });
@@ -265,6 +267,9 @@ shop.post("/lists/:id/to-cart", async (c) => {
   const u = requireCustomer(c);
   const list = await companyList(c, u, c.req.param("id"));
   let cart = await c.env.PARTS_DB.prepare("SELECT id FROM carts WHERE user_id = ? AND active = 1").bind(u.id).first<{ id: string }>();
+  // The cart's 500-line limit holds here too.
+  const n = await c.env.PARTS_DB.prepare("SELECT (SELECT COUNT(*) FROM lines WHERE list_id = ?1) AS adding, (SELECT COUNT(*) FROM lines WHERE cart_id = ?2) AS have").bind(list.id, cart?.id ?? "").first<{ adding: number; have: number }>();
+  if ((n?.adding ?? 0) + (n?.have ?? 0) > 500) fail(400, "A cart holds up to 500 lines. Start a new cart.");
   const t = now();
   const stmts: D1PreparedStatement[] = [];
   if (!cart) {

@@ -1,17 +1,14 @@
-// The Ronchi workbook: Work orders (Aaron, 2026-11-25). When a tech is scheduled, their email opens the
-// job's work order here: the current work order on top, then the log of past work orders for the same
-// machine with their notes and files, and what else the portal knows about that machine.
-// An admin can switch the whole workbook off (Settings); then these pages and their menu item are gone,
-// and the job email links to the plain job page instead.
-import { api, can, fmtDate, type Me } from "../api";
-import { Empty, ErrorNote, Link, PageHead, useLoad } from "../components/ui";
+// The Ronchi workbook: each job's Work order tab (Aaron, 2026-11-25: a job and its work order are the
+// same visit, so they share one page). The field service engineer's email opens this tab: the service
+// report, log, photos, billable hours and expenses, then the log of past work orders for the same machine
+// and what else the portal knows about it. An admin can switch the workbook off (Settings); then the tab
+// is gone and the job email links to the plain job page instead.
+import { api, fmtDate, type Me } from "../api";
+import { Empty, ErrorNote, Link, useLoad } from "../components/ui";
 import { t } from "../i18n";
 import { toCsv } from "../../../src/shared/csv";
-import { Contact, DaysText, JobFiles, JobList, JobStatusPill, Location } from "./Jobs";
-
-export function WorkOrders({ me }: { me: Me }) {
-  return <JobList me={me} base="/work-orders" title={t("Work orders")} sub={t("The Ronchi workbook: every work order, with each machine's log of past work orders.")} />;
-}
+import { DaysText, JobStatusPill } from "./Jobs";
+import { WorkbookPanel } from "./Workbook";
 
 function download(name: string, text: string) {
   const url = URL.createObjectURL(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }));
@@ -22,12 +19,11 @@ function download(name: string, text: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function WorkOrderPage({ id, me }: { id: string; me: Me }) {
-  const { data, error, reload } = useLoad(() => api(`/jobs/${encodeURIComponent(id)}/workbook`), [id]);
+export function WorkOrderTab({ job, me, onFiles }: { job: { id: string }; me: Me; onFiles: () => void }) {
+  const { data, error, reload } = useLoad(() => api(`/jobs/${encodeURIComponent(job.id)}/workbook`), [job.id], { live: true });
   if (error) return <ErrorNote error={error} />;
   if (!data) return null;
   const j = data.job;
-  const scheduler = can(me, "jobs.schedule");
   const all = [j, ...data.log];
 
   function exportLog() {
@@ -37,29 +33,18 @@ export function WorkOrderPage({ id, me }: { id: string; me: Me }) {
 
   return (
     <>
-      <PageHead title={t("Work orders")} sub={[j.machine, j.customer].filter(Boolean).join(" · ")}>
+      <div className="row no-print" style={{ justifyContent: "flex-end" }}>
         <button className="btn" onClick={() => window.print()}>{t("Print or save as PDF")}</button>
         <button className="btn" onClick={exportLog}>{t("Download the log (CSV)")}</button>
-        <Link to={`/jobs/${j.id}`} className="btn">{scheduler ? t("Edit job") : t("Job details")}</Link>
-      </PageHead>
-
-      <section className="panel wo current">
-        <div className="wo-head">
-          <span className="wo-tag">{t("Current work order")}</span>
-          <span className="mono wo-num">{j.job_number}</span>
-          <JobStatusPill status={j.status} />
-        </div>
-        <div className="grid g3 wo-grid">
-          <div><div className="wo-l">{t("Customer")}</div><div>{j.customer}</div>{j.machine && <div className="mono">{j.machine}</div>}</div>
-          <div><div className="wo-l">{t("Days of work")}</div><DaysText days={j.work_days} /></div>
-          <div><div className="wo-l">{t("Field service engineers")}</div>{j.techs.length ? j.techs.map((x: any) => x.name).join(", ") : <span className="muted">{t("No field service engineers yet")}</span>}</div>
-          <div><div className="wo-l">{t("Location")}</div><Location location={j.location} maps={data.maps} /></div>
-          <div><div className="wo-l">{t("Point of contact")}</div><Contact job={j} /></div>
-          <div><div className="wo-l">{t("Other information")}</div>{j.notes ? <div style={{ whiteSpace: "pre-wrap" }}>{j.notes}</div> : <span className="muted">{t("Nothing added.")}</span>}</div>
-        </div>
-        <div className="wo-l" style={{ marginTop: 14 }}>{t("Files")}</div>
-        <JobFiles jobId={j.id} files={j.files} me={me} canRemoveAll={scheduler} onChange={reload} />
+      </div>
+      {/* On paper the job's details print above the report. */}
+      <section className="panel wo print-only">
+        <div className="wo-head"><span className="wo-tag">{t("Work order")}</span><span className="mono wo-num">{j.job_number}</span></div>
+        <p style={{ margin: 0 }}>{[j.customer, j.machine, j.location?.split("\n")[0]].filter(Boolean).join(" · ")}</p>
+        <p style={{ margin: 0 }}><DaysText days={j.work_days} /> · {j.techs.map((x: any) => x.name).join(", ")}</p>
       </section>
+
+      <WorkbookPanel job={j} me={me} onFiles={() => { reload(); onFiles(); }} />
 
       {data.machine && (
         <section className="panel stack">
@@ -90,7 +75,7 @@ export function WorkOrderPage({ id, me }: { id: string; me: Me }) {
             <li key={w.id} className="panel wo">
               <div className="wo-head">
                 <span className="wo-date">{w.work_days.length ? fmtDate(w.work_days[0]) : t("No days set")}</span>
-                <Link to={`/work-orders/${w.id}`} className="mono wo-num">{w.job_number}</Link>
+                <Link to={`/jobs/${w.id}/work-order`} className="mono wo-num">{w.job_number}</Link>
                 <JobStatusPill status={w.status} />
                 <span className="spacer" />
                 <span className="muted">{w.techs.map((x: any) => x.name).join(", ")}</span>
