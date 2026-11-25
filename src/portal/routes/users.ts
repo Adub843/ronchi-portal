@@ -7,6 +7,7 @@ import { createInvite } from "../lib/invites";
 import { adjustable, effective, isPermission, isRole, PERMISSION_GROUPS, readChanges, VIEW_PERMS, type AccessChanges, type Permission } from "../lib/roles";
 import { listRoles, roleExists, saveRole } from "../lib/role-store";
 import { randomId } from "../../shared/crypto";
+import { isEmail } from "../lib/mail";
 import { endAllSessions } from "../lib/session";
 import { loginId } from "../../shared/login";
 
@@ -153,6 +154,7 @@ users.get("/", async (c) => {
   requirePerm(c, "users.manage");
   const { results } = await c.env.DB.prepare(
     `SELECT u.id, u.email, u.name, u.role, u.status, u.created_at, u.removed_at,
+            (SELECT n.email FROM notice_emails n WHERE n.user_id = u.id) AS notify_email,
             (SELECT r.perms FROM roles r WHERE r.id = u.role) AS role_perms,
             (SELECT COUNT(*) FROM passkeys p WHERE p.user_id = u.id) AS passkeys,
             (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id) AS sessions
@@ -205,6 +207,17 @@ users.patch("/:id", async (c) => {
   if (b.status !== undefined) {
     if (b.status !== "active" && b.status !== "disabled") fail(400, "Unknown status.");
     changes.status = b.status;
+  }
+  // Where job emails go, for people whose login is a username (Aaron, 2026-11-25: field service
+  // engineers get job emails). Kept in its own table (migration 0012); it doesn't sign anyone out.
+  if (b.notify_email !== undefined) {
+    const v = typeof b.notify_email === "string" ? b.notify_email.trim().toLowerCase() : "";
+    if (v && !isEmail(v)) fail(400, "That email doesn't look right.");
+    await (v
+      ? c.env.DB.prepare("INSERT INTO notice_emails (user_id, email, set_by, set_at) VALUES (?,?,?,?) ON CONFLICT (user_id) DO UPDATE SET email = excluded.email, set_by = excluded.set_by, set_at = excluded.set_at").bind(id, v, admin.id, now())
+      : c.env.DB.prepare("DELETE FROM notice_emails WHERE user_id = ?").bind(id)).run();
+    await audit(c.env.DB, { userId: admin.id, action: "user.notice_email", targetType: "user", targetId: id, detail: { email: v || null }, ip: c.get("ip") });
+    if (!Object.keys(changes).length) return c.json({ ok: true });
   }
   if (!Object.keys(changes).length) fail(400, "Nothing to change.");
   const cols = Object.keys(changes);
