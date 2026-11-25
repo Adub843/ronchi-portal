@@ -492,7 +492,7 @@ shipping.patch("/:id", async (c) => {
     if (dropped.some((h) => h.qty_received > 0)) fail(400, "An item that has already been checked in can't be taken off the list.");
     for (const l of lines) {
       const old = l.id ? had.find((h) => h.id === l.id) : undefined;
-      if (old && l.qty < old.qty_received) fail(400, `${l.description}: ${old.qty_received} already checked in, so the quantity can't be less than that.`);
+      if (old && l.qty < old.qty_received) fail(400, "An item's quantity can't be less than what was already checked in.");
     }
     for (const h of dropped) stmts.push(db.prepare(`DELETE FROM shipment_lines WHERE id = ? ${guard}`).bind(h.id, id, before.revision + 1));
     lines.forEach((l, i) => {
@@ -516,7 +516,10 @@ shipping.patch("/:id", async (c) => {
   const after = await loadShipment(db, id);
   if (diff.status && after.direction === "out" && (after.status === "shipped" || after.status === "delivered")) await tellChangePartOrder(c, after, u, "shipped");
   if (diff.status && after.direction === "in" && after.status === "received") await tellChangePartOrder(c, after, u, "received");
-  await syncPartsOrdersForShipment(db, id, u.id, c.get("ip"), hadOrders);
+  // Parts taken back off the road: the shipment is no longer shipped, or its list of items changed.
+  const gone = (st: string) => st === "shipped" || st === "delivered";
+  const pulledBack = after.direction === "out" && ((gone(before.status) && !gone(after.status)) || b.lines !== undefined);
+  await syncPartsOrdersForShipment(db, id, u.id, c.get("ip"), hadOrders, pulledBack);
   return c.json({ ok: true, revision: after.revision });
 });
 
@@ -603,6 +606,6 @@ shipping.delete("/:id", async (c) => {
   const r = await c.env.DB.prepare("UPDATE shipments SET removed_at = ?, updated_by = ? WHERE id = ? AND removed_at IS NULL").bind(now(), u.id, s.id).run();
   if (!r.meta.changes) fail(404, "Not found.");
   await audit(c.env.DB, { userId: u.id, action: "shipment.remove", targetType: "shipment", targetId: s.id, detail: { number: s.number }, ip: c.get("ip") });
-  await syncPartsOrdersForShipment(c.env.DB, s.id, u.id, c.get("ip")); // parts it carried no longer count as shipped
+  await syncPartsOrdersForShipment(c.env.DB, s.id, u.id, c.get("ip"), [], true); // parts it carried no longer count as shipped
   return c.json({ ok: true });
 });

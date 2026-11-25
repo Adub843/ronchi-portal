@@ -188,6 +188,14 @@ export function shippingRoute(method: string, seg: string[], q: URLSearchParams,
     const before = s.status;
     const { lines: ls, revision: _r, ...rest } = body;
     if (rest.packages) { try { rest.packages = cleanPackages(rest.packages); } catch (e) { throw new ShippingFail(400, (e as Error).message); } }
+    if (Array.isArray(ls)) {
+      // Same rules as the server: what was checked in stays on the list, at least as many as came in.
+      for (const h of linesOf(s.id)) {
+        const x = ls.find((y: any) => y.id === h.id);
+        if (!x && h.qty_received > 0) throw new ShippingFail(400, "An item that has already been checked in can't be taken off the list.");
+        if (x && Number(x.qty) < h.qty_received) throw new ShippingFail(400, "An item's quantity can't be less than what was already checked in.");
+      }
+    }
     Object.assign(s, rest);
     if (s.machine) s.machine = s.machine.toUpperCase();
     if (s.status !== before) {

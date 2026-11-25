@@ -523,7 +523,7 @@ export function ReportRecipients({ me }: { me: Me }) {
   const people: any[] = staff.data.staff ?? staff.data.people ?? [];
   async function save() {
     try {
-      await api("/workbook/settings/recipients", { method: "PUT", body: { userIds: ids } });
+      await api("/workbook/settings/recipients", { method: "PUT", body: { userIds: ids, was: current.data.recipients.map((r: any) => r.id) } });
       toast(t("Saved"));
       setOpen(false);
       setPicked(null);

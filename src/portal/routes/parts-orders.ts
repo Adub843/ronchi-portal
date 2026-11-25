@@ -117,9 +117,8 @@ async function shippingReady(db: D1Database): Promise<boolean> {
   return r?.n === 2;
 }
 
-/** What Shipping shipped and received for parts order lines (all of them, or one order's). */
 /** The changes written in one history row; an unreadable row shows as no detail instead of breaking the page. */
-function readChanges(detail: string | null): Row | null {
+function historyChanges(detail: string | null): Row | null {
   if (!detail) return null;
   try {
     return (JSON.parse(detail) as Row).changes ?? null;
@@ -131,6 +130,7 @@ function readChanges(detail: string | null): Row | null {
 /** The orders the list shows (bind the machine twice, '' for all): newest 3000. */
 const LISTED = "SELECT id FROM parts_orders WHERE removed_at IS NULL AND (? = '' OR machine = ?) ORDER BY updated_at DESC LIMIT 3000";
 
+/** What Shipping shipped and received for parts order lines (all of them, or one order's). */
 async function shippedFromShipping(db: D1Database, orderId?: string, machine?: string): Promise<Map<string, { shipped: number; received: number }>> {
   const out = new Map<string, { shipped: number; received: number }>();
   if (!(await shippingReady(db))) return out;
@@ -168,8 +168,10 @@ export async function partsOrdersOnShipment(db: D1Database, shipmentId: string):
  * After Shipping saves a shipment: move each parts order it carries parts for forward, the same way a
  * save on the order would (autoStatus: only forward, only from Customer PO received onward). Written to
  * the order's history as done by that shipment. Shipping calls this; nothing here changes a shipment.
+ * stepBack: this save took parts off the road (shipment cancelled, set back, cut or removed), so an order
+ * marked Shipped that no longer has everything shipped goes back to where its lines say it is.
  */
-export async function syncPartsOrdersForShipment(db: D1Database, shipmentId: string, userId: string, ip: string, alsoOrders: string[] = []): Promise<void> {
+export async function syncPartsOrdersForShipment(db: D1Database, shipmentId: string, userId: string, ip: string, alsoOrders: string[] = [], stepBack = false): Promise<void> {
   if (!(await shippingReady(db))) return;
   if ((await loadSettings(db)).sections.partsOrders === false) return; // section switched off: leave orders alone
   const s = await db.prepare("SELECT number FROM shipments WHERE id = ?").bind(shipmentId).first<{ number: string }>();
@@ -183,7 +185,7 @@ export async function syncPartsOrdersForShipment(db: D1Database, shipmentId: str
     let next = autoStatus(o.status as Status, mine);
     // Shipped, but a shipment was cancelled, cut or removed so not everything has gone any more: step back
     // to where the lines say the order is, so it shows up again as still to ship.
-    if (!next && o.status === "shipped" && mine.length && !mine.every((l) => l.qty_shipped >= l.qty)) {
+    if (!next && stepBack && o.status === "shipped" && mine.length && !mine.every((l) => l.qty_shipped >= l.qty)) {
       next = autoStatus("ordered", mine) ?? "ordered";
     }
     if (!next) continue;
@@ -325,7 +327,7 @@ partsOrders.get("/:id", async (c) => {
     `SELECT a.at, a.action, a.detail, u.name AS who FROM audit_log a LEFT JOIN users u ON u.id = a.user_id
       WHERE a.target_type = 'parts_order' AND a.target_id = ? ORDER BY a.at DESC LIMIT 200`,
   ).bind(id).all<{ at: string; action: string; detail: string | null; who: string | null }>();
-  const history = results.map((h) => ({ at: h.at, action: h.action, who: h.who, changes: readChanges(h.detail) }));
+  const history = results.map((h) => ({ at: h.at, action: h.action, who: h.who, changes: historyChanges(h.detail) }));
   // Only for people who may see Shipping (taken away too when Shipping is switched off).
   const shipments = has(u, "shipping.view") && (await shippingReady(c.env.DB))
     ? (await c.env.DB.prepare(

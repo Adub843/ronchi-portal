@@ -3,6 +3,7 @@
 const E: [string, string, string][] = [
   ["A day can't have more than 24 billable hours.", "Un día no puede tener más de 24 horas facturables.", "Un giorno non può avere più di 24 ore fatturabili."],
   ["Add at least one day to the work log before submitting.", "Agregue al menos un día al registro de trabajo antes de enviar.", "Aggiungi almeno un giorno al registro di lavoro prima di inviare."],
+  ["An item's quantity can't be less than what was already checked in.", "La cantidad de un artículo no puede ser menor que lo ya recibido.", "La quantità di un articolo non può essere inferiore a quanto già ricevuto."],
   ["An item that has already been checked in can't be taken off the list.", "Un artículo que ya se recibió no se puede quitar de la lista.", "Un articolo già ricevuto non può essere tolto dall'elenco."],
   ["Choose a file to add.", "Elija un archivo para agregar.", "Scegli un file da aggiungere."],
   ["Choose the kind of expense.", "Elija el tipo de gasto.", "Scegli il tipo di spesa."],
@@ -44,6 +45,7 @@ const E: [string, string, string][] = [
   ["Someone else changed this machine while you were editing. Reload to see their change, then edit again.", "Otra persona cambió esta máquina mientras usted editaba. Recargue para ver su cambio y edite de nuevo.", "Qualcun altro ha modificato questa macchina mentre la modificavi. Ricarica per vedere la modifica, poi modifica di nuovo."],
   ["Someone else changed this report. Reload to see their changes, then save yours again.", "Otra persona cambió este informe. Recargue para ver sus cambios y guarde los suyos de nuevo.", "Qualcun altro ha modificato questo rapporto. Ricarica per vedere le modifiche, poi salva di nuovo le tue."],
   ["Someone else changed this shipment while you were editing. Reload to see their changes.", "Otra persona cambió este envío mientras usted editaba. Recargue para ver sus cambios.", "Qualcun altro ha modificato questa spedizione mentre la modificavi. Ricarica per vedere le modifiche."],
+  ["Someone else changed who gets reports. Reload to see their change, then pick again.", "Otra persona cambió quién recibe los informes. Recargue para ver su cambio y elija de nuevo.", "Qualcun altro ha cambiato chi riceve i rapporti. Ricarica per vedere la modifica, poi scegli di nuovo."],
   ["Someone you picked can't be found.", "No se encuentra a una de las personas elegidas.", "Una delle persone scelte non si trova."],
   ["That amount is too large.", "Ese monto es demasiado grande.", "Quell'importo è troppo grande."],
   ["That file is too big (limit 2 MB).", "Ese archivo es demasiado grande (límite 2 MB).", "Quel file è troppo grande (limite 2 MB)."],
@@ -76,3 +78,28 @@ const E: [string, string, string][] = [
 ];
 export const ERRORS_ES: Record<string, string> = Object.fromEntries(E.map(([en, es]) => [en, es]));
 export const ERRORS_IT: Record<string, string> = Object.fromEntries(E.map(([en, , it]) => [en, it]));
+
+/**
+ * Server messages with a name or number filled in. Matched when the whole text isn't in the dictionary;
+ * each $1, $2 is the filled-in part, itself translated when the dictionary knows it (field names).
+ */
+export const ERROR_PATTERNS: { re: RegExp; es: string; it: string }[] = [
+  { re: /^Choose the (.+) from the list\.$/, es: "Elija $1 de la lista.", it: "Scegli $1 dall'elenco." },
+  { re: /^(.+) must be text\.$/, es: "$1 debe ser texto.", it: "$1 deve essere testo." },
+  { re: /^(.+) is too long \(limit (\d+) characters\)\.$/, es: "$1 es demasiado largo (límite $2 caracteres).", it: "$1 è troppo lungo (limite $2 caratteri)." },
+  { re: /^Up to (\d+) items in one shipment\.$/, es: "Hasta $1 artículos en un envío.", it: "Fino a $1 articoli in una spedizione." },
+  { re: /^Add up to (\d+) files at a time\.$/, es: "Agregue hasta $1 archivos a la vez.", it: "Aggiungi fino a $1 file alla volta." },
+  { re: /^More (.+) than expected \((\d+)\)\. Note it as "Extra" if that's right\.$/, es: "Más $1 de lo esperado ($2). Anótelo como \"Extra\" si es correcto.", it: "Più $1 del previsto ($2). Segnalo come \"Extra\" se è giusto." },
+  { re: /^(.+) must be a number\.$/, es: "$1 debe ser un número.", it: "$1 deve essere un numero." },
+  { re: /^(.+) must be more than 0\.$/, es: "$1 debe ser mayor que 0.", it: "$1 deve essere maggiore di 0." },
+  { re: /^(.+) can't be less than (.+)\.$/, es: "$1 no puede ser menor que $2.", it: "$1 non può essere inferiore a $2." },
+  { re: /^(.+) can't be more than (.+)\.$/, es: "$1 no puede ser mayor que $2.", it: "$1 non può essere superiore a $2." },
+  { re: /^(.+) must be a date\.$/, es: "$1 debe ser una fecha.", it: "$1 deve essere una data." },
+  { re: /^An order can have up to (\d+) lines\.$/, es: "Un pedido puede tener hasta $1 líneas.", it: "Un ordine può avere fino a $1 righe." },
+  { re: /^Line (\d+) is empty\.$/, es: "La línea $1 está vacía.", it: "La riga $1 è vuota." },
+  { re: /^That request has more than (\d+) lines\.$/, es: "Esa solicitud tiene más de $1 líneas.", it: "Quella richiesta ha più di $1 righe." },
+  { re: /^Machine (.+) is already in the registry\.$/, es: "La máquina $1 ya está en el registro.", it: "La macchina $1 è già nel registro." },
+  { re: /^Job number (.+) is already used\.$/, es: "El número de trabajo $1 ya se usa.", it: "Il numero di lavoro $1 è già usato." },
+  { re: /^(.+) hours must be between 0 and 24\.$/, es: "Las horas de $1 deben estar entre 0 y 24.", it: "Le ore di $1 devono essere tra 0 e 24." },
+  { re: /^([^:]+): (.+)$/, es: "$1: $2", it: "$1: $2" }, // a file name, then the problem with it
+];

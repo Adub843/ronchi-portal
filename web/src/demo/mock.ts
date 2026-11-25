@@ -527,7 +527,7 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       return { ok: true };
     }
     const perms = effective(u.role, u.access, savedPerms(u.role)) as Set<string>;
-    const jobs = perms.has("jobs.view") ? demoJobs().filter((j) => j.machine === m.serial).sort((a, b) => (b.first_day ?? "").localeCompare(a.first_day ?? "")).map((j) => ({ id: j.id, job_number: j.job_number, status: j.status, first_day: j.first_day })) : undefined;
+    const jobs = perms.has("jobs.view") ? demoJobs().filter((j) => j.machine === m.serial && j.status !== "cancelled").sort((a, b) => (b.first_day ?? "").localeCompare(a.first_day ?? "")).map((j) => ({ id: j.id, job_number: j.job_number, customer: j.customer, status: j.status, first_day: j.first_day, last_day: j.last_day })) : undefined;
     return { machine: m, jobs, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at), orders: db.orders.filter((x) => x.machine === m.serial && !x.removed_at && x.phase !== "sale").map(({ _h, ...x }) => x), partsOrders: partsOrdersFor(m.serial, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id }) };
   }
   if (seg[0] === "shipping") {
