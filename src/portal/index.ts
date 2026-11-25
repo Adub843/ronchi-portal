@@ -20,6 +20,7 @@ import { customers, quotes } from "./routes/customers";
 import { changeParts } from "./routes/change-parts";
 import { files } from "./routes/files";
 import { jobs } from "./routes/jobs";
+import { reports } from "./routes/reports";
 import { live } from "./routes/live";
 import { switches } from "./routes/switches";
 import { kb } from "./routes/kb";
@@ -40,7 +41,7 @@ app.use("*", async (c, next) => {
   c.set("user", null);
   await next();
   // A file from a chat or a catalog drawing keeps its own, stricter Content-Security-Policy.
-  const fileRoute = c.req.path.startsWith("/api/files/") || c.req.path.startsWith("/api/software/files/") || c.req.path.startsWith("/api/jobs/files/") || /^\/api\/catalog\/sheets\/[^/]+\/(drawing|model)$/.test(c.req.path);
+  const fileRoute = c.req.path.startsWith("/api/files/") || c.req.path.startsWith("/api/software/files/") || c.req.path.startsWith("/api/jobs/files/") || c.req.path.startsWith("/api/reports/files/") || /^\/api\/catalog\/sheets\/[^/]+\/(drawing|model)$/.test(c.req.path);
   const own = fileRoute ? c.res.headers.get("Content-Security-Policy") : null;
   c.res = withHeaders(c.res, HEADERS);
   if (own) c.res.headers.set("Content-Security-Policy", own);
@@ -85,6 +86,7 @@ app.route("/api/quotes", quotes);
 app.route("/api/change-parts", changeParts);
 app.route("/api/kb", kb);
 app.route("/api/jobs", jobs);
+app.route("/api/reports", reports);
 app.route("/api/switches", switches);
 app.route("/api/live", live);
 app.route("/api/links", links);

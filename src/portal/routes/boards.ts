@@ -323,6 +323,7 @@ export function eventText(actor: string, body: string): string {
     if (e.type === "added") return `${actor} added ${names}`;
     if (e.type === "removed") return `${actor} removed ${names}`;
     if (e.type === "left") return `${actor} left the chat`;
+    if (e.type === "joined") return `${actor} joined the chat`;
   } catch {
     /* fall through */
   }

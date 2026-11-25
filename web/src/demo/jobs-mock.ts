@@ -44,6 +44,9 @@ function seed(c: Ctx) {
       "Short fills on heads 7 and 8. O-rings were flat; replaced both. Fill weights back in spec.", "done", ["Steve Williams"]),
     j("J-1031", "Example Home Care", "4212MB", "88 Example Ave\nChicago, IL 60609", ["Sam Ortiz", "(312) 555-0110", "sam.ortiz@example.com"], days(-7, 2),
       "Trigger sprayer cap chuck set fitted and tested.", "done", ["Elim Ramirez", "Carlos"]),
+    // On site now: the preview's signed-in person is on this one, so the workbook's paperwork can be tried.
+    j("J-1045", "Example Foods Inc.", "4222TP", "1200 Example Pkwy\nAtlanta, GA 30336", ["Dana Smith", "(404) 555-0142", "dana.smith@example.com"], days(-1, 3),
+      "Line 1 changeover to 500 ml and a fill weight check on all 12 heads.", "in_progress", ["Patrick Morgan", "Aaron Lewis"]),
   ];
   const [, , install, shortfill] = jobs;
   files.push(
@@ -52,6 +55,12 @@ function seed(c: Ctx) {
     { id: c.newId(), job_id: shortfill.id, user_id: by("Steve Williams").id, name: "Fill weights heads 1-12.csv", ext: "csv", size: 0, created_at: at, blob: new Blob(["Head,Target g,Actual g\n7,500.0,499.8\n8,500.0,500.1\n"], { type: "text/csv" }) },
   );
   for (const f of files) { f.size = f.blob.size; f.url = URL.createObjectURL(f.blob); }
+}
+
+/** The example jobs and who is on them, for the workbook's paperwork in the preview (reports-mock.ts). */
+export function jobsState(c: Ctx) {
+  if (!jobs) seed(c);
+  return { jobs: jobs!, techs };
 }
 
 export function resetJobs() {
@@ -141,7 +150,8 @@ export function jobsRoute(method: string, seg: string[], q: URLSearchParams, bod
   if (seg[2] === "workbook") {
     if (!workbook) throw new JobsFail(404, "Not found.");
     const key = j.machine ? "machine" : "customer";
-    const log = list.filter((x) => x.id !== j.id && x.status !== "cancelled" && (x[key] ?? "").toLowerCase() === (j[key] ?? "").toLowerCase()).sort((a, b) => (b.first_day ?? "").localeCompare(a.first_day ?? ""));
+    const isPast = (x: any) => x.status === "done" || (x.last_day && x.last_day < day(0));
+    const log = list.filter((x) => x.id !== j.id && x.status !== "cancelled" && isPast(x) && (x[key] ?? "").toLowerCase() === (j[key] ?? "").toLowerCase()).sort((a, b) => (b.first_day ?? "").localeCompare(a.first_day ?? ""));
     const full = (x: any) => ({ ...x, techs: techsOf(x.id), files: filesOf(x.id) });
     const machine = c.machines.find((m) => m.serial === j.machine) ?? null;
     return { job: full(j), log: log.map(full), logBy: key, machine, notes: [], orders: [], maps: j.location ? mapLinks(j.location) : null };

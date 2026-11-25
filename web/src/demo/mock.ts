@@ -8,6 +8,7 @@ import { clean, defaults, LOCKED_RULES, publicPart, SECTIONS, type PortalSetting
 import { CP_FIELDS, CP_SALE_FIELDS, isOpen, isSaleOpen, readOrdersCsv } from "../../../src/shared/change-parts";
 import { KbFail, kbRoute, resetKb } from "./kb-mock";
 import { JobsFail, jobsRoute, resetJobs } from "./jobs-mock";
+import { ReportsFail, reportsRoute, resetReports } from "./reports-mock";
 import { resetSoftware, SoftwareFail, softwareRoute } from "./software-mock";
 type Role = keyof typeof ROLES;
 
@@ -445,6 +446,30 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       throw e;
     }
   }
+  if (seg[0] === "reports") {
+    try {
+      return reportsRoute(method, seg, q, body, {
+        me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, users: db.users, machines: db.machines, newId: id, pdf: examplePdf,
+        makeChat: (chatName, createdBy, people, seedPosts) => {
+          const b = { id: id(), kind: "chat", name: chatName, description: "Job chat", audience: null, machine_id: null, created_by: createdBy, created_at: iso(new Date(Date.now() - 30 * 3600000)), archived_at: null, locked: 0 };
+          db.boards.push(b);
+          db.members[b.id] = [...new Set(people)];
+          for (const sp of seedPosts) {
+            const who = db.users.find((x) => x.name === sp.by);
+            if (who) db.posts.push({ id: id(), board_id: b.id, parent_id: null, user_id: who.id, body: sp.body, pinned: 0, created_at: iso(new Date(Date.now() - sp.minutesAgo * 60000)), edited_at: null, deleted_at: null });
+          }
+          return b.id;
+        },
+        joinChat: (bid, uid) => {
+          if (!(db.members[bid] ?? []).includes(uid)) db.members[bid] = [...(db.members[bid] ?? []), uid];
+        },
+        isMember: (bid, uid) => (db.members[bid] ?? []).includes(uid),
+      });
+    } catch (e) {
+      if (e instanceof ReportsFail) throw new Fail(e.status, e.message);
+      throw e;
+    }
+  }
   if (seg[0] === "software") {
     try {
       return softwareRoute(method, seg, body, { perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id });
@@ -776,7 +801,7 @@ export function installDemo() {
       body = { __blob: init.body instanceof Blob ? init.body : new Blob([init.body]) };
     } else if (init?.body instanceof FormData) {
       const f = init.body;
-      body = { body: f.get("body") ?? "", parentId: f.get("parentId") ?? null, files: f.getAll("files") };
+      body = { body: f.get("body") ?? "", parentId: f.get("parentId") ?? null, files: f.getAll("files"), file: f.get("file") };
     } else {
       try {
         body = init?.body ? JSON.parse(String(init.body)) : {};
@@ -802,6 +827,7 @@ export function resetDemo() {
   db = seed();
   resetKb();
   resetJobs();
+  resetReports();
   resetSoftware();
   save();
 }

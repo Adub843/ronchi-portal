@@ -18,6 +18,7 @@ import { body, fail, has, requirePerm } from "../lib/http";
 import { isEmail, mailTo, sendMail } from "../lib/mail";
 import { serveFile } from "../lib/serve-file";
 import { isOn } from "../lib/switches";
+import { syncJobChat } from "../lib/job-chat";
 
 export const jobs = new Hono<AppEnv>();
 
@@ -282,9 +283,11 @@ jobs.get("/:id/workbook", async (c) => {
   const job = await loadJob(db, c.req.param("id"));
   const key = job.machine ? { col: "machine", val: job.machine } : { col: "customer", val: job.customer };
   const { results: past } = await db.prepare(
+    // Past = done, or its last work day is before today. Upcoming and undated jobs aren't history yet.
     `SELECT * FROM jobs WHERE ${key.col} = ? COLLATE NOCASE AND id != ? AND status != 'cancelled'
+        AND (status = 'done' OR (last_day IS NOT NULL AND last_day < ?))
       ORDER BY first_day IS NULL, first_day DESC LIMIT 200`,
-  ).bind(key.val, job.id).all<JobRow>();
+  ).bind(key.val, job.id, new Date().toISOString().slice(0, 10)).all<JobRow>();
   const ids = [job.id, ...past.map((j) => j.id)];
   const [engineers, files] = await Promise.all([engineersOf(db, ids), filesOf(db, ids)]);
   // What else the portal knows about the machine, each only for people allowed to see it.
@@ -363,6 +366,8 @@ jobs.patch("/:id", async (c) => {
     if (isDuplicate(e)) fail(409, `Job number ${f.job_number} is already used.`);
     throw e;
   }
+  // The job's chat follows its engineers: new ones join, the ones taken off leave (lib/job-chat.ts).
+  if (added.length || removed.length) await syncJobChat(db, id, u, removed);
   if (Object.keys(diff).length) await audit(db, { userId: u.id, action: "job.update", targetType: "job", targetId: id, detail: { changes: diff }, ip: c.get("ip") });
   const job = await loadJob(db, id);
   let emails: Awaited<ReturnType<typeof emailEngineers>> = [];

@@ -3,11 +3,15 @@
 // machine with their notes and files, and what else the portal knows about that machine.
 // An admin can switch the whole workbook off (Settings); then these pages and their menu item are gone,
 // and the job email links to the plain job page instead.
+import { useState } from "react";
 import { api, can, fmtDate, type Me } from "../api";
 import { Empty, ErrorNote, Link, PageHead, useLoad } from "../components/ui";
 import { t } from "../i18n";
 import { toCsv } from "../../../src/shared/csv";
 import { Contact, DaysText, JobFiles, JobList, JobStatusPill, Location } from "./Jobs";
+import { JobPaperwork, takeWorkOrderTarget, type PaperTab } from "./Workbook";
+
+type Tab = PaperTab | "history";
 
 export function WorkOrders({ me }: { me: Me }) {
   return <JobList me={me} base="/work-orders" title={t("Work orders")} sub={t("The Ronchi workbook: every work order, with each machine's log of past work orders.")} />;
@@ -24,6 +28,10 @@ function download(name: string, text: string) {
 
 export function WorkOrderPage({ id, me }: { id: string; me: Me }) {
   const { data, error, reload } = useLoad(() => api(`/jobs/${encodeURIComponent(id)}/workbook`), [id]);
+  // The job's paperwork (time sheet, service report, job chat) needs the workbook's reports permissions.
+  const paperwork = can(me, "reports.write") || can(me, "reports.review");
+  const [opened] = useState(takeWorkOrderTarget);
+  const [tab, setTab] = useState<Tab>(opened.tab ?? (paperwork ? "sheet" : "history"));
   if (error) return <ErrorNote error={error} />;
   if (!data) return null;
   const j = data.job;
@@ -38,8 +46,6 @@ export function WorkOrderPage({ id, me }: { id: string; me: Me }) {
   return (
     <>
       <PageHead title={t("Work orders")} sub={[j.machine, j.customer].filter(Boolean).join(" · ")}>
-        <button className="btn" onClick={() => window.print()}>{t("Print or save as PDF")}</button>
-        <button className="btn" onClick={exportLog}>{t("Download the log (CSV)")}</button>
         <Link to={`/jobs/${j.id}`} className="btn">{scheduler ? t("Edit job") : t("Job details")}</Link>
       </PageHead>
 
@@ -61,7 +67,24 @@ export function WorkOrderPage({ id, me }: { id: string; me: Me }) {
         <JobFiles jobId={j.id} files={j.files} me={me} canRemoveAll={scheduler} onChange={reload} />
       </section>
 
-      {data.machine && (
+      {paperwork && (
+        <div className="wb-tabs" role="tablist" aria-label={t("Work order")}>
+          {([["sheet", "Time sheet"], ["report", "Service report"], ["chat", "Job chat"], ["history", "Machine history"]] as [Tab, string][]).map(([k, label]) => (
+            <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{t(label)}</button>
+          ))}
+        </div>
+      )}
+      {paperwork && tab !== "history" && <JobPaperwork jobId={j.id} me={me} tab={tab} who={opened.who} />}
+
+      {tab === "history" && (
+        <div className="row">
+          <span className="spacer" />
+          <button className="btn" onClick={() => window.print()}>{t("Print or save as PDF")}</button>
+          <button className="btn" onClick={exportLog}>{t("Download the log (CSV)")}</button>
+        </div>
+      )}
+
+      {tab === "history" && data.machine && (
         <section className="panel stack">
           <div className="row"><h2 style={{ margin: 0 }}>{t("Machine {serial}", { serial: data.machine.serial })}</h2><span className="spacer" /><Link to={`/machines/${data.machine.id}`} className="btn small">{t("Machine page")}</Link></div>
           <p className="muted" style={{ margin: 0 }}>{[data.machine.model, data.machine.customer, data.machine.site].filter(Boolean).join(" · ")}</p>
@@ -82,7 +105,7 @@ export function WorkOrderPage({ id, me }: { id: string; me: Me }) {
         </section>
       )}
 
-      <section className="stack">
+      {tab === "history" && <section className="stack">
         <h2 style={{ margin: "8px 0 0" }}>{data.logBy === "machine" ? t("Past work orders for this machine") : t("Past work orders for this customer")}</h2>
         {!data.log.length && <div className="panel"><Empty>{t("No past work orders yet. Finished jobs will build up here.")}</Empty></div>}
         <ol className="wo-log">
@@ -104,7 +127,7 @@ export function WorkOrderPage({ id, me }: { id: string; me: Me }) {
             </li>
           ))}
         </ol>
-      </section>
+      </section>}
     </>
   );
 }

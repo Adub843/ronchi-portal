@@ -201,6 +201,24 @@ describe("Ronchi workbook: work orders", () => {
     expect(wb.data.log[0].files.map((f: any) => f.name)).toEqual(["March report.pdf"]);
   });
 
+  it("the log of past work orders leaves out upcoming jobs, and keeps done ones", async () => {
+    const m = await person("scheduling");
+    const serial = `5${String(Math.floor(Math.random() * 900) + 100)}TP`;
+    const past = await m.json("/api/jobs", { body: jobBody({ machine: serial, work_days: ["2025-03-01"] }) });
+    const upcoming = await m.json("/api/jobs", { body: jobBody({ machine: serial, work_days: ["2099-11-27"] }) });
+    const undated = await m.json("/api/jobs", { body: jobBody({ machine: serial, work_days: [] }) });
+    const doneEarly = await m.json("/api/jobs", { body: jobBody({ machine: serial, work_days: ["2099-12-01"] }) });
+    const d = (await m.json(`/api/jobs/${doneEarly.data.id}`)).data.job;
+    await m.json(`/api/jobs/${doneEarly.data.id}`, { method: "PATCH", body: { revision: d.revision, status: "done" } });
+    const cur = await m.json("/api/jobs", { body: jobBody({ machine: serial, work_days: ["2099-12-10"] }) });
+    const ids = (await m.json(`/api/jobs/${cur.data.id}/workbook`)).data.log.map((j: any) => j.id);
+    expect(ids).toContain(past.data.id);
+    expect(ids).toContain(doneEarly.data.id);
+    expect(ids).not.toContain(upcoming.data.id);
+    expect(ids).not.toContain(undated.data.id);
+    expect(ids).not.toContain(cur.data.id);
+  });
+
   it("a switch removes the workbook; scheduling, emails and files keep working", async () => {
     emailOn();
     const admin = await person("admin");

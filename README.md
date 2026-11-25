@@ -208,8 +208,26 @@ the wall fails the build.
 - **Work orders** (`/work-orders/<job>`): the Ronchi workbook page. The current work order on top, then the
   log of past work orders for the same machine with their notes and files, and the machine's record.
   `web/src/pages/WorkOrders.tsx`.
-- **The workbook switch**: Settings > Ronchi workbook (admins). Off = Work orders leave the menu, their API
-  answers "Not found", and the job email links to the plain job page. Jobs, emails and files keep working.
+- **Job paperwork** (the old "Ronchi Field Service Workbook" app, now on each work order): tabs for **Time sheet**,
+  **Service report**, **Job chat** and **Machine history**. Each field service engineer on the job has their own time
+  sheet (one line per day: date, start, end, break, travel, work hours worked out, billable or not, production hours,
+  notes; expenses with type, description, quantity such as miles or nights, and a receipt photo, never an amount) and
+  their own service report (job details filled in from the job, summary, work log per day, Ronchi parts used or
+  needed, photos, recipe and settings, follow-up, and the customer's name, date and signature drawn on the screen,
+  saved as a PNG). One report per engineer, like the old workbook: each person's work, hours and sign-off stay theirs.
+  Everything saves as it's typed, on Enter and on upload. Draft → sent for review → approved, or sent back with a note;
+  approved is locked until a reviewer sends it back. Engineers see only their own; reviewers (`reports.review`) see
+  all of it on **Time sheets and reports** (`/reports`) with queues, filters and an hours CSV. The service report has
+  a printable page (Print or save as PDF). Code: `src/portal/routes/reports.ts`, `src/shared/reports.ts`,
+  `web/src/pages/Workbook.tsx`, `web/src/pages/Reports.tsx`. Files go in R2 under `reports/<id>` and are served only
+  to the engineer who owns the paperwork and to reviewers. Times are typed paperwork: there is still no clock.
+- **Job chat**: a private chat (the normal chat code and rules) linked to the job in `job_chats`, made the first time
+  someone opens it. In it: the job's engineers and the scheduler who made the job; anyone who schedules jobs joins when
+  they open it. Engineers put on the job join it and engineers taken off leave it (`src/portal/lib/job-chat.ts`).
+- **The workbook switch**: Settings > Ronchi workbook (admins). Off = Work orders, the job paperwork and `/reports`
+  leave the menu, their API answers "Not found", and the job email links to the plain job page. Jobs, emails, files
+  and job chats already made (under Chats) keep working. The Command center section "Time sheets and service reports"
+  closes the paperwork to everyone but admins.
   Stored in table `feature_switches` (`src/portal/lib/switches.ts`).
 - **Job emails** go out through Cloudflare Email Service. Until it is set up, nothing is sent: the job
   page says so and offers "Send it from my email", which opens the scheduler's own email app with the same message.
