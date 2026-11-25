@@ -8,7 +8,7 @@ import { Empty, ErrorNote, Link, useLoad } from "../components/ui";
 import { t } from "../i18n";
 import { toCsv } from "../../../src/shared/csv";
 import { DaysText, JobStatusPill } from "./Jobs";
-import { WorkbookPanel } from "./Workbook";
+import { FieldServiceWorkbook } from "./FieldServiceWorkbook";
 
 function download(name: string, text: string) {
   const url = URL.createObjectURL(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }));
@@ -44,7 +44,7 @@ export function WorkOrderTab({ job, me, onFiles }: { job: { id: string }; me: Me
         <p style={{ margin: 0 }}><DaysText days={j.work_days} /> · {j.techs.map((x: any) => x.name).join(", ")}</p>
       </section>
 
-      <WorkbookPanel job={j} me={me} onFiles={() => { reload(); onFiles(); }} />
+      <FieldServiceWorkbook job={j} me={me} />
 
       {data.machine && (
         <section className="panel stack">

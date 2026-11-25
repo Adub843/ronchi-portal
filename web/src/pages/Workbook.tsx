@@ -11,7 +11,7 @@ import { navigate } from "../router";
 import { JobListTabs } from "./Jobs";
 import { toCsv } from "../../../src/shared/csv";
 import { fileProblem } from "../../../src/shared/files";
-import { addDays, EXPENSE_TYPES, fromCents, toCents, HOUR_TYPES, hoursTotal, mondayOf, PCT, RECIPE_SCREENS, SCOPES } from "../../../src/shared/workbook";
+import { addDays, EXPENSE_TYPES, fromCents, HOUR_TYPES, hoursTotal, mondayOf, PCT, RECIPE_SCREENS, SCOPES } from "../../../src/shared/workbook";
 
 const today = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in the person's own time zone
 const enc = encodeURIComponent;
@@ -65,7 +65,7 @@ export function WorkbookPanel({ job, me, onFiles }: { job: any; me: Me; onFiles:
       <WorkLog job={job} entries={data.entries} fill={fill} me={me} canSchedule={data.canSchedule} onChange={reload} />
       <Photos jobId={job.id} photos={data.photos} fill={fill} onChange={refresh} />
       {data.hours && <BillableHours job={job} rows={data.hours} fill={fill} me={me} canSchedule={data.canSchedule} onChange={reload} />}
-      {data.expenses && <Expenses job={job} rows={data.expenses} fill={fill} me={me} billable={data.billable} showAmounts={!!data.money} onChange={refresh} />}
+      {data.expenses && <Expenses job={job} rows={data.expenses} fill={fill} me={me} billable={data.billable} onChange={refresh} />}
       <SignOff jobId={job.id} report={r} fill={fill} onSaved={reload} />
     </section>
   );
@@ -321,7 +321,7 @@ function BillableHours({ job, rows, fill, me, canSchedule, onChange }: { job: an
 
 // ---- Expenses ----
 
-function Expenses({ job, rows, fill, me, billable, showAmounts, onChange }: { job: any; rows: any[]; fill: boolean; me: Me; billable: "Y" | "N"; showAmounts: boolean; onChange: () => void }) {
+function Expenses({ job, rows, fill, me, billable, onChange }: { job: any; rows: any[]; fill: boolean; me: Me; billable: "Y" | "N"; onChange: () => void }) {
   const firstDay = job.work_days.includes(today()) ? today() : job.work_days[0] ?? today();
   const blank: Record<string, string> = { day: firstDay, type: "", amount: "", pay: "Credit", description: "", billable };
   const [f, setF] = useState<Record<string, string>>(blank);
@@ -332,7 +332,6 @@ function Expenses({ job, rows, fill, me, billable, showAmounts, onChange }: { jo
     e.preventDefault();
     setBusy(true);
     try {
-      toCents(f.amount); // a mistyped amount stops here, before the receipt is uploaded
       let receipt_file: string | undefined;
       if (receipt) {
         const p = fileProblem(receipt.name, receipt.size);
@@ -341,13 +340,7 @@ function Expenses({ job, rows, fill, me, billable, showAmounts, onChange }: { jo
         form.append("files", receipt);
         receipt_file = (await apiForm(`/jobs/${enc(job.id)}/files`, form)).ids[0];
       }
-      try {
-        await api(`/workbook/${enc(job.id)}/expenses`, { body: { ...f, receipt_file } });
-      } catch (x) {
-        // An unattached receipt would be an ordinary job file anyone on jobs could open, so take it back out.
-        if (receipt_file) await api(`/jobs/files/${enc(receipt_file)}`, { method: "DELETE" }).catch(() => undefined);
-        throw x;
-      }
+      await api(`/workbook/${enc(job.id)}/expenses`, { body: { ...f, receipt_file } });
       setF({ ...blank, day: f.day ?? firstDay });
       setReceipt(null);
       onChange();
@@ -365,28 +358,28 @@ function Expenses({ job, rows, fill, me, billable, showAmounts, onChange }: { jo
       toast((x as Error).message);
     }
   }
+  const total = rows.reduce((s, x) => s + x.amount_cents, 0);
   return (
     <div className="panel stack">
       <h3 style={{ margin: 0 }}>{t("Expenses")}</h3>
       {rows.length ? (
         <div className="tbl">
           <table>
-            <thead><tr><th>{t("Date")}</th><th>{t("Field service engineer")}</th><th>{t("Kind")}</th><th>{t("What it was for")}</th><th>{t("Paid by")}</th><th>{t("Billable")}</th>{showAmounts && <th className="num">{t("Amount")}</th>}<th /></tr></thead>
+            <thead><tr><th>{t("Date")}</th><th>{t("Field service engineer")}</th><th>{t("Kind")}</th><th>{t("What it was for")}</th><th>{t("Paid by")}</th><th>{t("Billable")}</th><th className="num">{t("Amount")}</th><th /></tr></thead>
             <tbody>
               {rows.map((x) => (
                 <tr key={x.id}>
                   <td>{fmtDate(x.day)}</td><td>{x.who}</td><td>{t(x.type)}</td>
-                  <td>{x.description}{showAmounts && x.receipt_file && <> · <a href={`/api/jobs/files/${enc(x.receipt_file)}`} target="_blank" rel="noopener noreferrer">{t("Receipt")}</a></>}</td>
-                  <td>{t(x.pay)}</td><td>{x.billable === "Y" ? t("Yes") : t("No")}</td>{showAmounts && <td className="num">{money(x.amount_cents)}</td>}
+                  <td>{x.description}{x.receipt_file && <> · <a href={`/api/jobs/files/${enc(x.receipt_file)}`} target="_blank" rel="noopener noreferrer">{t("Receipt")}</a></>}</td>
+                  <td>{t(x.pay)}</td><td>{x.billable === "Y" ? t("Yes") : t("No")}</td><td className="num">{money(x.amount_cents)}</td>
                   <td>{fill && (x.user_id === me.id || can(me, "jobs.schedule")) && <button className="linkish" onClick={() => remove(x.id)}>{t("Remove")}</button>}</td>
                 </tr>
               ))}
-              {showAmounts && <tr><td colSpan={6}><strong>{t("Total")}</strong></td><td className="num"><strong>{money(rows.reduce((s, x) => s + x.amount_cents, 0))}</strong></td><td /></tr>}
+              <tr><td colSpan={6}><strong>{t("Total")}</strong></td><td className="num"><strong>{money(total)}</strong></td><td /></tr>
             </tbody>
           </table>
         </div>
       ) : <Empty>{t("No expenses yet.")}</Empty>}
-      {!showAmounts && rows.length > 0 && <p className="muted small" style={{ margin: 0 }}>{t("Amounts and receipts go to the office for billing and are not shown here.")}</p>}
       {fill && (
         <form className="grid g3 wb-add" onSubmit={add}>
           <div className="field"><label htmlFor="ex-day">{t("Date")}</label><input id="ex-day" type="date" required value={f.day} onChange={(e) => set("day", e.target.value)} /></div>

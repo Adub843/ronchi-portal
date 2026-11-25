@@ -121,8 +121,6 @@ export interface ReportForText {
   photos: number;
   by: string;
   link: string;
-  /** false: list the expenses without any dollar amount (for field service engineers). */
-  amounts?: boolean;
 }
 
 export function reportText(r: ReportForText): { subject: string; text: string } {
@@ -152,9 +150,8 @@ export function reportText(r: ReportForText): { subject: string; text: string } 
   }
   if (r.expenses.length) {
     L.push("", "Expenses");
-    const amounts = r.amounts !== false;
-    for (const x of r.expenses) L.push(`- ${x.day}, ${x.who}: ${x.type}${amounts ? ` ${fromCents(x.amount_cents)}` : ""}${x.billable === "Y" ? " (billable)" : ""}${x.description ? `, ${x.description}` : ""}`);
-    if (amounts) L.push(`Total expenses: ${fromCents(r.expenses.reduce((s, x) => s + x.amount_cents, 0))}`);
+    for (const x of r.expenses) L.push(`- ${x.day}, ${x.who}: ${x.type} ${fromCents(x.amount_cents)}${x.billable === "Y" ? " (billable)" : ""}${x.description ? `, ${x.description}` : ""}`);
+    L.push(`Total expenses: ${fromCents(r.expenses.reduce((s, x) => s + x.amount_cents, 0))}`);
   }
   if (r.photos) L.push("", `${r.photos} photo${r.photos === 1 ? "" : "s"} on the work order.`);
   if (r.report.sign_name) L.push("", `Signed off by ${r.report.sign_name}${r.report.sign_title ? `, ${r.report.sign_title}` : ""}${r.report.sign_date ? ` on ${r.report.sign_date}` : ""}${r.report.signature ? " (signature on the work order)" : ""}.`);
