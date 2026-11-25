@@ -1,6 +1,7 @@
 // The main menu: one line per page. A page shows only to people with its permission.
 // Every page here needs a training area in web/src/learn/guides.ts (test/unit/learn.test.ts checks).
-// Which unread count a menu line shows (see Unread in components/Alerts.tsx).
+
+/** Which unread count a menu line shows. Same names as Unread in components/Alerts.tsx. */
 type Count = "boards" | "chats";
 
 export const NAV: { to: string; label: string; perm?: string; count?: Count; phone?: boolean }[] = [

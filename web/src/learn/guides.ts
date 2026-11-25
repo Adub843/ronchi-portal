@@ -200,8 +200,8 @@ export const GUIDES: Guide[] = [
     summary: T("Change who's in a group, or step out of it.", "Cambie quién está en un grupo o salga de él.", "Cambia chi è nel gruppo, o esci."),
     steps: [
       T("Open the chat and press its title, or open its menu, to see People in this chat.", "Abra el chat y pulse su título, o abra su menú, para ver Personas en este chat.", "Apri la chat e premi il titolo, o apri il suo menu, per vedere Persone in questa chat."),
-      T("Press Add people to bring someone in. They'll see the messages and files already there.", "Pulse Agregar personas para sumar a alguien. Verá los mensajes y archivos que ya hay.", "Premi Aggiungi persone per far entrare qualcuno. Vedrà i messaggi e i file già presenti."),
-      T("Use Rename group to change the name, or Leave chat to step out.", "Use Cambiar nombre del grupo para cambiar el nombre, o Salir del chat para salir.", "Usa Rinomina gruppo per cambiare il nome, o Esci dalla chat per uscire."),
+      T("Press Add people to bring someone into a group. They'll see the messages and files already there.", "Pulse Agregar personas para sumar a alguien a un grupo. Verá los mensajes y archivos que ya hay.", "Premi Aggiungi persone per far entrare qualcuno in un gruppo. Vedrà i messaggi e i file già presenti."),
+      T("In a group, Leave chat steps you out. The person who started the group can also use Rename group.", "En un grupo, Salir del chat le saca de él. Quien inició el grupo también puede usar Cambiar nombre del grupo.", "In un gruppo, Esci dalla chat ti fa uscire. Chi ha iniziato il gruppo può anche usare Rinomina gruppo."),
     ],
     tip: T("Adding people to a one-to-one chat starts a new group. The one-to-one messages stay private.", "Agregar personas a un chat uno a uno inicia un grupo nuevo. Los mensajes uno a uno siguen privados.", "Aggiungere persone a una chat uno a uno crea un nuovo gruppo. I messaggi uno a uno restano privati."),
   },
@@ -226,6 +226,7 @@ export const GUIDES: Guide[] = [
       T("Open Boards and pick one. You see the boards that are open to you.", "Abra Tableros y elija uno. Verá los tableros abiertos para usted.", "Apri Bacheche e scegline una. Vedi le bacheche aperte a te."),
       T("Type a message and press Send. Tap a message to reply to it.", "Escriba un mensaje y pulse Enviar. Toque un mensaje para responderlo.", "Scrivi un messaggio e premi Invia. Tocca un messaggio per rispondere."),
       T("Pinned messages stay at the top. Some boards are Announcements only, where only the creator and moderators post.", "Los mensajes fijados quedan arriba. Algunos tableros son Solo anuncios, donde solo publican el creador y los moderadores.", "I messaggi fissati restano in alto. Alcune bacheche sono Solo annunci: scrivono solo il creatore e i moderatori."),
+      T("The board's menu has the same search, photos and files, and mute as a chat.", "El menú del tablero tiene la misma búsqueda, fotos y archivos, y silencio que un chat.", "Il menu della bacheca ha la stessa ricerca, foto e file, e silenzio di una chat."),
     ],
   },
   {
@@ -238,6 +239,7 @@ export const GUIDES: Guide[] = [
       T("Under Who can see it, tick roles or people, or leave all unticked for everyone on staff.", "En Quién puede verlo, marque roles o personas, o deje todo sin marcar para todo el personal.", "In Chi può vederla spunta ruoli o persone, o lascia tutto vuoto per tutto il personale."),
       T("Press Create board. As its creator you can change it later with Edit board.", "Pulse Crear tablero. Como creador puede cambiarlo después con Editar tablero.", "Premi Crea bacheca. Come creatore puoi cambiarla dopo con Modifica bacheca."),
     ],
+    tip: T("On a board you started you can also pin and remove posts, set Announcements only and archive it, like a moderator.", "En un tablero que usted creó también puede fijar y eliminar publicaciones, poner Solo anuncios y archivarlo, como un moderador.", "In una bacheca creata da te puoi anche fissare e rimuovere messaggi, impostare Solo annunci e archiviarla, come un moderatore."),
   },
   {
     id: "moderate-boards", area: "boards", needs: ["boards.use", "boards.moderate"],
@@ -262,7 +264,7 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
-    id: "quick-note", area: "kb", needs: ["kb.write"],
+    id: "quick-note", area: "kb", needs: ["kb.view", "kb.write"],
     title: T("Add a quick note from the field", "Agregar una nota rápida desde campo", "Aggiungere una nota rapida dal campo"),
     summary: T("A short Issue and Fix, so the next field service engineer who hits it finds the answer.", "Un Problema y una Solución breves, para que el próximo ingeniero de servicio de campo que lo encuentre tenga la respuesta.", "Un breve Problema e Soluzione, perché il prossimo ingegnere di assistenza sul campo che lo incontra trovi la risposta."),
     steps: [
@@ -274,7 +276,7 @@ export const GUIDES: Guide[] = [
     tip: T("The machine number is staff only and is never shown to customers.", "El número de máquina es solo para el personal y nunca se muestra a clientes.", "Il numero macchina è solo per il personale e non viene mai mostrato ai clienti."),
   },
   {
-    id: "new-article", area: "kb", needs: ["kb.write"],
+    id: "new-article", area: "kb", needs: ["kb.view", "kb.write"],
     title: T("Write an article", "Escribir un artículo", "Scrivere un articolo"),
     summary: T("A longer how-to, known issue or reference, with a summary and details.", "Un instructivo, problema conocido o referencia más largo, con resumen y detalles.", "Un'istruzione, problema noto o riferimento più lungo, con riepilogo e dettagli."),
     steps: [
@@ -285,7 +287,7 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
-    id: "edit-any-article", area: "kb", needs: ["kb.edit_all"],
+    id: "edit-any-article", area: "kb", needs: ["kb.view", "kb.write", "kb.edit_all"],
     title: T("Change or remove anyone's article", "Cambiar o quitar el artículo de cualquiera", "Modificare o rimuovere l'articolo di chiunque"),
     summary: T("Knowledge base editors keep articles correct, whoever wrote them.", "Los editores de la base de conocimientos mantienen los artículos correctos, sin importar quién los escribió.", "Gli editor della base di conoscenza mantengono corretti gli articoli, chiunque li abbia scritti."),
     steps: [
@@ -295,7 +297,7 @@ export const GUIDES: Guide[] = [
     tip: T("Imported documents keep their steps and tables from the source. To change those, import the document again.", "Los documentos importados mantienen sus pasos y tablas del original. Para cambiarlos, importe el documento otra vez.", "I documenti importati mantengono passaggi e tabelle dall'originale. Per cambiarli, importa di nuovo il documento."),
   },
   {
-    id: "import-docs", area: "kb", needs: ["kb.import"],
+    id: "import-docs", area: "kb", needs: ["kb.view", "kb.import"],
     title: T("Import Training Center documents", "Importar documentos del Training Center", "Importare i documenti del Training Center"),
     summary: T("Bring the Ronchi documents (OPLs, how-tos, known issues) into the knowledge base from the import file.", "Traiga los documentos Ronchi (lecciones de un punto, instructivos, problemas conocidos) a la base de conocimientos desde el archivo de importación.", "Porta i documenti Ronchi (OPL, istruzioni, problemi noti) nella base di conoscenza dal file di importazione."),
     steps: [
@@ -305,7 +307,7 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
-    id: "publish-kb", area: "kb", needs: ["kb.publish"],
+    id: "publish-kb", area: "kb", needs: ["kb.view", "kb.publish"],
     title: T("Publish an article to the customer help center", "Publicar un artículo en el centro de ayuda para clientes", "Pubblicare un articolo nel centro assistenza clienti"),
     summary: T("Customers can read it with no login. A scan stops anything with customer details first.", "Los clientes lo leen sin iniciar sesión. Antes, un análisis detiene cualquier dato de clientes.", "I clienti lo leggono senza accesso. Prima un controllo blocca qualsiasi dato dei clienti."),
     steps: [
@@ -361,6 +363,15 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
+    id: "catalog-note", area: "catalog", needs: ["catalog.view"],
+    title: T("Leave a staff note on a part", "Dejar una nota del personal en una pieza", "Lasciare una nota del personale su un ricambio"),
+    summary: T("Fix tips, what to watch for, where to buy it. Only staff see these; they're never published.", "Consejos de arreglo, qué vigilar, dónde comprarla. Solo el personal las ve; nunca se publican.", "Consigli di riparazione, cosa controllare, dove comprarlo. Le vede solo il personale; non vengono mai pubblicate."),
+    steps: [
+      T("Find the part in Parts catalog and open it.", "Busque la pieza en Catálogo de piezas y ábrala.", "Trova il ricambio in Catalogo ricambi e aprilo."),
+      T("Under Staff notes, write your note and press Add note.", "En Notas del personal, escriba su nota y pulse Añadir nota.", "In Note del personale scrivi la nota e premi Aggiungi nota."),
+    ],
+  },
+  {
     id: "build-catalog", area: "catalog", needs: ["catalog.view", "catalog.edit"],
     title: T("Build a machine's catalog from its manual", "Crear el catálogo de una máquina desde su manual", "Creare il catalogo di una macchina dal manuale"),
     summary: T("The portal reads the parts tables in chapter 11 of the manual PDF.", "El portal lee las tablas de piezas del capítulo 11 del manual en PDF.", "Il portale legge le tabelle ricambi del capitolo 11 del manuale PDF."),
@@ -368,7 +379,7 @@ export const GUIDES: Guide[] = [
       T("Open Parts catalog, tick Show machines with no catalog yet, and open the machine.", "Abra Catálogo de piezas, marque Mostrar máquinas sin catálogo y abra la máquina.", "Apri Catalogo ricambi, spunta Mostra macchine ancora senza catalogo e apri la macchina."),
       T("Press Import from manual, choose the manual PDF, set the first and last page, and press Read.", "Pulse Importar del manual, elija el PDF, indique la primera y última página y pulse Leer.", "Premi Importa dal manuale, scegli il PDF, indica prima e ultima pagina e premi Leggi."),
       T("Check the drawings it found, then save them.", "Revise los dibujos encontrados y guárdelos.", "Controlla i disegni trovati, poi salvali."),
-      T("Open each drawing, press Edit, then Place balloons: pick a row and click its spot on the drawing.", "Abra cada dibujo, pulse Editar y luego Colocar globos: elija una fila y haga clic en su lugar en el dibujo.", "Apri ogni disegno, premi Modifica, poi Posiziona palloncini: scegli una riga e fai clic sul punto del disegno."),
+      T("Open each drawing and press Place balloons: pick a row in the parts list and click its spot on the drawing. Press Done placing when finished.", "Abra cada dibujo y pulse Colocar globos: elija una fila de la lista de piezas y haga clic en su lugar en el dibujo. Pulse Terminar de colocar al acabar.", "Apri ogni disegno e premi Posiziona palloncini: scegli una riga della distinta e fai clic sul punto del disegno. Premi Fine posizionamento alla fine."),
     ],
     tip: T("Add 3D from a STEP or GLB file on a drawing to give it a model customers can turn and take apart.", "Use Añadir 3D desde un archivo STEP o GLB en un dibujo para darle un modelo que los clientes puedan girar y desarmar.", "Usa Aggiungi 3D da un file STEP o GLB su un disegno per dargli un modello che i clienti possono ruotare e smontare."),
   },
@@ -403,7 +414,7 @@ export const GUIDES: Guide[] = [
       T("Open Customers, press Manage on the company, and fill in the person's name and email.", "Abra Clientes, pulse Gestionar en la empresa y complete el nombre y correo de la persona.", "Apri Clienti, premi Gestisci sull'azienda e compila nome ed email della persona."),
       T("Tick Can send quote requests if they're a buyer, then press Make sign-up link.", "Marque Puede enviar solicitudes de cotización si es comprador y pulse Crear enlace de registro.", "Spunta Può inviare richieste di offerta se è un acquirente, poi premi Crea link di registrazione."),
       T("Copy the link and send it only to that person. It works once, for 7 days.", "Copie el enlace y envíelo solo a esa persona. Funciona una vez, durante 7 días.", "Copia il link e mandalo solo a quella persona. Funziona una volta, per 7 giorni."),
-      T("Use Turn off or Turn on next to a person to stop or allow their sign-in.", "Use Desactivar o Activar junto a una persona para bloquear o permitir su acceso.", "Usa Disattiva o Attiva accanto a una persona per bloccare o consentire l'accesso."),
+      T("Use Turn off or Turn on next to a person to stop or allow their sign-in. New sign-in link helps someone on a new device; Cancel link stops an unused one.", "Use Desactivar o Activar junto a una persona para bloquear o permitir su acceso. Nuevo enlace de acceso ayuda a quien tiene un dispositivo nuevo; Cancelar enlace anula uno sin usar.", "Usa Disattiva o Attiva accanto a una persona per bloccare o consentire l'accesso. Nuovo link di accesso aiuta chi ha un dispositivo nuovo; Annulla link blocca un link non usato."),
     ],
   },
   {
@@ -411,7 +422,7 @@ export const GUIDES: Guide[] = [
     title: T("Handle quote requests", "Atender solicitudes de cotización", "Gestire le richieste di offerta"),
     summary: T("Parts lists customers send from the parts site.", "Listas de piezas que los clientes envían desde el sitio de piezas.", "Distinte che i clienti inviano dal sito ricambi."),
     steps: [
-      T("Open Quote requests. Use the list at the top right to show one status only.", "Abra Solicitudes de cotización. Use la lista de arriba a la derecha para ver un solo estado.", "Apri Richieste di offerta. Usa l'elenco in alto a destra per vedere un solo stato."),
+      T("Press Open the page below, or Quote requests on the Customers page. Use the list at the top right to show one status only.", "Pulse Abrir la página aquí abajo, o Solicitudes de cotización en la página Clientes. Use la lista de arriba a la derecha para ver un solo estado.", "Premi Apri la pagina qui sotto, o Richieste di offerta nella pagina Clienti. Usa l'elenco in alto a destra per vedere un solo stato."),
       T("Press a request number to see the parts, quantities and notes.", "Pulse el número de una solicitud para ver piezas, cantidades y notas.", "Premi il numero di una richiesta per vedere ricambi, quantità e note."),
       T("Change its Status as you work on it. Reply to the customer at the email shown.", "Cambie su Estado mientras la atiende. Responda al cliente al correo indicado.", "Cambia lo Stato mentre la gestisci. Rispondi al cliente all'email indicata."),
     ],
@@ -425,7 +436,7 @@ export const GUIDES: Guide[] = [
     steps: [
       T("Open Change parts. The counts at the top show open jobs, ones shipping soon and ones past their ship date.", "Abra Cambio de formato. Los totales de arriba muestran trabajos abiertos, próximos a enviar y atrasados.", "Apri Cambio formato. I conteggi in alto mostrano lavori aperti, in spedizione a breve e in ritardo."),
       T("Search by customer, machine, part, PO or notes, and filter by status.", "Busque por cliente, máquina, pieza, orden de compra o notas, y filtre por estado.", "Cerca per cliente, macchina, ricambio, ordine d'acquisto o note, e filtra per stato."),
-      T("Open an order to see its details and History of changes. Export CSV gives you a spreadsheet.", "Abra un pedido para ver sus datos y su Historial. Exportar CSV le da una hoja de cálculo.", "Apri un ordine per vederne i dati e la Cronologia. Esporta CSV ti dà un foglio di calcolo."),
+      T("Open an order to see its details and its History. Export CSV gives you a spreadsheet.", "Abra un pedido para ver sus datos y su Historial. Exportar CSV le da una hoja de cálculo.", "Apri un ordine per vederne i dati e la Cronologia. Esporta CSV ti dà un foglio di calcolo."),
     ],
   },
   {
@@ -486,7 +497,7 @@ export const GUIDES: Guide[] = [
     steps: [
       T("Open People, then Roles.", "Abra Personas, luego Roles.", "Apri Persone, poi Ruoli."),
       T("To make one, type a role name under Make a role, pick a role to start from, and press Make role.", "Para crear uno, escriba un nombre en Crear un rol, elija un rol de partida y pulse Crear rol.", "Per crearne uno, scrivi un nome in Crea un ruolo, scegli un ruolo di partenza e premi Crea ruolo."),
-      T("Press Edit on any role, switch things on or off, and press Save role.", "Pulse Editar en cualquier rol, active o desactive lo que quiera y pulse Guardar rol.", "Premi Modifica su un ruolo, attiva o disattiva ciò che vuoi e premi Salva ruolo."),
+      T("Press Edit on a role, switch things on or off, and press Save role. Admin always has everything and can't be changed.", "Pulse Editar en un rol, active o desactive lo que quiera y pulse Guardar rol. Admin siempre lo tiene todo y no se puede cambiar.", "Premi Modifica su un ruolo, attiva o disattiva ciò che vuoi e premi Salva ruolo. Admin ha sempre tutto e non si può cambiare."),
       T("Back to original undoes changes to a built-in role.", "Volver al original deshace los cambios de un rol incorporado.", "Torna all'originale annulla le modifiche a un ruolo predefinito."),
     ],
     tip: T("This training follows the switches, so new roles get the right guides automatically.", "Esta capacitación sigue los interruptores, así que los roles nuevos reciben las guías correctas automáticamente.", "Questa formazione segue gli interruttori, quindi i nuovi ruoli ricevono automaticamente le guide giuste."),
@@ -513,7 +524,7 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
-    id: "audit-log", area: "people", needs: ["audit.view"],
+    id: "audit-log", area: "people", needs: ["users.manage", "audit.view"],
     title: T("Check the audit log", "Revisar el registro de auditoría", "Controllare il registro di controllo"),
     summary: T("See who did what, and when.", "Vea quién hizo qué y cuándo.", "Vedi chi ha fatto cosa e quando."),
     steps: [

@@ -54,6 +54,11 @@ describe("the training covers the whole portal", () => {
     expect(GUIDES.filter((g) => !areaIds.has(g.area)).map((g) => g.id)).toEqual([]);
   });
 
+  it("every Open the page link goes to a page the training knows", () => {
+    const paths = new Set(AREAS.flatMap((a) => a.paths));
+    expect(GUIDES.filter((g) => g.open && !paths.has(g.open)).map((g) => g.id)).toEqual([]);
+  });
+
   it("guide ids are unique", () => {
     const ids = GUIDES.map((g) => g.id);
     expect(ids.length).toBe(new Set(ids).size);

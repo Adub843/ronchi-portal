@@ -11,6 +11,9 @@ import { roleLabel } from "../roles";
 type Tab = "me" | "function" | "role";
 interface RoleInfo { id: string; name: string; perms: string[] }
 
+/** A role's name: the translated label for built-in roles, the typed name for ones an admin made. */
+const nameOf = (r: RoleInfo) => (roleLabel(r.id) !== r.id ? roleLabel(r.id) : r.name);
+
 const DONE_KEY = (id: string) => `ronchi.learn.done.${id}`;
 
 function readDone(userId: string): Set<string> {
@@ -99,10 +102,10 @@ export function Learn({ me }: { me: Me }) {
           <div className="field">
             <label htmlFor="learn-role">{t("Show the training for")}</label>
             <select id="learn-role" value={role?.id ?? ""} onChange={(e) => setRoleId(e.target.value)}>
-              {roleList.map((r) => <option key={r.id} value={r.id}>{roleLabel(r.id) || r.name}</option>)}
+              {roleList.map((r) => <option key={r.id} value={r.id}>{nameOf(r)}</option>)}
             </select>
           </div>
-          {role && <p className="muted">{t("{role} can follow {n} of {total} guides. Personal changes on People > Access can add or take away more.", { role: roleLabel(role.id) || role.name, n: roleCan.size, total: GUIDES.length })}</p>}
+          {role && <p className="muted">{t("{role} can follow {n} of {total} guides. Personal changes on People > Access can add or take away more.", { role: nameOf(role), n: roleCan.size, total: GUIDES.length })}</p>}
         </div>
       )}
 
@@ -135,13 +138,13 @@ export function Learn({ me }: { me: Me }) {
                     {isAdmin && (
                       <p className="muted learn-who">
                         {t("Roles that can do this")}:{" "}
-                        {who.length ? who.map((r) => roleLabel(r.id) || r.name).join(", ") : t("Only people given the switch on People > Access")}
+                        {who.length ? who.map((r) => nameOf(r)).join(", ") : t("Only people given the switch on People > Access")}
                       </p>
                     )}
                     {allowed && (
                       <div className="row">
                         <Link to={g.open ?? area.paths[0]!} className="btn small">{t("Open the page")}</Link>
-                        <button type="button" className="btn small" aria-pressed={isDone} onClick={() => toggleDone(g.id)}>
+                        <button type="button" className="btn small" onClick={() => toggleDone(g.id)}>
                           {isDone ? t("Mark as not done") : t("Mark as done")}
                         </button>
                       </div>
