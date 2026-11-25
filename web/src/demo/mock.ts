@@ -9,6 +9,7 @@ import { CP_FIELDS, CP_SALE_FIELDS, isOpen, isSaleOpen, readOrdersCsv } from "..
 import { KbFail, kbRoute, resetKb } from "./kb-mock";
 import { JobsFail, jobsRoute, resetJobs } from "./jobs-mock";
 import { resetSoftware, SoftwareFail, softwareRoute } from "./software-mock";
+import { partsOrdersFor, partsOrdersRoute, resetSales, SalesFail, shippingRoute } from "./sales-mock";
 type Role = keyof typeof ROLES;
 
 // Ids for example records. Uses the browser's secure random source like the real server does.
@@ -445,6 +446,15 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       throw e;
     }
   }
+  if (seg[0] === "parts-orders" || seg[0] === "shipping") {
+    const ctx = { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id, pdf: examplePdf, machines: db.machines, cpOrders: db.orders };
+    try {
+      return seg[0] === "shipping" ? shippingRoute(method, seg, q, body, ctx) : partsOrdersRoute(method, seg, body, ctx);
+    } catch (e) {
+      if (e instanceof SalesFail) throw new Fail(e.status, e.message);
+      throw e;
+    }
+  }
   if (seg[0] === "software") {
     try {
       return softwareRoute(method, seg, body, { perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id });
@@ -491,7 +501,8 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       log("machine.update");
       return { ok: true };
     }
-    return { machine: m, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at), orders: db.orders.filter((x) => x.machine === m.serial && !x.removed_at && x.phase !== "sale").map(({ _h, ...x }) => x) };
+    const ctx = { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id, pdf: examplePdf, machines: db.machines, cpOrders: db.orders };
+    return { machine: m, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at), orders: db.orders.filter((x) => x.machine === m.serial && !x.removed_at && x.phase !== "sale").map(({ _h, ...x }) => x), partsOrders: ctx.perms.has("psales.view") ? partsOrdersFor(m.serial, ctx) : null };
   }
   // --- change-part orders ---
   if (seg[0] === "change-parts") {
@@ -803,5 +814,6 @@ export function resetDemo() {
   resetKb();
   resetJobs();
   resetSoftware();
+  resetSales();
   save();
 }

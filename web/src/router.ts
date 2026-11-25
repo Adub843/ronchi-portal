@@ -57,7 +57,8 @@ export function parentOf(path: string): string {
   if (/^\/catalog\/./.test(path)) return "/catalog";
   if (/^\/quotes\/./.test(path)) return "/quotes";
   if (/^\/kb\/./.test(path)) return "/kb";
-  const m = /^\/(boards|machines|chats|change-parts|jobs|work-orders)\/.+$/.exec(path);
+  if (/^\/shipping\/out\/[^/]+\/slip$/.test(path)) return path.replace(/\/slip$/, "");
+  const m = /^\/(boards|machines|chats|change-parts|jobs|work-orders|parts-orders|shipping)\/.+$/.exec(path);
   return m ? `/${m[1]}` : "/";
 }
 
