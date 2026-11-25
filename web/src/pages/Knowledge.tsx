@@ -70,7 +70,7 @@ export function KnowledgeBase({ me }: { me: Me }) {
       <div className="row kb-actions">
         {can(me, "kb.write") && <button className="btn primary" onClick={() => navigate("/kb/new-note")}>{t("Add a quick note")}</button>}
         {can(me, "kb.write") && <button className="btn" onClick={() => navigate("/kb/new")}>{t("New article")}</button>}
-        {can(me, "kb.publish") && (
+        {can(me, "kb.import") && (
           <>
             <button className="btn" onClick={() => file.current?.click()}>{t("Import documents (JSON)")}</button>
             <input ref={file} type="file" accept=".json,application/json" hidden onChange={(e) => importFile(e.target.files?.[0])} />
@@ -376,7 +376,7 @@ function KbEditor({ me, article, quickNote, onDone }: { me: Me; article?: any; q
     <>
       <div className="pagehead">
         <h1>{article ? t("Edit {code}", { code: article.code }) : note ? t("Add a quick note") : t("New article")}</h1>
-        {note && !article && <p className="muted">{t("A short Issue and Fix from the field, so the next tech who hits it finds the answer.")}</p>}
+        {note && !article && <p className="muted">{t("A short Issue and Fix from the field, so the next field service engineer who hits it finds the answer.")}</p>}
       </div>
       <form className="panel stack kb-form" onSubmit={save}>
         <div className="grid g2">

@@ -65,7 +65,7 @@ changeParts.get("/:id", async (c) => {
 });
 
 changeParts.post("/", async (c) => {
-  const u = requirePerm(c, "orders.edit");
+  const u = requirePerm(c, "orders.add");
   const f = clean(await body(c));
   if (!f.customer) fail(400, "Customer is required.");
   const id = randomId();
@@ -98,7 +98,7 @@ changeParts.patch("/:id", async (c) => {
 });
 
 changeParts.delete("/:id", async (c) => {
-  const u = requirePerm(c, "orders.edit");
+  const u = requirePerm(c, "orders.remove");
   const id = c.req.param("id");
   const r = await c.env.DB.prepare("UPDATE cp_orders SET removed_at = ?, updated_by = ? WHERE id = ? AND removed_at IS NULL").bind(now(), u.id, id).run();
   if (!r.meta.changes) fail(404, "Not found.");

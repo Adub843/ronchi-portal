@@ -2,24 +2,106 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
-import { body, fail, mustStr, requirePerm, requireUser } from "../lib/http";
+import { body, fail, has, mustStr, requirePerm, requireUser } from "../lib/http";
 import { createInvite } from "../lib/invites";
-import { adjustable, effective, isPermission, isRole, PERMISSION_GROUPS, PERMISSIONS, readChanges, ROLES, type AccessChanges, type Role } from "../lib/roles";
+import { adjustable, effective, isPermission, isRole, PERMISSION_GROUPS, readChanges, VIEW_PERMS, type AccessChanges, type Permission } from "../lib/roles";
+import { listRoles, roleExists, saveRole } from "../lib/role-store";
+import { randomId } from "../../shared/crypto";
 import { endAllSessions } from "../lib/session";
 import { loginId } from "../../shared/login";
 
 export const users = new Hono<AppEnv>();
 
-users.get("/roles", (c) => {
-  requireUser(c);
-  return c.json({ roles: ROLES });
+/** Every role: built-in ones and the ones an admin made. `roles` is id -> name for pickers. */
+users.get("/roles", async (c) => {
+  const u = requireUser(c);
+  const list = await listRoles(c.env.DB);
+  return c.json({
+    roles: Object.fromEntries(list.map((r) => [r.id, r.name])),
+    // Names an admin typed (new roles and renamed built-ins), for labels around the app.
+    named: Object.fromEntries(list.filter((r) => !r.builtIn || r.changed).map((r) => [r.id, r.name])),
+    list: has(u, "users.manage") ? list : undefined,
+  });
+});
+
+function cleanPerms(value: unknown): Permission[] {
+  if (!Array.isArray(value)) fail(400, "Send the list of switches.");
+  for (const p of value) {
+    if (!isPermission(p)) fail(400, `Unknown permission: ${String(p)}`);
+    if (!adjustable(p)) fail(400, "Managing people and the audit log stay with admins.");
+  }
+  return value as Permission[];
+}
+
+async function nameTaken(db: D1Database, name: string, except?: string): Promise<boolean> {
+  return (await listRoles(db)).some((r) => r.id !== except && r.name.trim().toLowerCase() === name.trim().toLowerCase());
+}
+
+/** Make a new role. It starts from another role's switches (copyFrom) or from the list sent. */
+users.post("/roles", async (c) => {
+  const admin = requirePerm(c, "users.manage");
+  const b = await body(c);
+  const name = mustStr(b.name, 60, "Role name");
+  if (await nameTaken(c.env.DB, name)) fail(409, "There's already a role with that name.");
+  let perms: Permission[] = [];
+  if (b.copyFrom !== undefined && b.copyFrom !== null && b.copyFrom !== "") {
+    const from = (await listRoles(c.env.DB)).find((r) => r.id === b.copyFrom);
+    if (!from) fail(400, "Unknown role to copy.");
+    perms = from.perms.filter(adjustable);
+  } else if (b.perms !== undefined) perms = cleanPerms(b.perms);
+  const id = `r-${randomId().slice(0, 12)}`;
+  await saveRole(c.env.DB, { id, name, perms, by: admin.id });
+  await audit(c.env.DB, { userId: admin.id, action: "role.create", targetType: "role", targetId: id, detail: { name, perms }, ip: c.get("ip") });
+  return c.json({ id });
+});
+
+/** Rename a role or change its switches. Applies to everyone with the role on their next click. */
+users.patch("/roles/:id", async (c) => {
+  const admin = requirePerm(c, "users.manage");
+  const id = c.req.param("id");
+  if (id === "admin") fail(400, "The admin role always has everything.");
+  const role = (await listRoles(c.env.DB)).find((r) => r.id === id);
+  if (!role) fail(404, "Not found.");
+  const b = await body(c);
+  const name = b.name === undefined ? role.name : mustStr(b.name, 60, "Role name");
+  if (name !== role.name && (await nameTaken(c.env.DB, name, id))) fail(409, "There's already a role with that name.");
+  const perms = b.perms === undefined ? role.perms : cleanPerms(b.perms);
+  await saveRole(c.env.DB, { id, name, perms, by: admin.id });
+  await audit(c.env.DB, { userId: admin.id, action: "role.update", targetType: "role", targetId: id, detail: { before: { name: role.name, perms: role.perms }, after: { name, perms } }, ip: c.get("ip") });
+  return c.json({ ok: true });
+});
+
+/** Put a built-in role back to how it came. */
+users.post("/roles/:id/reset", async (c) => {
+  const admin = requirePerm(c, "users.manage");
+  const id = c.req.param("id");
+  if (!isRole(id)) fail(400, "Only built-in roles can go back to how they came.");
+  await c.env.DB.prepare("DELETE FROM roles WHERE id = ?").bind(id).run();
+  await audit(c.env.DB, { userId: admin.id, action: "role.reset", targetType: "role", targetId: id, ip: c.get("ip") });
+  return c.json({ ok: true });
+});
+
+/** Delete a role an admin made. Only when nobody has it and no invite uses it. */
+users.delete("/roles/:id", async (c) => {
+  const admin = requirePerm(c, "users.manage");
+  const id = c.req.param("id");
+  if (isRole(id)) fail(400, "Built-in roles can't be deleted. You can change their switches instead.");
+  const row = await c.env.DB.prepare("SELECT name FROM roles WHERE id = ?").bind(id).first<{ name: string }>();
+  if (!row) fail(404, "Not found.");
+  const used = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM users WHERE role = ? AND removed_at IS NULL").bind(id).first<{ n: number }>();
+  if (used?.n) fail(409, `${used.n} ${used.n === 1 ? "person has" : "people have"} this role. Give them another role first.`);
+  const invited = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM invites WHERE role = ? AND used_at IS NULL AND expires_at > ?").bind(id, now()).first<{ n: number }>();
+  if (invited?.n) fail(409, "An unused invite uses this role. Cancel it first.");
+  await c.env.DB.prepare("DELETE FROM roles WHERE id = ?").bind(id).run();
+  await audit(c.env.DB, { userId: admin.id, action: "role.delete", targetType: "role", targetId: id, detail: { name: row.name }, ip: c.get("ip") });
+  return c.json({ ok: true });
 });
 
 /** The access screen's list: every permission in plain English, and what each role gives. */
-users.get("/permissions", (c) => {
+users.get("/permissions", async (c) => {
   requirePerm(c, "users.manage");
-  const byRole = Object.fromEntries(Object.entries(PERMISSIONS).map(([r, set]) => [r, [...set]]));
-  return c.json({ groups: PERMISSION_GROUPS.map((g) => ({ ...g, perms: g.perms.map((p) => ({ ...p, adjustable: adjustable(p.id) })) })), byRole });
+  const byRole = Object.fromEntries((await listRoles(c.env.DB)).map((r) => [r.id, r.perms]));
+  return c.json({ groups: PERMISSION_GROUPS.map((g) => ({ ...g, perms: g.perms.map((p) => ({ ...p, adjustable: adjustable(p.id), view: VIEW_PERMS.has(p.id) })) })), byRole });
 });
 
 async function changesFor(db: D1Database, userId: string): Promise<AccessChanges> {
@@ -37,7 +119,7 @@ users.put("/:id/access", async (c) => {
   const admin = requirePerm(c, "users.manage");
   const id = c.req.param("id");
   const b = await body(c);
-  const target = await c.env.DB.prepare("SELECT id, name, role FROM users WHERE id = ?").bind(id).first<{ id: string; name: string; role: Role }>();
+  const target = await c.env.DB.prepare("SELECT u.id, u.name, u.role, (SELECT r.perms FROM roles r WHERE r.id = u.role) AS role_perms FROM users u WHERE u.id = ?").bind(id).first<{ id: string; name: string; role: string; role_perms: string | null }>();
   if (!target) fail(404, "Not found.");
   if (id === admin.id) fail(400, "You can't change your own access. Ask another admin.");
   if (target.role === "admin") fail(400, "Admins always have everything. Change their role first.");
@@ -63,23 +145,24 @@ users.put("/:id/access", async (c) => {
   await c.env.DB.batch(stmts);
   const after = await changesFor(c.env.DB, id);
   await audit(c.env.DB, { userId: admin.id, action: "user.access", targetType: "user", targetId: id, detail: { before, after }, ip: c.get("ip") });
-  return c.json({ changes: after, permissions: [...effective(target.role, after)] });
+  return c.json({ changes: after, permissions: [...effective(target.role, after, target.role_perms)] });
 });
 
 /** Everyone (admin only). */
 users.get("/", async (c) => {
   requirePerm(c, "users.manage");
   const { results } = await c.env.DB.prepare(
-    `SELECT u.id, u.email, u.name, u.role, u.status, u.created_at,
+    `SELECT u.id, u.email, u.name, u.role, u.status, u.created_at, u.removed_at,
+            (SELECT r.perms FROM roles r WHERE r.id = u.role) AS role_perms,
             (SELECT COUNT(*) FROM passkeys p WHERE p.user_id = u.id) AS passkeys,
             (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id) AS sessions
        FROM users u ORDER BY u.name`,
   ).all();
   const access = await c.env.DB.prepare("SELECT user_id, group_concat(perm || '=' || allow) AS list FROM user_access GROUP BY user_id").all<{ user_id: string; list: string }>();
   const changes = new Map(access.results.map((r) => [r.user_id, readChanges(r.list)]));
-  const people = (results as { id: string; role: Role }[]).map((u) => {
+  const people = (results as { id: string; role: string; role_perms: string | null }[]).map(({ role_perms, ...u }) => {
     const own = u.role === "admin" ? {} : (changes.get(u.id) ?? {});
-    return { ...u, access: own, permissions: [...effective(u.role, own)] };
+    return { ...u, access: own, permissions: [...effective(u.role, own, role_perms)] };
   });
   const pending = await c.env.DB.prepare(
     "SELECT id, email, name, role, expires_at FROM invites WHERE used_at IS NULL AND user_id IS NULL AND expires_at > ? ORDER BY created_at DESC",
@@ -95,10 +178,11 @@ users.post("/invite", async (c) => {
   const email = loginId(b.email);
   if (!email) fail(400, "Use a work email or a username of 3 to 40 letters or numbers, with no spaces.");
   const name = mustStr(b.name, 100, "Name");
-  if (!isRole(b.role)) fail(400, "Pick a role.");
-  const exists = await c.env.DB.prepare("SELECT 1 FROM users WHERE email = ?").bind(email).first();
+  if (!(await roleExists(c.env.DB, b.role))) fail(400, "Pick a role.");
+  const exists = await c.env.DB.prepare("SELECT removed_at FROM users WHERE email = ?").bind(email).first<{ removed_at: string | null }>();
+  if (exists?.removed_at) fail(409, "This person was removed. Find them under Removed employees and press Restore.");
   if (exists) fail(409, "Someone with this email or username already has a login.");
-  const link = await createInvite(c.env, { email, name, role: b.role, createdBy: admin.id });
+  const link = await createInvite(c.env, { email, name, role: b.role as string, createdBy: admin.id });
   await audit(c.env.DB, { userId: admin.id, action: "invite.create", detail: { email, role: b.role }, ip: c.get("ip") });
   return c.json({ link });
 });
@@ -115,7 +199,7 @@ users.patch("/:id", async (c) => {
   }
   const changes: Record<string, unknown> = {};
   if (b.role !== undefined) {
-    if (!isRole(b.role)) fail(400, "Unknown role.");
+    if (!(await roleExists(c.env.DB, b.role))) fail(400, "Unknown role.");
     changes.role = b.role;
   }
   if (b.status !== undefined) {
@@ -140,6 +224,49 @@ users.post("/:id/sign-out-everywhere", async (c) => {
   const n = await endAllSessions(c.env.DB, id);
   await audit(c.env.DB, { userId: admin.id, action: "user.sign_out_all", targetType: "user", targetId: id, detail: { sessions: n }, ip: c.get("ip") });
   return c.json({ ok: true, sessions: n });
+});
+
+/**
+ * Remove someone who has left (Aaron, 2026-11-24: "i need to be able to add and remove employees").
+ * They're signed out and can't sign in, and drop off the people lists. What they wrote (posts,
+ * orders, notes, articles) keeps their name. Restore brings them back as they were.
+ */
+users.post("/:id/remove", async (c) => {
+  const admin = requirePerm(c, "users.manage");
+  const id = c.req.param("id");
+  if (id === admin.id) fail(400, "You can't remove yourself. Ask another admin.");
+  const target = await c.env.DB.prepare("SELECT id, name, role, removed_at FROM users WHERE id = ?").bind(id).first<{ id: string; name: string; role: string; removed_at: string | null }>();
+  if (!target) fail(404, "Not found.");
+  if (target.role === "admin") fail(400, "Admins can't be removed. Change their role first.");
+  if (target.removed_at) return c.json({ ok: true });
+  const t = now();
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE users SET status = 'disabled', removed_at = ?, updated_at = ? WHERE id = ?").bind(t, t, id),
+    // An unused "add a device" link for them stops working too.
+    c.env.DB.prepare("UPDATE invites SET expires_at = ? WHERE user_id = ? AND used_at IS NULL").bind(t, id),
+  ]);
+  const sessions = await endAllSessions(c.env.DB, id);
+  await audit(c.env.DB, { userId: admin.id, action: "user.remove", targetType: "user", targetId: id, detail: { name: target.name, role: target.role, sessions }, ip: c.get("ip") });
+  return c.json({ ok: true });
+});
+
+users.post("/:id/restore", async (c) => {
+  const admin = requirePerm(c, "users.manage");
+  const id = c.req.param("id");
+  const target = await c.env.DB.prepare("SELECT id, name, role, removed_at FROM users WHERE id = ?").bind(id).first<{ id: string; name: string; role: string; removed_at: string | null }>();
+  if (!target) fail(404, "Not found.");
+  const b = await body(c);
+  let role = target.role;
+  if (typeof b.role === "string" && b.role) {
+    if (!(await roleExists(c.env.DB, b.role))) fail(400, "Unknown role.");
+    if (b.role === "admin") fail(400, "There is only one admin.");
+    role = b.role;
+  } else if (!(await roleExists(c.env.DB, role))) {
+    fail(409, "Their old role was deleted. Pick a role for them, then press Restore.");
+  }
+  await c.env.DB.prepare("UPDATE users SET status = 'active', removed_at = NULL, role = ?, updated_at = ? WHERE id = ?").bind(role, now(), id).run();
+  await audit(c.env.DB, { userId: admin.id, action: "user.restore", targetType: "user", targetId: id, detail: { name: target.name, role }, ip: c.get("ip") });
+  return c.json({ ok: true });
 });
 
 /** Cancel an unused invite. */

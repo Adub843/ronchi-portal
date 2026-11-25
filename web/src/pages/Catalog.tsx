@@ -240,7 +240,7 @@ function LoadFiles({ me, machines, onDone }: { me: Me; machines: any[]; onDone: 
         const serial = String(j.serial ?? "").toUpperCase();
         if (!serial || !Array.isArray(j.sheets)) throw new Error(t("This isn't a parts list file."));
         let mid = bySerial.get(serial);
-        if (!mid && can(me, "machines.edit")) {
+        if (!mid && can(me, "machines.add")) {
           mid = (await api("/machines", { body: { serial, model: j.type ?? "", customer: j.customer ?? "", site: j.plant ?? "" } })).id as string;
           bySerial.set(serial, mid);
         }

@@ -27,8 +27,8 @@ export function Machines({ me }: { me: Me }) {
   return (
     <>
       <PageHead title={t("Machines")} sub={t("Every Ronchi machine in the field, by machine number.")}>
-        {can(me, "machines.edit") && <button className="btn" onClick={() => setImporting(!importing)}>{importing ? t("Cancel") : t("Import CSV")}</button>}
-        {can(me, "machines.edit") && <button className="btn primary" onClick={() => setAdding(!adding)}>{adding ? t("Cancel") : t("Add machine")}</button>}
+        {can(me, "machines.add") && can(me, "machines.edit") && <button className="btn" onClick={() => setImporting(!importing)}>{importing ? t("Cancel") : t("Import CSV")}</button>}
+        {can(me, "machines.add") && <button className="btn primary" onClick={() => setAdding(!adding)}>{adding ? t("Cancel") : t("Add machine")}</button>}
       </PageHead>
       {importing && <ImportMachines onDone={() => { setImporting(false); setQuery(" "); setTimeout(() => setQuery(""), 0); }} />}
       {adding && (

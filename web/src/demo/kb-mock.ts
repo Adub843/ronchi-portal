@@ -60,7 +60,7 @@ export function kbRoute(method: string, seg: string[], q: URLSearchParams, body:
   const live = () => store!.filter((a) => !a.archived_at);
   const can = (p: string) => ctx.perms.has(p);
   const need = (p: string) => { if (!can(p)) throw new KbFail(403, "Your role doesn't allow this."); };
-  const canEdit = (a: Article) => can("kb.publish") || (can("kb.write") && a.created_by === ctx.me.id);
+  const canEdit = (a: Article) => can("kb.edit_all") || (can("kb.write") && a.created_by === ctx.me.id);
   const find = (id: string) => { const a = live().find((x) => x.id === id); if (!a) throw new KbFail(404, "Not found."); return a; };
   const now = () => new Date().toISOString();
   const list = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))];
@@ -116,7 +116,7 @@ export function kbRoute(method: string, seg: string[], q: URLSearchParams, body:
   }
 
   if (seg[1] === "import" && method === "POST") {
-    need("kb.publish");
+    need("kb.import");
     let added = 0, updated = 0, skipped = 0;
     for (const d of body.documents ?? []) {
       const a = d?.code ? fromDoc(d, now()) : null;

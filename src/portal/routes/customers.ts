@@ -49,7 +49,7 @@ customers.put("/:id/machines", async (c) => {
 
 /** A one-time sign-up link for a person at the company. Staff send it themselves. */
 customers.post("/:id/invites", async (c) => {
-  const u = requirePerm(c, "customers.manage");
+  const u = requirePerm(c, "customers.invite");
   const b = await body(c);
   const res = await partsCall(c.env, `/companies/${id(c.req.param("id"))}/invites`, { body: { email: b.email, name: b.name, role: b.role, by: u.name } });
   await audit(c.env.DB, { userId: u.id, action: "customer.invite", targetType: "parts_company", targetId: c.req.param("id"), detail: { role: b.role }, ip: c.get("ip") });
@@ -57,7 +57,7 @@ customers.post("/:id/invites", async (c) => {
 });
 
 customers.patch("/users/:id", async (c) => {
-  const u = requirePerm(c, "customers.manage");
+  const u = requirePerm(c, "customers.invite");
   const b = await body(c);
   const res = await partsCall(c.env, `/users/${id(c.req.param("id"))}`, { method: "PATCH", body: { role: b.role, status: b.status, by: u.name } });
   await audit(c.env.DB, { userId: u.id, action: "customer.user.update", targetType: "parts_user", targetId: c.req.param("id"), detail: { role: b.role, status: b.status }, ip: c.get("ip") });
@@ -65,7 +65,7 @@ customers.patch("/users/:id", async (c) => {
 });
 
 customers.delete("/invites/:id", async (c) => {
-  const u = requirePerm(c, "customers.manage");
+  const u = requirePerm(c, "customers.invite");
   const res = await partsCall(c.env, `/invites/${id(c.req.param("id"))}`, { method: "DELETE" });
   await audit(c.env.DB, { userId: u.id, action: "customer.invite.cancel", targetType: "parts_invite", targetId: c.req.param("id"), ip: c.get("ip") });
   return c.json(res);

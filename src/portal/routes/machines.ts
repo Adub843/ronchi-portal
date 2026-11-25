@@ -50,7 +50,7 @@ function fields(b: Record<string, unknown>) {
 }
 
 machines.post("/", async (c) => {
-  const u = requirePerm(c, "machines.edit");
+  const u = requirePerm(c, "machines.add");
   const b = await body(c);
   const serial = mustStr(b.serial, 20, "Machine number").toUpperCase();
   if (!MACHINE_NUMBER.test(serial)) fail(400, "Machine numbers look like 3069MB or RA1018.");
@@ -87,6 +87,8 @@ machines.patch("/:id", async (c) => {
  * already in the registry is never overwritten: only its empty fields are filled in.
  */
 machines.post("/import", async (c) => {
+  // It adds machines and fills in empty fields on existing ones, so it takes both permissions.
+  requirePerm(c, "machines.add");
   const u = requirePerm(c, "machines.edit");
   const b = await body(c);
   if (typeof b.csv !== "string" || !b.csv.trim()) fail(400, "Choose a CSV file to import.");
