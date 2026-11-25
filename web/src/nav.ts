@@ -1,4 +1,5 @@
-// The main menu: one line per page. A page shows only to people with its permission.
+// The main menu: one line per page. A page shows only to people with its permission (perm), and
+// not to people who have `unless` (a permission that already reaches the page another way).
 // Every page here needs a training area in web/src/learn/guides.ts (test/unit/learn.test.ts checks).
 
 /** Which unread count a menu line shows. Same names as Unread in components/Alerts.tsx. */

@@ -4,7 +4,7 @@
 import { now } from "./db";
 import { isRole, PERMISSIONS, ROLES, rolePermissions, type Permission } from "./roles";
 
-export interface RoleInfo { id: string; name: string; builtIn: boolean; changed: boolean; perms: Permission[]; people: number }
+export interface RoleInfo { id: string; name: string; builtIn: boolean; changed: boolean; renamed: boolean; perms: Permission[]; people: number }
 
 interface Row { id: string; name: string; perms: string }
 
@@ -17,11 +17,11 @@ export async function listRoles(db: D1Database): Promise<RoleInfo[]> {
   const people = new Map(counts.results.map((c) => [c.role, c.n]));
   const out: RoleInfo[] = Object.entries(ROLES).map(([id, name]) => {
     const row = saved.get(id);
-    return { id, name: row?.name ?? name, builtIn: true, changed: !!row, perms: [...rolePermissions(id, row?.perms)], people: people.get(id) ?? 0 };
+    return { id, name: row?.name ?? name, builtIn: true, changed: !!row, renamed: !!row && row.name !== name, perms: [...rolePermissions(id, row?.perms)], people: people.get(id) ?? 0 };
   });
   for (const r of rows.results) {
     if (isRole(r.id)) continue;
-    out.push({ id: r.id, name: r.name, builtIn: false, changed: false, perms: [...rolePermissions(r.id, r.perms)], people: people.get(r.id) ?? 0 });
+    out.push({ id: r.id, name: r.name, builtIn: false, changed: false, renamed: false, perms: [...rolePermissions(r.id, r.perms)], people: people.get(r.id) ?? 0 });
   }
   return out;
 }

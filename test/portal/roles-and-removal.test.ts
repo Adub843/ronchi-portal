@@ -62,6 +62,17 @@ describe("roles an admin makes", () => {
   });
 });
 
+describe("role names other screens show", () => {
+  it("a built-in role whose switches changed keeps its built-in name; only a rename counts as named", async () => {
+    const admin = await person("admin");
+    expect((await admin.json("/api/users/roles/billing", { method: "PATCH", body: { perms: ["boards.use", "quotes.manage"] } })).status).toBe(200);
+    expect((await admin.json("/api/users/roles")).data.named.billing).toBeUndefined();
+    expect((await admin.json("/api/users/roles/billing", { method: "PATCH", body: { name: "Accounts" } })).status).toBe(200);
+    expect((await admin.json("/api/users/roles")).data.named.billing).toBe("Accounts");
+    await admin.json("/api/users/roles/billing/reset", { body: {} });
+  });
+});
+
 describe("removing employees", () => {
   it("removes someone: signed out, can't come back, kept on a removed list; restore brings them back", async () => {
     const admin = await person("admin");

@@ -21,7 +21,7 @@ users.get("/roles", async (c) => {
   return c.json({
     roles: Object.fromEntries(list.map((r) => [r.id, r.name])),
     // Names an admin typed (new roles and renamed built-ins), for labels around the app.
-    named: Object.fromEntries(list.filter((r) => !r.builtIn || r.changed).map((r) => [r.id, r.name])),
+    named: Object.fromEntries(list.filter((r) => !r.builtIn || r.renamed).map((r) => [r.id, r.name])),
     list: has(u, "users.manage") ? list : undefined,
   });
 });

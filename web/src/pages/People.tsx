@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { api, fmtTime, type Me } from "../api";
 import { t } from "../i18n";
 import { ErrorNote, PageHead, toast, useLoad } from "../components/ui";
-import { refreshRoleNames, roleLabel } from "../roles";
+import { refreshRoleNames, roleDisplayName } from "../roles";
 
 export function People({ me }: { me: Me }) {
   const { data, error, reload } = useLoad(() => api("/users"));
@@ -79,8 +79,8 @@ export function People({ me }: { me: Me }) {
   const rolesChanged = () => { roles.reload(); permList.reload(); reload(); void refreshRoleNames(); };
 
   // Built-in roles show their short name in the person's language; roles an admin made or renamed keep the typed name.
-  const named: Record<string, string> = roles.data?.named ?? {};
-  const roleNames: Record<string, string> = Object.fromEntries(Object.entries((roles.data?.roles ?? {}) as Record<string, string>).map(([k, v]) => [k, named[k] ?? (roleLabel(k) !== k ? roleLabel(k) : v)]));
+  const roleNames: Record<string, string> = {};
+  for (const [id, name] of Object.entries((roles.data?.roles ?? {}) as Record<string, string>)) roleNames[id] = roleDisplayName(id, name);
   const pickable = Object.entries(roleNames).filter(([k]) => k !== "admin");
   const current = (data?.users ?? []).filter((u: any) => !u.removed_at);
   const removed = (data?.users ?? []).filter((u: any) => u.removed_at);
@@ -329,10 +329,9 @@ function usePhone(): boolean {
   return on;
 }
 
-type RoleInfo = { id: string; name: string; builtIn: boolean; changed: boolean; perms: string[]; people: number };
+type RoleInfo = { id: string; name: string; builtIn: boolean; changed: boolean; renamed: boolean; perms: string[]; people: number };
 
-/** A built-in role nobody renamed shows its short name in the person's language. */
-const shownName = (r: RoleInfo) => (r.builtIn && !r.changed ? roleLabel(r.id) : r.name);
+const shownName = (r: RoleInfo) => (r.renamed ? r.name : roleDisplayName(r.id, r.name));
 
 /** People > Roles: make roles, rename them, choose their switches, delete unused ones. */
 function Roles({ list, perms, onChanged }: { list: RoleInfo[]; perms: PermList; onChanged: () => void }) {
