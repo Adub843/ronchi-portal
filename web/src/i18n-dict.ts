@@ -884,6 +884,21 @@ export const ES: Record<string, string> = {
   "removed {when}": "quitado {when}",
   "{n} of {total}": "{n} de {total}",
   "{n} people have this role. Personal changes on People > Access still apply on top.": "{n} personas tienen este rol. Los cambios personales en Personas > Acceso siguen aplicándose encima.",
+  // Quick links on Home (2026-11-25)
+  "Add link": "Agregar enlace",
+  "Button name": "Nombre del botón",
+  "Edit quick links": "Editar enlaces rápidos",
+  "Everyone on staff sees this button.": "Todo el personal ve este botón.",
+  "Everyone": "Todos",
+  "For example: Ronchi Italy": "Por ejemplo: Ronchi Italia",
+  "Link added.": "Enlace agregado.",
+  "Move down": "Bajar",
+  "Move up": "Subir",
+  "No quick links yet. Press Edit quick links to add buttons that open a website.": "Aún no hay enlaces rápidos. Pulse Editar enlaces rápidos para agregar botones que abren un sitio web.",
+  "Only the roles and people ticked, plus admins when editing.": "Solo los roles y personas marcados, y los administradores al editar.",
+  "Quick links": "Enlaces rápidos",
+  "Saved.": "Guardado.",
+  "Web address": "Dirección web",
 };
 
 export const IT: Record<string, string> = {
@@ -1594,4 +1609,19 @@ export const IT: Record<string, string> = {
   "removed {when}": "rimosso {when}",
   "{n} of {total}": "{n} di {total}",
   "{n} people have this role. Personal changes on People > Access still apply on top.": "{n} persone hanno questo ruolo. Le modifiche personali in Persone > Accesso valgono comunque in aggiunta.",
+  // Quick links on Home (2026-11-25)
+  "Add link": "Aggiungi link",
+  "Button name": "Nome del pulsante",
+  "Edit quick links": "Modifica link rapidi",
+  "Everyone on staff sees this button.": "Tutto il personale vede questo pulsante.",
+  "Everyone": "Tutti",
+  "For example: Ronchi Italy": "Per esempio: Ronchi Italia",
+  "Link added.": "Link aggiunto.",
+  "Move down": "Sposta giù",
+  "Move up": "Sposta su",
+  "No quick links yet. Press Edit quick links to add buttons that open a website.": "Nessun link rapido. Premi Modifica link rapidi per aggiungere pulsanti che aprono un sito.",
+  "Only the roles and people ticked, plus admins when editing.": "Solo i ruoli e le persone selezionati, più gli admin in modifica.",
+  "Quick links": "Link rapidi",
+  "Saved.": "Salvato.",
+  "Web address": "Indirizzo web",
 };

@@ -23,6 +23,7 @@ interface RoleRow { id: string; name: string; perms: string }
 interface DB {
   users: User[];
   roles: RoleRow[]; // roles made in People > Roles, and changed built-ins
+  links: { id: string; label: string; url: string; audience: { roles: string[]; people: string[] } | null }[];
   invites: any[];
   machines: any[];
   boards: any[];
@@ -181,6 +182,13 @@ function seed(): DB {
   ];
   if (!real) orders[0]._h.unshift({ at: iso(daysAgo(1, 15, 20)), action: "cp_order.update", who: andrew.name, changes: { status: ["Fill test", "In production"], ship_date: [dayIso(5), dayIso(12)] } });
   return {
+    // Quick links on Home (Aaron adds these himself in the live portal).
+    links: [
+      { id: id(), label: "SharePoint", url: "https://ronchiam.sharepoint.com/", audience: null },
+      { id: id(), label: "Ronchi Mario (Italy)", url: "https://www.ronchi.it/", audience: null },
+      { id: id(), label: "Ronchi service portal", url: "https://service.ronchi.it/", audience: { roles: ["tech", "manager"], people: [] } },
+      { id: id(), label: "busybusy time clock", url: "https://busybusy.com/", audience: { roles: ["tech"], people: [] } },
+    ],
     users, roles, invites: [], machines, boards: [service, torque, sales, eng, ...chats.map(({ people: _p, ...c }) => c)], posts, audit, prefs: null,
     reads: { [torque.id]: iso(new Date()), [withLola.id]: iso(new Date()), [crew.id]: iso(new Date()), [withSteve.id]: iso(ago(100)) },
     muted: {}, members, files, orders,
@@ -228,6 +236,37 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     const cur = db.prefs ?? { theme: "ronchi", mode: "auto", layout: "L2", tiles: null, lang: "en", popups: true };
     if (method === "PUT") db.prefs = body.reset ? { ...cur, theme: "ronchi", mode: "auto", layout: "L2", tiles: null } : { theme: body.theme, mode: body.mode ?? "auto", layout: body.layout ?? "L2", tiles: body.tiles ?? null, lang: body.lang ?? "en", popups: body.popups !== false };
     return db.prefs ?? cur;
+  }
+  // --- quick links ---
+  if (path === "/links" && method === "GET") {
+    const all = q.get("all") === "1";
+    return { links: db.links.filter((l) => all || !l.audience || l.audience.roles.includes(u.role) || l.audience.people.includes(u.id)) };
+  }
+  if (path === "/links/order") {
+    db.links.sort((a, b) => body.ids.indexOf(a.id) - body.ids.indexOf(b.id));
+    return { ok: true };
+  }
+  if (seg[0] === "links") {
+    const fixUrl = (v: string) => {
+      const raw = /^[a-z][a-z0-9+.-]*:/i.test(v.trim()) ? v.trim() : `https://${v.trim()}`;
+      try { const x = new URL(raw); if (!/^https?:$/.test(x.protocol) || !x.hostname.includes(".")) throw 0; return x.toString(); } catch { throw new Fail(400, "That web address doesn't look right."); }
+    };
+    const aud = (a: any) => (a && (a.roles?.length || a.people?.length) ? { roles: a.roles ?? [], people: a.people ?? [] } : null);
+    if (method === "POST") {
+      if (!String(body.label ?? "").trim()) throw new Fail(400, "Button name is required.");
+      const l = { id: id(), label: String(body.label).trim().slice(0, 40), url: fixUrl(String(body.url ?? "")), audience: aud(body.audience) };
+      db.links.push(l);
+      log("link.create");
+      return { id: l.id };
+    }
+    const l = db.links.find((x) => x.id === seg[1]);
+    if (!l) throw new Fail(404, "Not found.");
+    if (method === "DELETE") { db.links = db.links.filter((x) => x !== l); log("link.delete"); return { ok: true }; }
+    if (body.label !== undefined) l.label = String(body.label).trim().slice(0, 40) || l.label;
+    if (body.url !== undefined) l.url = fixUrl(String(body.url));
+    if (body.audience !== undefined) l.audience = aud(body.audience);
+    log("link.update");
+    return { ok: true };
   }
   // --- people ---
   if (path === "/users/roles" && method === "GET") {
