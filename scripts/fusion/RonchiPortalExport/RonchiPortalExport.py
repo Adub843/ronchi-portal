@@ -7,10 +7,10 @@ Autodesk cloud), opens it, saves it as STEP in OUTBOX with every part and assemb
 name, and closes it. The STEP file then goes into the portal: Parts catalog > machine >
 "Add 3D for the whole machine", which puts each assembly on its own parts list.
 
-    Desktop\\ronchi-cad\\inbox\\4011MB\\4011MB.sldasm + parts   ->   Desktop\\ronchi-cad\\outbox\\4011MB.step
+    C:\\ronchi-cad\\inbox\\4011MB\\4011MB.sldasm + parts   ->   C:\\ronchi-cad\\outbox\\4011MB.step
 
 Which file is the top assembly: a file named like the folder, else the biggest .sldasm/.iam/.asm.
-Progress and errors go to Desktop\\ronchi-cad\\log.txt; a finished folder moves to done\\ (or
+Progress and errors go to C:\\ronchi-cad\\log.txt; a finished folder moves to done\\ (or
 failed\\). It handles one assembly at a time, between your own clicks, so Fusion stays usable.
 """
 import adsk.core
@@ -21,9 +21,8 @@ import threading
 import time
 import traceback
 
-ROOT = os.path.join(os.path.expanduser("~"), "OneDrive", "Desktop", "ronchi-cad")
-if not os.path.isdir(os.path.dirname(ROOT)):
-    ROOT = os.path.join(os.path.expanduser("~"), "Desktop", "ronchi-cad")
+# Outside OneDrive on purpose, so company CAD doesn't sync to a personal cloud.
+ROOT = os.path.join(os.environ.get("SystemDrive", "C:") + os.sep, "ronchi-cad")
 INBOX, OUTBOX, DONE, FAILED = (os.path.join(ROOT, d) for d in ("inbox", "outbox", "done", "failed"))
 LOG = os.path.join(ROOT, "log.txt")
 PROJECT = "Ronchi Portal CAD"
@@ -34,7 +33,7 @@ UPLOAD_TIMEOUT = 60 * 60  # an hour for a very big machine
 
 app = adsk.core.Application.get()
 handlers = []
-stop = threading.Event()
+_stop = threading.Event()
 busy = threading.Lock()
 
 
@@ -97,6 +96,11 @@ def export_one(folder):
     doc = app.documents.open(data_file, False)
     try:
         design = adsk.fusion.Design.cast(doc.products.itemByProductType("DesignProductType"))
+        rc = design.rootComponent
+        if rc.allOccurrences.count == 0 and rc.bRepBodies.count == 0:
+            # Seen with SolidWorks assemblies whose references Fusion can't resolve: every file
+            # arrives on its own and the assembly opens empty. Don't save an empty STEP.
+            raise RuntimeError("Fusion opened the assembly empty: it could not link its parts")
         os.makedirs(OUTBOX, exist_ok=True)
         out = os.path.join(OUTBOX, name + ".step")
         em = design.exportManager
@@ -143,7 +147,7 @@ class TickHandler(adsk.core.CustomEventHandler):
 
 
 def timer():
-    while not stop.wait(15):
+    while not _stop.wait(15):
         app.fireCustomEvent(EVENT_ID, "")
 
 
@@ -161,16 +165,11 @@ def run(context):
         log("start error: " + traceback.format_exc())
 
 
-def stop_addin(context):
-    stop.set()
+def stop(context):
+    _stop.set()
     try:
         app.unregisterCustomEvent(EVENT_ID)
     except Exception:  # noqa: BLE001
         pass
     log("stopped")
 
-
-# Fusion calls stop(context) when the add-in is stopped.
-globals()["stop"] = stop  # keep the Event under its own name for the timer thread
-def stop(context):  # noqa: F811
-    stop_addin(context)
