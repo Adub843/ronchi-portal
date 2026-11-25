@@ -108,7 +108,7 @@ describe("shipping and receiving", () => {
     expect(held.data.shipments.map((x: any) => x.id)).toContain(r.data.id);
     expect(held.data.counts.hold).toBeGreaterThan(0);
     // Clearing the hold
-    const c = await m.json(`/api/shipping/${r.data.id}/lines/${kit.id}/hold`, { body: { hold: false } });
+    const c = await m.json(`/api/shipping/${r.data.id}/lines/${kit.id}/hold`, { body: { revision: s.data.shipment.revision, hold: false } });
     expect(c.status).toBe(200);
     s = await m.json(`/api/shipping/${r.data.id}`);
     expect(s.data.lines[0].hold).toBe(0);
@@ -161,6 +161,43 @@ describe("shipping and receiving", () => {
     expect(pre.data).toMatchObject({ party: "Example Foods", machine: "4222TP", address: "1200 Example Pkwy, Atlanta, GA", contact_name: "Lee" });
     expect((await meagan.json("/api/shipping/prefill?source=job&id=nope")).status).toBe(404);
     expect((await meagan.json("/api/shipping", { body: outgoing({ source_type: "job", source_id: "nope" }) })).status).toBe(400);
+  });
+
+  it("only fills in from an order or job the person may see", async () => {
+    const sales = await person("sales");
+    const meagan = await person("scheduling"); // can ship, but can't see change-part orders
+    const o = await sales.json("/api/change-parts", { body: { customer: "Secret Bottling", part: "Neck guide" } });
+    expect((await meagan.json(`/api/shipping/prefill?source=cp_order&id=${o.data.id}`)).status).toBe(403);
+    const r = await sales.json("/api/shipping", { body: outgoing({ source_type: "cp_order", source_id: o.data.id }) });
+    const tech = await person("tech");
+    const s = await tech.json(`/api/shipping/${r.data.id}`);
+    expect(s.data.source).toMatchObject({ type: "cp_order", open: false, label: null });
+  });
+
+  it("won't check items into a cancelled receipt, and a hold needs the current revision", async () => {
+    const m = await person("scheduling");
+    const r = await m.json("/api/shipping", { body: incoming() });
+    let s = await m.json(`/api/shipping/${r.data.id}`);
+    const line = s.data.lines[0];
+    expect((await m.json(`/api/shipping/${r.data.id}/lines/${line.id}/hold`, { body: { revision: 99, hold: true } })).status).toBe(409);
+    expect((await m.json(`/api/shipping/${r.data.id}/lines/${line.id}/hold`, { body: { revision: s.data.shipment.revision, hold: true } })).status).toBe(200);
+    s = await m.json(`/api/shipping/${r.data.id}`);
+    await m.json(`/api/shipping/${r.data.id}`, { method: "PATCH", body: { revision: s.data.shipment.revision, status: "cancelled" } });
+    s = await m.json(`/api/shipping/${r.data.id}`);
+    expect((await m.json(`/api/shipping/${r.data.id}/receive`, { body: { revision: s.data.shipment.revision, lines: [{ id: line.id, qty: 1 }] } })).status).toBe(400);
+    // Outgoing items can't go on quality hold.
+    const out = await m.json("/api/shipping", { body: outgoing() });
+    const o = await m.json(`/api/shipping/${out.data.id}`);
+    expect((await m.json(`/api/shipping/${out.data.id}/lines/${o.data.lines[0].id}/hold`, { body: { revision: 1, hold: true } })).status).toBe(400);
+  });
+
+  it("keeps a new order of the items", async () => {
+    const m = await person("scheduling");
+    const r = await m.json("/api/shipping", { body: outgoing() });
+    const s = await m.json(`/api/shipping/${r.data.id}`);
+    await m.json(`/api/shipping/${r.data.id}`, { method: "PATCH", body: { revision: 1, lines: [...s.data.lines].reverse() } });
+    const after = await m.json(`/api/shipping/${r.data.id}`);
+    expect(after.data.lines.map((l: any) => l.part_code)).toEqual(["R-2210", "R-10442"]);
   });
 
   it("keeps the ship-from address of the last outgoing shipment for the next one", async () => {

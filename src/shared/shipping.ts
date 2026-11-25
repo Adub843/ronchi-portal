@@ -205,6 +205,18 @@ export const SHIP_MAX = {
 export type ShipTextField = keyof typeof SHIP_MAX;
 export const SHIP_TEXT_FIELDS = Object.keys(SHIP_MAX) as ShipTextField[];
 
+/**
+ * A suggested LTL freight class from one piece's weight (lb) and size (in), by density (pounds per cubic
+ * foot), using the density scale most LTL carriers use. Only a suggestion: some items have their own NMFC
+ * class, so check with the carrier. null when weight or size is missing.
+ */
+export function freightClass(weight: number | null | undefined, length: number | null | undefined, width: number | null | undefined, height: number | null | undefined): string | null {
+  if (!weight || !length || !width || !height) return null;
+  const pcf = weight / ((length * width * height) / 1728);
+  const scale: [number, string][] = [[1, "400"], [2, "300"], [4, "250"], [6, "175"], [8, "125"], [10, "100"], [12, "92.5"], [15, "85"], [22.5, "70"], [30, "65"], [35, "60"], [50, "55"]];
+  return scale.find(([max]) => pcf < max)?.[1] ?? "50";
+}
+
 /** Extras a freight carrier needs to know (they change the price). */
 export const FREIGHT_OPTIONS = ["liftgate", "inside_delivery", "appointment", "residential", "limited_access"] as const;
 export const FREIGHT_LABEL: Record<(typeof FREIGHT_OPTIONS)[number], string> = {
@@ -225,4 +237,4 @@ export const SOURCES = ["parts_order", "cp_order", "job"] as const;
 export type Source = (typeof SOURCES)[number];
 export const isSource = (v: unknown): v is Source => typeof v === "string" && (SOURCES as readonly string[]).includes(v);
 
-export const MAX_LINES = 300;
+export const MAX_LINES = 100;

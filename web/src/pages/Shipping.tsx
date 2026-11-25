@@ -6,7 +6,7 @@ import { useMemo, useRef, useState } from "react";
 import { toCsv } from "../../../src/shared/csv";
 import { ACCEPT, fileProblem, fmtSize } from "../../../src/shared/files";
 import {
-  CARRIERS, carrierName, FREIGHT_LABEL, FREIGHT_OPTIONS, guessCarrier, KIND_LABEL, KINDS, MODE_LABEL, MODES, PACKAGE_LABEL, PACKAGE_TYPES,
+  CARRIERS, carrierName, freightClass, FREIGHT_LABEL, FREIGHT_OPTIONS, guessCarrier, KIND_LABEL, KINDS, MODE_LABEL, MODES, PACKAGE_LABEL, PACKAGE_TYPES,
   packageTotals, PROBLEM_LABEL, PROBLEMS, STATUS_LABEL, statusesFor, type Direction, type Package, type Status,
 } from "../../../src/shared/shipping";
 import { api, apiForm, can, fmtDate, fmtTime, type Me } from "../api";
@@ -407,7 +407,7 @@ function Receive({ s, lines, edit, onDone }: { s: any; lines: any[]; edit: boole
   }
   async function clearHold(l: any) {
     try {
-      await api(`/shipping/${encodeURIComponent(s.id)}/lines/${encodeURIComponent(l.id)}/hold`, { body: { hold: false } });
+      await api(`/shipping/${encodeURIComponent(s.id)}/lines/${encodeURIComponent(l.id)}/hold`, { body: { revision: s.revision, hold: false } });
       onDone();
     } catch (e) {
       toast((e as Error).message);
@@ -668,6 +668,8 @@ export function ShipmentForm({ shipment, start, forWhat, onDone }: { shipment: a
   );
   const setPkg = (i: number, k: string, v: unknown) => set("packages", f.packages.map((p: any, j: number) => (j === i ? { ...p, [k]: v } : p)));
   const setLine = (i: number, k: string, v: unknown) => set("lines", f.lines.map((l: any, j: number) => (j === i ? { ...l, [k]: v } : l)));
+  const first = f.packages[0];
+  const suggested = first ? freightClass(Number(first.weight) || null, Number(first.length) || null, Number(first.width) || null, Number(first.height) || null) : null;
   const totals = packageTotals(f.packages.filter((p: any) => Number(p.count) > 0).map((p: any) => ({ ...p, count: Number(p.count), weight: Number(p.weight) || null })));
 
   return (
@@ -739,7 +741,10 @@ export function ShipmentForm({ shipment, start, forWhat, onDone }: { shipment: a
           </div>
           {freight && (
             <div className="grid g2">
-              {text("freight_class", t("Freight class"), { placeholder: "85" })}
+              <div className="stack" style={{ gap: 4 }}>
+                {text("freight_class", t("Freight class"), { placeholder: suggested ?? "85" })}
+                {suggested && suggested !== f.freight_class && <button type="button" className="linkish small1" style={{ alignSelf: "flex-start" }} onClick={() => set("freight_class", suggested)}>{t("Use class {n} (from the first package's weight and size; check with the carrier)", { n: suggested })}</button>}
+              </div>
               <div className="field">
                 <span className="label">{t("Freight extras")}</span>
                 <div className="row" style={{ gap: 10 }}>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { guessCarrier, isStatusFor, nextNumber, receiveStatus, statusesFor, trackingLinks, cleanPackages, packageTotals } from "../../src/shared/shipping";
+import { freightClass, guessCarrier, isStatusFor, nextNumber, receiveStatus, statusesFor, trackingLinks, cleanPackages, packageTotals } from "../../src/shared/shipping";
 
 describe("tracking links (no outside service: the carrier's own public tracking page)", () => {
   it("builds the carrier's tracking page for each number", () => {
@@ -62,5 +62,15 @@ describe("packages", () => {
     expect(() => cleanPackages([{ type: "box", count: 0 }])).toThrow(/count/i);
     expect(() => cleanPackages([{ type: "box", count: 1, weight: -3 }])).toThrow(/weight/i);
     expect(() => cleanPackages("x")).toThrow();
+  });
+});
+
+describe("freight class helper", () => {
+  it("suggests the class from weight and size (density in pounds per cubic foot)", () => {
+    // 48x40x48 in = 53.3 cu ft; 500 lb -> 9.4 pcf -> class 100
+    expect(freightClass(500, 48, 40, 48)).toBe("100");
+    expect(freightClass(1850, 120, 60, 84)).toBe("175"); // 350 cu ft, 5.3 pcf
+    expect(freightClass(2000, 48, 40, 30)).toBe("50"); // 33.3 cu ft, 60 pcf
+    expect(freightClass(null, 48, 40, 48)).toBeNull();
   });
 });

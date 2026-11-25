@@ -46,6 +46,8 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const today = () => now().slice(0, 10);
 const marks = (n: number) => Array.from({ length: n }, () => "?").join(",");
 const isDuplicate = (e: unknown) => /UNIQUE/i.test(String((e as Error)?.message ?? e));
+/** Added to a line's change so it only applies if the shipment's own save went through (bind: id, revision + 1). */
+const guard = "AND (SELECT revision FROM shipments WHERE id = ?) = ?";
 const STALE = "Someone else changed this shipment while you were editing. Reload to see their changes.";
 
 function parseJson<T>(text: string | null | undefined, fallback: T): T {
@@ -139,13 +141,28 @@ async function loadSource(db: D1Database, type: Source, id: string): Promise<Rec
   const order = await db.prepare("SELECT * FROM parts_orders WHERE id = ?").bind(id).first<Record<string, any>>();
   if (!order || order.removed_at) return null;
   const lines = (await tableExists(db, "parts_order_lines"))
-    ? (await db.prepare("SELECT * FROM parts_order_lines WHERE order_id = ? ORDER BY line_no").bind(id).all<Record<string, any>>()).results
+    ? (await db.prepare(
+        `SELECT p.*, (SELECT COALESCE(SUM(l.qty), 0) FROM shipment_lines l JOIN shipments s ON s.id = l.shipment_id
+                       WHERE l.source_type = 'parts_order_line' AND l.source_id = p.id AND s.direction = 'out' AND s.removed_at IS NULL AND s.status != 'cancelled') AS already
+           FROM parts_order_lines p WHERE p.order_id = ? ORDER BY p.line_no`,
+      ).bind(id).all<Record<string, any>>()).results
     : [];
   return { ...order, lines };
 }
 
-/** Who may follow a link to the thing a shipment is for (each part of the portal keeps its own rules). */
+/**
+ * Who may see the thing a shipment is for (each part of the portal keeps its own rules, and a section
+ * switched off takes these away). Without it, a person sees that a shipment is for an order, not which one.
+ */
 const SOURCE_PERM: Record<Source, string> = { cp_order: "orders.view", job: "jobs.view", parts_order: "partsorders.view" };
+const mayRead = (u: SessionUser, type: Source) => has(u, SOURCE_PERM[type] as never);
+
+/** A short name for what a shipment is for: "Job J-1042", "Acme · 38 mm star wheels", "PO-2026-0001". */
+function sourceLabel(type: Source, src: Record<string, any>): string {
+  if (type === "job") return `Job ${src.job_number}`;
+  if (type === "cp_order") return [src.customer, src.part].filter(Boolean).join(" · ");
+  return String(src.number ?? "Parts order");
+}
 
 async function loadShipment(db: D1Database, id: string): Promise<ShipmentRow> {
   const s = await db.prepare("SELECT * FROM shipments WHERE id = ? AND removed_at IS NULL").bind(id).first<ShipmentRow>();
@@ -162,7 +179,7 @@ async function tellChangePartOrder(c: Context<AppEnv>, s: ShipmentRow, u: Sessio
   if (s.source_type !== "cp_order" || !s.source_id) return;
   const db = c.env.DB;
   const o = await db.prepare("SELECT * FROM cp_orders WHERE id = ? AND removed_at IS NULL").bind(s.source_id).first<Record<string, any>>();
-  if (!o) return;
+  if (!o || o.phase === "sale") return; // a sale not yet sold isn't an order to ship
   const set: Record<string, string> = {};
   if (s.kind === "samples") {
     const k = event === "shipped" ? "samples_shipped" : "samples_received";
@@ -221,11 +238,14 @@ shipping.get("/", async (c) => {
       ORDER BY CASE WHEN s.status IN (${marks(done.length)}) THEN 1 ELSE 0 END, COALESCE(s.planned_date, '9999') ASC, s.updated_at DESC LIMIT 2000`,
   ).bind(...args, ...done).all<ShipmentRow & { lines: number; files: number }>();
   // How much is waiting at each step (open work only, both directions), for the counters at the top.
+  // One small query over open shipments only (finished ones are never counted), using the status index.
   const { results: counted } = await c.env.DB.prepare(
-    "SELECT status, COUNT(*) AS n FROM shipments WHERE removed_at IS NULL GROUP BY status",
-  ).all<{ status: string; n: number }>();
-  const problems = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM shipments WHERE removed_at IS NULL AND problem IS NOT NULL AND status NOT IN ('cancelled')`).first<{ n: number }>();
-  const held = await c.env.DB.prepare("SELECT COUNT(DISTINCT l.shipment_id) AS n FROM shipment_lines l JOIN shipments s ON s.id = l.shipment_id WHERE l.hold = 1 AND s.removed_at IS NULL").first<{ n: number }>();
+    `SELECT status, COUNT(*) AS n, SUM(problem IS NOT NULL) AS problems,
+            SUM(EXISTS (SELECT 1 FROM shipment_lines l WHERE l.shipment_id = shipments.id AND l.hold = 1)) AS held
+       FROM shipments WHERE status NOT IN ('delivered','cancelled') AND removed_at IS NULL GROUP BY status`,
+  ).all<{ status: string; n: number; problems: number; held: number }>();
+  const problems = { n: counted.reduce((a, r) => a + (r.problems ?? 0), 0) };
+  const held = { n: counted.reduce((a, r) => a + (r.held ?? 0), 0) };
   const counts: Record<string, number> = { to_pack: 0, packed: 0, shipped: 0, expected: 0, arrived: 0, partly_received: 0, on_hold: 0, problems: problems?.n ?? 0, hold: held?.n ?? 0 };
   for (const r of counted) if (r.status in counts) counts[r.status] = r.n;
   return c.json({
@@ -250,23 +270,26 @@ shipping.get("/prefill", async (c) => {
   const id = c.req.query("id");
   if (!type || !id) return c.json(out);
   if (!isSource(type)) fail(400, "Unknown link.");
+  if (!mayRead(u, type)) fail(403, "Your role doesn't allow this.");
   const src = await loadSource(db, type, id);
   if (!src) fail(404, "Not found.");
   out.source_type = type;
   out.source_id = id;
   out.direction = "out";
   if (type === "cp_order") {
-    Object.assign(out, { kind: "change_parts", party: src.customer, machine: src.machine, reference: src.customer_po ?? src.ra_po ?? null, label: [src.customer, src.part].filter(Boolean).join(" · ") });
+    Object.assign(out, { kind: "change_parts", party: src.customer, machine: src.machine, reference: src.customer_po ?? src.ra_po ?? null, label: sourceLabel(type, src) });
     if (src.part) out.lines = [{ part_code: null, description: String(src.part).slice(0, 300), qty: 1 }];
   } else if (type === "job") {
-    Object.assign(out, { kind: "spare_parts", party: src.customer, machine: src.machine, address: src.location, contact_name: src.contact_name, contact_phone: src.contact_phone, contact_email: src.contact_email, reference: src.job_number, label: `Job ${src.job_number}` });
+    Object.assign(out, { kind: "spare_parts", party: src.customer, machine: src.machine, address: src.location, contact_name: src.contact_name, contact_phone: src.contact_phone, contact_email: src.contact_email, reference: src.job_number, label: sourceLabel(type, src) });
   } else {
     Object.assign(out, {
-      kind: "spare_parts", party: src.customer, machine: src.machine ?? null, address: src.ship_to ?? null, reference: src.customer_po ?? src.number ?? null, label: src.number ?? null,
-      lines: (src.lines as Record<string, any>[]).map((l) => ({ part_code: l.part_code ?? null, description: String(l.description ?? l.part_code ?? "Part").slice(0, 300), qty: Math.max(1, Number(l.qty) - Number(l.qty_shipped ?? 0)) || 1, source_type: "parts_order_line", source_id: l.id })),
+      kind: "spare_parts", party: src.customer, machine: src.machine ?? null, address: src.ship_to ?? null, reference: src.customer_po ?? src.number ?? null, label: sourceLabel(type, src),
+      // Only what is still to ship: each line's quantity less what is already on other shipments.
+      lines: (src.lines as Record<string, any>[])
+        .map((l) => ({ part_code: l.part_code ?? null, description: String(l.description ?? l.part_code ?? "Part").slice(0, 300), qty: Number(l.qty) - Number(l.already ?? 0), source_type: "parts_order_line", source_id: l.id }))
+        .filter((l) => l.qty > 0),
     });
   }
-  void u;
   return c.json(out);
 });
 
@@ -274,7 +297,9 @@ shipping.get("/prefill", async (c) => {
 
 shipping.get("/files/:fileId", async (c) => {
   requirePerm(c, "shipping.view");
-  const f = await c.env.DB.prepare("SELECT id, name FROM shipment_files WHERE id = ? AND deleted_at IS NULL").bind(c.req.param("fileId")).first<{ id: string; name: string }>();
+  const f = await c.env.DB.prepare(
+    "SELECT f.id, f.name FROM shipment_files f JOIN shipments s ON s.id = f.shipment_id WHERE f.id = ? AND f.deleted_at IS NULL AND s.removed_at IS NULL",
+  ).bind(c.req.param("fileId")).first<{ id: string; name: string }>();
   if (!f) fail(404, "Not found.");
   return serveFile(c.env.FILES, `shipping/${f.id}`, f.name, { download: c.req.query("download") !== undefined });
 });
@@ -338,9 +363,9 @@ shipping.get("/:id", async (c) => {
   // What it's for, with a link only for people allowed to open that page.
   let source: Record<string, unknown> | null = null;
   if (s.source_type && s.source_id && isSource(s.source_type)) {
-    const src = await loadSource(db, s.source_type, s.source_id);
-    const label = !src ? null : s.source_type === "job" ? `Job ${src.job_number}` : s.source_type === "cp_order" ? [src.customer, src.part].filter(Boolean).join(" · ") : String(src.number ?? "Parts order");
-    source = { type: s.source_type, id: s.source_id, label, open: !!src && has(u, SOURCE_PERM[s.source_type] as never) };
+    const allowed = mayRead(u, s.source_type);
+    const src = allowed ? await loadSource(db, s.source_type, s.source_id) : null;
+    source = { type: s.source_type, id: s.source_id, label: src ? sourceLabel(s.source_type, src) : null, open: !!src };
   }
   const shipment = toShipment(s);
   return c.json({
@@ -362,9 +387,10 @@ shipping.post("/", async (c) => {
   if (!isDirection(b.direction)) fail(400, "Say whether it's going out or coming in.");
   const direction = b.direction;
   const f = clean({ kind: direction === "out" ? "spare_parts" : "supplier", ...b }, direction);
-  if (!f.party) fail(400, direction === "out" ? "Who is it going to? Customer is required." : "Who is it coming from? Supplier or sender is required.");
+  if (!f.party) clean({ party: "" }, direction); // says which one is missing
   f.status ??= firstStatus(direction);
-  if (f.status === "shipped" && direction === "out" && !f.shipped_date) f.shipped_date = today();
+  if ((f.status === "shipped" || f.status === "delivered") && direction === "out" && !f.shipped_date) f.shipped_date = today();
+  if (f.status === "delivered" && !f.done_date) f.done_date = today();
   const lines = b.lines === undefined ? [] : cleanLines(b.lines);
   if (b.source_type !== undefined && b.source_type !== null && b.source_type !== "") {
     if (!isSource(b.source_type) || typeof b.source_id !== "string" || !(await loadSource(db, b.source_type, b.source_id))) fail(400, "The order or job this is for wasn't found.");
@@ -379,7 +405,8 @@ shipping.post("/", async (c) => {
   // Two people saving at the same moment could pick the same number; the second simply takes the next one.
   for (let attempt = 0; attempt < 5; attempt++) {
     const prefix = `${direction === "out" ? "SH" : "RC"}-${year}-`;
-    const top = await db.prepare("SELECT number FROM shipments WHERE number LIKE ? ORDER BY length(number) DESC, number DESC LIMIT 1").bind(prefix + "%").first<{ number: string }>();
+    // A range on the number (not LIKE) so the unique index is used instead of reading every row.
+    const top = await db.prepare("SELECT number FROM shipments WHERE number >= ? AND number < ? ORDER BY length(number) DESC, number DESC LIMIT 1").bind(prefix, prefix + "~").first<{ number: string }>();
     number = nextNumber(direction, year, top?.number ?? null);
     const cols = ["direction", ...Object.keys(f)];
     try {
@@ -394,7 +421,7 @@ shipping.post("/", async (c) => {
     }
   }
   await audit(db, { userId: u.id, action: "shipment.create", targetType: "shipment", targetId: id, detail: { number, direction, ...f, lines: lines.length }, ip: c.get("ip") });
-  if (f.status === "shipped") await tellChangePartOrder(c, await loadShipment(db, id), u, "shipped");
+  if (direction === "out" && (f.status === "shipped" || f.status === "delivered")) await tellChangePartOrder(c, await loadShipment(db, id), u, "shipped");
   return c.json({ id, number });
 });
 
@@ -410,6 +437,10 @@ shipping.patch("/:id", async (c) => {
     if (b.source_type === null || b.source_type === "") f.source_type = f.source_id = null;
     else if (!isSource(b.source_type) || typeof b.source_id !== "string" || !(await loadSource(db, b.source_type, b.source_id))) fail(400, "The order or job this is for wasn't found.");
     else (f.source_type = b.source_type), (f.source_id = b.source_id);
+  }
+  if (f.status === "received" && f.status !== before.status) {
+    const left = await db.prepare("SELECT COUNT(*) AS n FROM shipment_lines WHERE shipment_id = ? AND qty_received < qty").bind(id).first<{ n: number }>();
+    if (left?.n) fail(400, "Some items haven't been checked in yet. Check them in, or note what's missing as a problem.");
   }
   // Stamp the dates when a step is reached, unless someone typed them.
   if (f.status && f.status !== before.status) {
@@ -429,16 +460,15 @@ shipping.patch("/:id", async (c) => {
     const keep = new Set(lines.map((l) => l.id).filter(Boolean));
     const dropped = had.filter((h) => !keep.has(h.id));
     if (dropped.some((h) => h.qty_received > 0)) fail(400, "An item that has already been checked in can't be taken off the list.");
-    const guard = "AND (SELECT revision FROM shipments WHERE id = ?) = ?";
     for (const h of dropped) stmts.push(db.prepare(`DELETE FROM shipment_lines WHERE id = ? ${guard}`).bind(h.id, id, before.revision + 1));
     lines.forEach((l, i) => {
       const old = l.id ? had.find((h) => h.id === l.id) : undefined;
       if (old) stmts.push(db.prepare(`UPDATE shipment_lines SET line_no = ?, part_code = ?, description = ?, qty = ? WHERE id = ? ${guard}`).bind(i + 1, l.part_code, l.description, l.qty, old.id, id, before.revision + 1));
       else stmts.push(db.prepare(`INSERT INTO shipment_lines (id, shipment_id, line_no, part_code, description, qty, source_type, source_id) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT revision FROM shipments WHERE id = ?) = ?`).bind(randomId(), id, i + 1, l.part_code, l.description, l.qty, l.source_type, l.source_id, id, before.revision + 1));
     });
-    const was = had.map((h) => `${h.part_code ?? ""} ${h.description} x${h.qty}`).sort().join("; ");
-    const now_ = lines.map((l) => `${l.part_code ?? ""} ${l.description} x${l.qty}`).sort().join("; ");
-    if (was !== now_) diff.items = [had.length, lines.length];
+    const itemText = (x: { id?: string | null; part_code: string | null; description: string; qty: number }) => `${x.id ?? "new"} ${x.part_code ?? ""} ${x.description} x${x.qty}`;
+    const listBefore = [...had].sort((a, b) => a.line_no - b.line_no).map(itemText).join("; ");
+    if (listBefore !== lines.map(itemText).join("; ")) diff.items = [had.length, lines.length];
   }
   if (!Object.keys(diff).length) return c.json({ ok: true, revision: before.revision });
   const keys = Object.keys(f).filter((k) => k in diff);
@@ -467,6 +497,7 @@ shipping.post("/:id/receive", async (c) => {
   const b = await body(c);
   const s = await loadShipment(db, id);
   if (s.direction !== "in") fail(400, "Only incoming shipments are checked in.");
+  if (s.status === "cancelled") fail(400, "This delivery was cancelled. Change its status first if it came after all.");
   if (typeof b.revision !== "number" || b.revision !== s.revision) fail(409, STALE);
   if (!Array.isArray(b.lines)) fail(400, "Say how many of each item came in.");
   if (b.problem !== undefined && b.problem !== null && b.problem !== "" && !isProblem(b.problem)) fail(400, "Pick the problem from the list.");
@@ -496,7 +527,6 @@ shipping.post("/:id/receive", async (c) => {
   if (problem) set.problem = problem;
   if (note) set.problem_note = note;
   const keys = Object.keys(set);
-  const guard = "AND (SELECT revision FROM shipments WHERE id = ?) = ?";
   const [r] = await db.batch([
     db.prepare(`UPDATE shipments SET ${keys.map((k) => `${k} = ?, `).join("")}revision = revision + 1, updated_by = ?, updated_at = ? WHERE id = ? AND revision = ?`)
       .bind(...keys.map((k) => set[k]), u.id, now(), id, s.revision),
@@ -516,22 +546,26 @@ shipping.post("/:id/lines/:lineId/hold", async (c) => {
   const db = c.env.DB;
   const s = await loadShipment(db, c.req.param("id"));
   const b = await body(c);
+  if (s.direction !== "in") fail(400, "Only items that came in can go on quality hold.");
+  if (typeof b.revision !== "number" || b.revision !== s.revision) fail(409, STALE);
   if (typeof b.hold !== "boolean") fail(400, "Say hold or clear.");
   const note = b.hold && typeof b.note === "string" ? b.note.trim().slice(0, 500) || null : null;
   const line = await db.prepare("SELECT * FROM shipment_lines WHERE id = ? AND shipment_id = ?").bind(c.req.param("lineId"), s.id).first<LineRow>();
   if (!line) fail(404, "Not found.");
-  await db.batch([
-    db.prepare("UPDATE shipment_lines SET hold = ?, hold_note = ? WHERE id = ?").bind(b.hold ? 1 : 0, note, line.id),
-    db.prepare("UPDATE shipments SET revision = revision + 1, updated_by = ?, updated_at = ? WHERE id = ?").bind(u.id, now(), s.id),
+  const [r] = await db.batch([
+    db.prepare("UPDATE shipments SET revision = revision + 1, updated_by = ?, updated_at = ? WHERE id = ? AND revision = ?").bind(u.id, now(), s.id, s.revision),
+    db.prepare("UPDATE shipment_lines SET hold = ?, hold_note = ? WHERE id = ? AND (SELECT revision FROM shipments WHERE id = ?) = ?").bind(b.hold ? 1 : 0, note, line.id, s.id, s.revision + 1),
   ]);
+  if (!r?.meta.changes) fail(409, STALE);
   await audit(db, { userId: u.id, action: b.hold ? "shipment.hold" : "shipment.hold_clear", targetType: "shipment", targetId: s.id, detail: { item: line.part_code ?? line.description, note }, ip: c.get("ip") });
-  return c.json({ ok: true });
+  return c.json({ ok: true, revision: s.revision + 1 });
 });
 
 shipping.delete("/:id", async (c) => {
   const u = requirePerm(c, "shipping.edit");
   const s = await loadShipment(c.env.DB, c.req.param("id"));
-  await c.env.DB.prepare("UPDATE shipments SET removed_at = ?, updated_by = ? WHERE id = ?").bind(now(), u.id, s.id).run();
+  const r = await c.env.DB.prepare("UPDATE shipments SET removed_at = ?, updated_by = ? WHERE id = ? AND removed_at IS NULL").bind(now(), u.id, s.id).run();
+  if (!r.meta.changes) fail(404, "Not found.");
   await audit(c.env.DB, { userId: u.id, action: "shipment.remove", targetType: "shipment", targetId: s.id, detail: { number: s.number }, ip: c.get("ip") });
   return c.json({ ok: true });
 });

@@ -71,6 +71,7 @@ CREATE TABLE shipment_lines (
 );
 CREATE INDEX shipment_lines_shipment ON shipment_lines(shipment_id);
 CREATE INDEX shipment_lines_source ON shipment_lines(source_type, source_id);
+CREATE INDEX shipment_lines_hold ON shipment_lines(shipment_id) WHERE hold = 1;
 
 -- Photos and papers: packed crate, signed bill of lading, proof of delivery, damage, packing slip.
 -- Stored in R2 under shipping/<id>.

@@ -162,6 +162,7 @@ export function shippingRoute(method: string, seg: string[], q: URLSearchParams,
   }
   if (seg[2] === "lines" && seg[4] === "hold") {
     need(c, "shipping.edit");
+    if (body.revision !== s.revision) throw new ShippingFail(409, "Someone else changed this shipment while you were editing. Reload to see their changes.");
     const l = linesOf(s.id).find((x) => x.id === seg[3]);
     if (!l) throw new ShippingFail(404, "Not found.");
     l.hold = body.hold ? 1 : 0;

@@ -195,6 +195,7 @@ const E: [string, string, string][] = [
   ["removed it", "lo quitó", "l'ha rimossa"],
   ["{n} pieces", "{n} bultos", "{n} colli"],
   ["1 piece", "1 bulto", "1 collo"],
+  ["Use class {n} (from the first package's weight and size; check with the carrier)", "Usar la clase {n} (según el peso y las medidas del primer bulto; confírmelo con el transportista)", "Usa la classe {n} (dal peso e dalle misure del primo collo; verifica con il vettore)"],
 ];
 
 export const SHIPPING_ES: Record<string, string> = Object.fromEntries(E.map(([en, es]) => [en, es]));
