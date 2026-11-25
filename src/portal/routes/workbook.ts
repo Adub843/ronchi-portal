@@ -156,13 +156,16 @@ workbook.put("/:jobId/report", async (c) => {
   };
   const at = now();
   const revision = (old?.revision ?? 0) + 1;
-  await db.prepare(
+  const saved = await db.prepare(
     `INSERT INTO wb_reports (job_id, scope, summary, open_issues, sign_name, sign_title, sign_date, signature, status, revision, updated_by, updated_at)
      VALUES (?,?,?,?,?,?,?,?, 'draft', ?,?,?)
      ON CONFLICT(job_id) DO UPDATE SET scope = excluded.scope, summary = excluded.summary, open_issues = excluded.open_issues, sign_name = excluded.sign_name,
        sign_title = excluded.sign_title, sign_date = excluded.sign_date, signature = excluded.signature, revision = excluded.revision,
-       updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
-  ).bind(job.id, f.scope, f.summary, f.open_issues, f.sign_name, f.sign_title, f.sign_date, signature, revision, u.id, at).run();
+       updated_by = excluded.updated_by, updated_at = excluded.updated_at
+     WHERE wb_reports.revision = ? AND wb_reports.status = 'draft'`,
+  ).bind(job.id, f.scope, f.summary, f.open_issues, f.sign_name, f.sign_title, f.sign_date, signature, revision, u.id, at, old?.revision ?? 0).run();
+  // Two saves at the same moment: only the first one lands, the other is told to reload.
+  if (!saved.meta.changes) fail(409, "Someone else changed this report. Reload to see their changes, then save yours again.");
   return c.json({ ok: true, revision });
 });
 
@@ -376,6 +379,14 @@ workbook.post("/:jobId/submit", async (c) => {
     job, report: report ?? blank, entries, hours, expenses, photos: photos?.n ?? 0, by: u.name,
     link: jobLink(c.env.ORIGIN, job.id, true),
   });
+  // Mark it submitted first, and only if it's still a draft, so pressing Submit twice sends one email and one set of notes.
+  const claimed = await db.prepare(
+    `INSERT INTO wb_reports (job_id, status, submitted_by, submitted_at, revision, updated_by, updated_at) VALUES (?, 'submitted', ?, ?, 1, ?, ?)
+     ON CONFLICT(job_id) DO UPDATE SET status = 'submitted', submitted_by = excluded.submitted_by, submitted_at = excluded.submitted_at,
+       revision = wb_reports.revision + 1, updated_by = excluded.updated_by, updated_at = excluded.updated_at
+     WHERE wb_reports.status = 'draft'`,
+  ).bind(job.id, u.id, at, u.id, at).run();
+  if (!claimed.meta.changes) fail(409, "This report was already submitted.");
   // Problems found become quick notes in the knowledge base, on the machine, for the next engineer.
   const notes: string[] = [];
   for (const e of entries) {
@@ -383,11 +394,6 @@ workbook.post("/:jobId/submit", async (c) => {
       notes.push(await addQuickNote(db, u.id, { title: issue, serial: job.machine, issue: `${issue}\n\nFound on job ${job.job_number} (${job.customer}) on ${e.day} by ${e.who}.`, fix: e.description }));
     }
   }
-  await db.prepare(
-    `INSERT INTO wb_reports (job_id, status, submitted_by, submitted_at, revision, updated_by, updated_at) VALUES (?, 'submitted', ?, ?, 1, ?, ?)
-     ON CONFLICT(job_id) DO UPDATE SET status = 'submitted', submitted_by = excluded.submitted_by, submitted_at = excluded.submitted_at,
-       revision = wb_reports.revision + 1, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
-  ).bind(job.id, u.id, at, u.id, at).run();
   const replyTo = mailTo({ email: u.email, notify_email: null }) ?? undefined;
   const sent = [];
   for (const r of recipients) {

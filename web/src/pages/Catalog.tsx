@@ -29,12 +29,13 @@ export function Catalog({ me, path }: { me: Me; path: string }) {
   if (kind === "m" && id && parts[3] === "catalog") return <CatalogMachineBrowse key={path} id={id} rest={parts.slice(4)} me={me} />;
   if (kind === "m" && id) return <CatalogMachine key={id} id={id} me={me} />;
   if (kind === "s" && id) return <CatalogSheet key={id} id={id} me={me} />;
-  if (kind === "p" && id) return <CatalogPart key={id} code={id} me={me} />;
+  if (kind === "p" && id) return <CatalogPart key={id} code={safeDecode(id)} me={me} />;
   if (kind === "c" && id !== undefined) return <CatalogHome key={path} me={me} customer={decodeURIComponent(id)} />;
   return <CatalogHome me={me} />;
 }
 
 const enc = encodeURIComponent;
+const safeDecode = (v: string) => { try { return decodeURIComponent(v); } catch { return v; } };
 
 // ---------- Home: customers, machines and search, as picture tiles like the Mario portal ----------
 

@@ -3,6 +3,7 @@
 // email comes back "not sent" with the button to send it from your own email.
 import { fileInfo, fileProblem, cleanName } from "../../../src/shared/files";
 import { isJobStatus, jobEmail, jobLink, mapLinks, normalizeDays } from "../../../src/shared/jobs";
+import { addDays, billableFor, cleanHours, EXPENSE_TYPES, HOUR_KEYS, isDay, mondayOf, PAY, PCT, reportText, SCOPES, toCents, type Hours } from "../../../src/shared/workbook";
 
 export class JobsFail extends Error {
   constructor(public status: number, message: string) {
@@ -174,4 +175,142 @@ export function jobsRoute(method: string, seg: string[], q: URLSearchParams, bod
   }
   const machine = c.machines.find((m) => m.serial === j.machine);
   return { job: j, techs: techsOf(j.id), files: filesOf(j.id), machine: machine ? { id: machine.id, serial: machine.serial } : null, maps: j.location ? mapLinks(j.location) : null, workbook };
+}
+
+// ---- The Ronchi workbook (a job's Work order tab) in the preview. Kept in memory, like the jobs. ----
+// Email isn't set up in the preview, so Submit hands back the email to send from your own email app.
+
+interface Wb { report: any; entries: any[]; hours: any[]; expenses: any[]; photos: Record<string, { caption: string | null; recipe_screen: string | null }> }
+const books = new Map<string, Wb>();
+let recipients: string[] = [];
+const book = (id: string): Wb => {
+  let b = books.get(id);
+  if (!b) books.set(id, (b = { report: { job_id: id, status: "draft", revision: 0 }, entries: [], hours: [], expenses: [], photos: {} }));
+  return b;
+};
+const nameOf = (c: Ctx, id: string) => c.users.find((u) => u.id === id)?.name ?? "";
+const isPhoto = (ext: string) => ["jpg", "jpeg", "png", "webp", "heic", "gif"].includes(ext.toLowerCase());
+
+export function resetWorkbook() {
+  books.clear();
+  recipients = [];
+}
+
+export function workbookRoute(method: string, seg: string[], q: URLSearchParams, body: any, c: Ctx): unknown {
+  if (!jobs) seed(c);
+  if (!workbook) throw new JobsFail(404, "Not found.");
+  const list = jobs!;
+  if (seg[1] === "settings" && seg[2] === "recipients") {
+    if (!can(c, "settings.manage")) throw new JobsFail(403, "Your role doesn't allow this.");
+    if (method === "PUT") recipients = [...new Set<string>(body.userIds ?? [])];
+    return method === "PUT" ? { ok: true } : { recipients: recipients.map((id) => ({ id, name: nameOf(c, id) })) };
+  }
+  if (seg[1] === "billing") {
+    if (!can(c, "workbook.billing")) throw new JobsFail(403, "Your role doesn't allow this.");
+    const start = mondayOf(isDay(q.get("start")) ? q.get("start")! : day(0));
+    const end = addDays(start, 6);
+    const hours: any[] = [];
+    const expenses: any[] = [];
+    for (const [jobId, b] of books) {
+      const j = list.find((x) => x.id === jobId);
+      for (const h of b.hours) if (h.day >= start && h.day <= end) hours.push({ ...h, job_number: j?.job_number, customer: j?.customer, machine: j?.machine });
+      for (const x of b.expenses) if (x.day >= start && x.day <= end) expenses.push({ ...x, job_number: j?.job_number, customer: j?.customer });
+    }
+    return { start, end, hours, expenses };
+  }
+  const j = list.find((x) => x.id === seg[1]);
+  if (!j) throw new JobsFail(404, "Not found.");
+  const b = book(j.id);
+  const onJob = techs.some((t) => t.job_id === j.id && t.user_id === c.me.id);
+  const fill = onJob || can(c, "jobs.schedule");
+  const mustFill = () => { if (!fill) throw new JobsFail(403, "Only the field service engineers on this job and schedulers can fill in its work order."); };
+  const mustBeOpen = () => { if (b.report.status === "submitted") throw new JobsFail(409, "This report was submitted. A scheduler can reopen it if something needs changing."); };
+  const now = new Date().toISOString();
+  const who = (wanted: unknown) => (typeof wanted === "string" && wanted && can(c, "jobs.schedule") ? wanted : c.me.id);
+
+  if (!seg[2]) {
+    const money = fill || can(c, "workbook.billing");
+    const photos = files.filter((f) => f.job_id === j.id && !f.deleted && isPhoto(f.ext)).map((f) => ({ id: f.id, name: f.name, ext: f.ext, created_at: f.created_at, ...(b.photos[f.id] ?? { caption: null, recipe_screen: null }) }));
+    return {
+      report: { ...b.report, submitted_by_name: b.report.submitted_by ? nameOf(c, b.report.submitted_by) : null },
+      entries: b.entries.filter((e) => !e.removed).map((e) => ({ ...e, who: nameOf(c, e.user_id) })),
+      photos,
+      hours: money ? b.hours.map((h) => ({ ...h, who: nameOf(c, h.user_id) })) : null,
+      expenses: money ? b.expenses.map((x) => ({ ...x, who: nameOf(c, x.user_id) })) : null,
+      recipients: recipients.map((id) => ({ id, name: nameOf(c, id) })),
+      chat: null, canFill: fill, canSchedule: can(c, "jobs.schedule"), billable: billableFor(j.job_number),
+      lists: { scopes: SCOPES, pct: PCT, expenseTypes: EXPENSE_TYPES, pay: PAY },
+    };
+  }
+  if (seg[2] === "chat") throw new JobsFail(400, "Job chats aren't part of the preview.");
+  if (seg[2] === "reopen") {
+    if (!can(c, "jobs.schedule")) throw new JobsFail(403, "Your role doesn't allow this.");
+    if (b.report.status !== "submitted") throw new JobsFail(409, "This report isn't submitted.");
+    b.report = { ...b.report, status: "draft", revision: b.report.revision + 1 };
+    return { ok: true };
+  }
+  mustFill();
+  if (seg[2] === "report") {
+    mustBeOpen();
+    if ((body.revision ?? 0) !== b.report.revision) throw new JobsFail(409, "Someone else changed this report. Reload to see their changes, then save yours again.");
+    const keys = ["scope", "summary", "open_issues", "sign_name", "sign_title", "sign_date", "signature"];
+    const next = { ...b.report };
+    for (const k of keys) if (body[k] !== undefined) next[k] = body[k] === "" ? null : body[k];
+    next.revision = b.report.revision + 1;
+    b.report = next;
+    return { ok: true, revision: next.revision };
+  }
+  if (seg[2] === "photos") {
+    b.photos[seg[3]!] = { caption: body.caption || null, recipe_screen: body.recipe_screen || null };
+    return { ok: true };
+  }
+  if (seg[2] === "submit") {
+    mustBeOpen();
+    const entries = b.entries.filter((e) => !e.removed).map((e) => ({ ...e, who: nameOf(c, e.user_id) }));
+    if (!entries.length) throw new JobsFail(400, "Add at least one day to the work log before submitting.");
+    b.report = { ...b.report, status: "submitted", submitted_by: c.me.id, submitted_at: now, revision: b.report.revision + 1 };
+    const mail = reportText({
+      job: j, report: b.report, entries, hours: b.hours.map((h) => ({ ...h, who: nameOf(c, h.user_id) })),
+      expenses: b.expenses.map((x) => ({ ...x, who: nameOf(c, x.user_id) })), photos: files.filter((f) => f.job_id === j.id && !f.deleted && isPhoto(f.ext)).length,
+      by: c.me.name, link: jobLink(location.origin, j.id, true),
+    });
+    return { ok: true, notes: [], sent: recipients.map((id) => ({ name: nameOf(c, id), to: null, status: "not_configured" })), subject: mail.subject, text: mail.text };
+  }
+  mustBeOpen();
+  if (seg[2] === "entries") {
+    if (method === "DELETE") {
+      const e = b.entries.find((x) => x.id === seg[3]);
+      if (e) e.removed = true;
+      return { ok: true };
+    }
+    if (!String(body.description ?? "").trim()) throw new JobsFail(400, "Write what was done that day.");
+    const e = { id: c.newId(), user_id: who(body.user_id), day: body.day, work: body.work || null, description: String(body.description).trim(), done: body.done || null, pct: body.pct || null, issues: body.issues || null, updated_at: now };
+    if (method === "PATCH") Object.assign(b.entries.find((x) => x.id === seg[3]) ?? {}, { ...e, id: seg[3] });
+    else b.entries.push(e);
+    return method === "PATCH" ? { ok: true } : { id: e.id };
+  }
+  if (seg[2] === "hours") {
+    let h: Hours;
+    try { h = cleanHours(body); } catch (e) { throw new JobsFail(400, (e as Error).message); }
+    const uid = who(body.user_id);
+    b.hours = b.hours.filter((x) => !(x.user_id === uid && x.day === body.day));
+    if (HOUR_KEYS.every((k) => !h[k]) && !h.miles) return { ok: true, removed: true };
+    b.hours.push({ id: c.newId(), job_id: j.id, user_id: uid, day: body.day, ...h, note: body.note || null, updated_at: now });
+    b.hours.sort((x, y) => x.day.localeCompare(y.day));
+    return { ok: true };
+  }
+  if (seg[2] === "expenses") {
+    if (method === "DELETE") {
+      b.expenses = b.expenses.filter((x) => x.id !== seg[3]);
+      return { ok: true };
+    }
+    let amount: number;
+    try { amount = toCents(body.amount); } catch (e) { throw new JobsFail(400, (e as Error).message); }
+    if (!body.type) throw new JobsFail(400, "Choose the kind of expense.");
+    const x = { id: c.newId(), job_id: j.id, user_id: who(body.user_id), day: body.day, type: body.type, amount_cents: amount, pay: body.pay || "Credit", description: body.description || null, billable: body.billable || billableFor(j.job_number), receipt_file: body.receipt_file || null, created_at: now, updated_at: now };
+    if (method === "PATCH") Object.assign(b.expenses.find((y) => y.id === seg[3]) ?? {}, { ...x, id: seg[3] });
+    else b.expenses.push(x);
+    return method === "PATCH" ? { ok: true } : { id: x.id };
+  }
+  throw new JobsFail(404, "Not found.");
 }

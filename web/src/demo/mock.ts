@@ -7,7 +7,7 @@ import { adjustable, effective, isPermission, PERMISSION_GROUPS, PERMISSIONS, ro
 import { clean, defaults, LOCKED_RULES, publicPart, SECTIONS, type PortalSettings } from "../../../src/portal/lib/settings";
 import { CP_FIELDS, CP_SALE_FIELDS, isOpen, isSaleOpen, readOrdersCsv } from "../../../src/shared/change-parts";
 import { KbFail, kbRoute, resetKb } from "./kb-mock";
-import { demoJobs, JobsFail, jobsRoute, resetJobs } from "./jobs-mock";
+import { demoJobs, JobsFail, jobsRoute, resetJobs, resetWorkbook, workbookRoute } from "./jobs-mock";
 import { resetShipping, ShippingFail, shippingRoute } from "./shipping-mock";
 import { resetSoftware, SoftwareFail, softwareRoute } from "./software-mock";
 import { PartsOrdersFail, partsOrdersFor, partsOrdersRoute, resetPartsOrders } from "./parts-orders-mock";
@@ -469,6 +469,14 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       throw e;
     }
   }
+  if (seg[0] === "workbook") {
+    try {
+      return workbookRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, users: db.users, machines: db.machines, newId: id, pdf: examplePdf });
+    } catch (e) {
+      if (e instanceof JobsFail) throw new Fail(e.status, e.message);
+      throw e;
+    }
+  }
   if (seg[0] === "software") {
     try {
       return softwareRoute(method, seg, body, { perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id });
@@ -834,6 +842,7 @@ export function resetDemo() {
   db = seed();
   resetKb();
   resetJobs();
+  resetWorkbook();
   resetPartsOrders();
   resetShipping();
   resetSoftware();

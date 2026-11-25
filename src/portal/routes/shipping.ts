@@ -13,7 +13,7 @@
 // Who: shipping.view to look (all staff by default), shipping.edit to change. The whole section can be
 // switched off in the admin controls (section "shipping").
 import { Hono, type Context } from "hono";
-import { isOpen } from "../../shared/change-parts";
+import { isOpen, isShipped } from "../../shared/change-parts";
 import { randomId } from "../../shared/crypto";
 import { cleanName, fileInfo, fileProblem, MAX_FILES_PER_MESSAGE, MAX_MESSAGE_BYTES } from "../../shared/files";
 import {
@@ -158,11 +158,27 @@ async function loadSource(db: D1Database, type: Source, id: string): Promise<Rec
 const SOURCE_PERM: Record<Source, string> = { cp_order: "orders.view", job: "jobs.view", parts_order: "partsorders.view" };
 const mayRead = (u: SessionUser, type: Source) => has(u, SOURCE_PERM[type] as never);
 
+/**
+ * Lines tied to parts order lines: the person must be allowed to see parts orders, and every line id must
+ * be a real line of a parts order that isn't removed. Shipping those lines moves the order forward.
+ */
+async function checkPartsLinks(db: D1Database, u: SessionUser, lines: { source_id: string | null }[], shipmentId?: string) {
+  // Links already on this shipment were checked when they were added, so anyone shipping can keep them.
+  const had = shipmentId
+    ? new Set((await db.prepare("SELECT source_id FROM shipment_lines WHERE shipment_id = ? AND source_id IS NOT NULL").bind(shipmentId).all<{ source_id: string }>()).results.map((r) => r.source_id))
+    : new Set<string>();
+  const ids = [...new Set(lines.map((l) => l.source_id).filter((x): x is string => !!x && !had.has(x)))];
+  if (!ids.length) return;
+  if (!mayRead(u, "parts_order")) fail(403, "Your role doesn't allow shipping parts orders.");
+  const r = await db.prepare(`SELECT COUNT(*) AS n FROM parts_order_lines p JOIN parts_orders o ON o.id = p.order_id WHERE o.removed_at IS NULL AND p.id IN (${marks(ids.length)})`).bind(...ids).first<{ n: number }>();
+  if ((r?.n ?? 0) !== ids.length) fail(400, "One of the items isn't on that parts order any more. Reload and try again.");
+}
+
 /** A short name for what a shipment is for: "Job J-1042", "Acme · 38 mm star wheels", "PO-2026-0001". */
 function sourceLabel(type: Source, src: Record<string, any>): string {
   if (type === "job") return `Job ${src.job_number}`;
   if (type === "cp_order") return [src.customer, src.part].filter(Boolean).join(" · ");
-  return String(src.number ?? "Parts order");
+  return src.seq ? `P-${src.seq}` : "Parts order";
 }
 
 async function loadShipment(db: D1Database, id: string): Promise<ShipmentRow> {
@@ -187,7 +203,8 @@ async function tellChangePartOrder(c: Context<AppEnv>, s: ShipmentRow, u: Sessio
     if (!o[k]) set[k] = today();
   } else if (event === "shipped" && s.direction === "out") {
     if (!o.ship_date) set.ship_date = today();
-    if (isOpen(o.status)) set.status = "Shipped";
+    // Only an order not yet shipped moves on; later steps (dry fit, waiting on approval) stay where they are.
+    if (isOpen(o.status) && !isShipped(o.status)) set.status = "Shipped to customer";
   }
   const keys = Object.keys(set);
   if (!keys.length) return;
@@ -240,10 +257,11 @@ shipping.get("/", async (c) => {
   ).bind(...args, ...done).all<ShipmentRow & { lines: number; files: number }>();
   // How much is waiting at each step (open work only, both directions), for the counters at the top.
   // One small query over open shipments only (finished ones are never counted), using the status index.
-  const { results: counted } = await c.env.DB.prepare(
+  // Skipped for the short lists on an order, job or machine page, which show no counters.
+  const { results: counted } = link[0] || machine ? { results: [] as { status: string; n: number; problems: number; held: number }[] } : await c.env.DB.prepare(
     `SELECT status, COUNT(*) AS n, SUM(problem IS NOT NULL) AS problems,
             SUM(EXISTS (SELECT 1 FROM shipment_lines l WHERE l.shipment_id = shipments.id AND l.hold = 1)) AS held
-       FROM shipments WHERE status NOT IN ('delivered','cancelled') AND removed_at IS NULL GROUP BY status`,
+       FROM shipments WHERE status NOT IN ('delivered','received','cancelled') AND removed_at IS NULL GROUP BY status`,
   ).all<{ status: string; n: number; problems: number; held: number }>();
   const problems = { n: counted.reduce((a, r) => a + (r.problems ?? 0), 0) };
   const held = { n: counted.reduce((a, r) => a + (r.held ?? 0), 0) };
@@ -284,7 +302,7 @@ shipping.get("/prefill", async (c) => {
     Object.assign(out, { kind: "spare_parts", party: src.customer, machine: src.machine, address: src.location, contact_name: src.contact_name, contact_phone: src.contact_phone, contact_email: src.contact_email, reference: src.job_number, label: sourceLabel(type, src) });
   } else {
     Object.assign(out, {
-      kind: "spare_parts", party: src.customer, machine: src.machine ?? null, address: src.ship_to ?? null, reference: src.customer_po ?? src.number ?? null, label: sourceLabel(type, src),
+      kind: "spare_parts", party: src.customer, machine: src.machine ?? null, address: src.ship_to ?? null, reference: src.customer_po ?? (src.seq ? `P-${src.seq}` : null), label: sourceLabel(type, src),
       // Only what is still to ship: each line's quantity less what is already on other shipments.
       lines: (src.lines as Record<string, any>[])
         .map((l) => ({ part_code: l.part_code ?? null, description: String(l.description ?? l.part_code ?? "Part").slice(0, 300), qty: Number(l.qty) - Number(l.already ?? 0), source_type: "parts_order_line", source_id: l.id }))
@@ -318,8 +336,8 @@ shipping.delete("/files/:fileId", async (c) => {
 
 /** Anyone who can see shipments can add photos and papers (proof of delivery, damage photos). */
 shipping.post("/:id/files", async (c) => {
+  // Part of shipping.view (photos and papers), so it keeps working when Chats and boards is switched off.
   const u = requirePerm(c, "shipping.view");
-  if (!has(u, "files.send")) fail(403, "You can't add photos or files. Ask an admin.");
   const s = await loadShipment(c.env.DB, c.req.param("id"));
   let form: FormData;
   try {
@@ -393,6 +411,7 @@ shipping.post("/", async (c) => {
   if ((f.status === "shipped" || f.status === "delivered") && direction === "out" && !f.shipped_date) f.shipped_date = today();
   if (f.status === "delivered" && !f.done_date) f.done_date = today();
   const lines = b.lines === undefined ? [] : cleanLines(b.lines);
+  await checkPartsLinks(db, u, lines);
   if (b.source_type !== undefined && b.source_type !== null && b.source_type !== "") {
     if (!isSource(b.source_type) || typeof b.source_id !== "string" || !(await loadSource(db, b.source_type, b.source_id))) fail(400, "The order or job this is for wasn't found.");
     f.source_type = b.source_type;
@@ -458,6 +477,7 @@ shipping.patch("/:id", async (c) => {
   const stmts: D1PreparedStatement[] = [];
   if (b.lines !== undefined) {
     const lines = cleanLines(b.lines);
+    await checkPartsLinks(db, u, lines, id);
     const { results: had } = await db.prepare("SELECT * FROM shipment_lines WHERE shipment_id = ?").bind(id).all<LineRow>();
     const keep = new Set(lines.map((l) => l.id).filter(Boolean));
     const dropped = had.filter((h) => !keep.has(h.id));

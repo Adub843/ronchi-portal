@@ -139,9 +139,16 @@ describe("shipping and receiving", () => {
     expect(r.status).toBe(200);
     await sales.json(`/api/shipping/${r.data.id}`, { method: "PATCH", body: { revision: 1, status: "shipped" } });
     const order = await sales.json(`/api/change-parts/${o.data.id}`);
-    expect(order.data.order).toMatchObject({ status: "Shipped", ship_date: new Date().toISOString().slice(0, 10) });
+    expect(order.data.order).toMatchObject({ status: "Shipped to customer", ship_date: new Date().toISOString().slice(0, 10) });
     const linked = await sales.json(`/api/shipping?link=cp_order:${o.data.id}`);
     expect(linked.data.shipments.map((s: any) => s.id)).toEqual([r.data.id]);
+ 
+    // A later step (waiting on the customer's approval) isn't pulled back when another box ships.
+    const cur = (await sales.json(`/api/change-parts/${o.data.id}`)).data.order;
+    expect((await sales.json(`/api/change-parts/${o.data.id}`, { method: "PATCH", body: { revision: cur.revision, status: "Waiting on customer approval" } })).status).toBe(200);
+    const r2 = await sales.json("/api/shipping", { body: outgoing({ ...pre.data, status: "shipped", source_type: "cp_order", source_id: o.data.id }) });
+    expect(r2.status).toBe(200);
+    expect((await sales.json(`/api/change-parts/${o.data.id}`)).data.order.status).toBe("Waiting on customer approval");
   });
 
   it("receiving a customer's sample bottles for a change-part order fills 'samples received'", async () => {

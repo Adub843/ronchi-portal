@@ -20,6 +20,7 @@ import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
 import { body, fail, has, requirePerm } from "../lib/http";
 import { partsCall } from "../lib/parts-site";
+import { loadSettings } from "../lib/settings-store";
 
 export const partsOrders = new Hono<AppEnv>();
 
@@ -146,6 +147,7 @@ function merged(l: Row, ship: Map<string, { shipped: number; received: number }>
  */
 export async function syncPartsOrdersForShipment(db: D1Database, shipmentId: string, userId: string, ip: string): Promise<void> {
   if (!(await shippingReady(db))) return;
+  if ((await loadSettings(db)).sections.partsOrders === false) return; // section switched off: leave orders alone
   const s = await db.prepare("SELECT number FROM shipments WHERE id = ?").bind(shipmentId).first<{ number: string }>();
   const { results } = await db.prepare(
     `SELECT DISTINCT p.order_id FROM shipment_lines l JOIN parts_order_lines p ON p.id = l.source_id
@@ -190,11 +192,16 @@ partsOrders.get("/", async (c) => {
   // All lines in one read, then grouped here (cheaper than one sub-query per order).
   const lines = (await c.env.DB.prepare(
     `SELECT l.id, l.order_id, l.part_code, l.description, l.qty, l.unit_price, l.supplier, l.qty_received, l.qty_shipped
-       FROM parts_order_lines l JOIN parts_orders o ON o.id = l.order_id WHERE o.removed_at IS NULL AND (? = '' OR o.machine = ?)`,
+       FROM parts_order_lines l
+      WHERE l.order_id IN (SELECT id FROM parts_orders WHERE removed_at IS NULL AND (? = '' OR machine = ?) ORDER BY updated_at DESC LIMIT 3000)`,
   ).bind(machine, machine).all<Row>()).results;
   const ship = await shippedFromShipping(c.env.DB);
   const byOrder = new Map<string, Row[]>();
-  for (const l of lines) byOrder.set(l.order_id, [...(byOrder.get(l.order_id) ?? []), merged(l, ship)]);
+  for (const l of lines) {
+    const list = byOrder.get(l.order_id);
+    if (list) list.push(merged(l, ship));
+    else byOrder.set(l.order_id, [merged(l, ship)]);
+  }
   const orders = results.map((o) => {
     const ls = byOrder.get(o.id) ?? [];
     const p = progress(ls as Line[]);
@@ -297,7 +304,7 @@ partsOrders.get("/:id", async (c) => {
             (s.source_type = 'parts_order' AND s.source_id = ?)
             OR s.id IN (SELECT l.shipment_id FROM shipment_lines l WHERE l.source_type = 'parts_order_line' AND l.source_id IN (SELECT id FROM parts_order_lines WHERE order_id = ?)))
           LIMIT 50`,
-      ).bind(id, id).all<Row>()).results.map((s) => ({ id: s.id, number: s.number, direction: s.direction, status: s.status, carrier: s.carrier ?? null, tracking: s.tracking ?? null, ship_date: s.ship_date ?? s.shipped_at ?? null }))
+      ).bind(id, id).all<Row>()).results.map((s) => ({ id: s.id, number: s.number, direction: s.direction, status: s.status, carrier: s.carrier ?? null, tracking: s.tracking ?? null, ship_date: s.shipped_date ?? null }))
     : [];
   const order = { ...o, number: number(o.seq), open: isOpen(o.status), progress: progress(lines as Line[]) };
   return c.json({
@@ -399,6 +406,18 @@ partsOrders.patch("/:id", async (c) => {
   if (b.lines !== undefined) {
     const old = (await c.env.DB.prepare(`SELECT ${LINE_COLS} FROM parts_order_lines WHERE order_id = ? ORDER BY line_no`).bind(id).all<Row>()).results;
     lines = cleanLines(b.lines, prices, new Map(old.map((l) => [l.id, l])));
+    // The page shows the larger of what was typed and what Shipping recorded. When that shown number comes
+    // back unchanged, keep what was typed, so Shipping's counts never get copied into the typed ones (a
+    // cancelled shipment would otherwise leave its parts counted for good).
+    const shipNow = await shippedFromShipping(c.env.DB, id);
+    const oldById = new Map(old.map((l) => [l.id as string, l]));
+    for (const l of lines) {
+      const o = l.id ? oldById.get(l.id) : undefined;
+      const s = l.id ? shipNow.get(l.id) : undefined;
+      if (!o || !s) continue;
+      if (s.received > o.qty_received && l.qty_received === Math.max(o.qty_received, s.received)) l.qty_received = o.qty_received;
+      if (s.shipped > o.qty_shipped && l.qty_shipped === Math.max(o.qty_shipped, s.shipped)) l.qty_shipped = o.qty_shipped;
+    }
     const was = linesSummary(old as Line[]), is = linesSummary(lines);
     const moneyChanged = prices && JSON.stringify(old.map((l) => [l.unit_price, l.unit_cost])) !== JSON.stringify(lines.map((l) => [l.unit_price, l.unit_cost]));
     const sameLines = JSON.stringify(old.map((l) => [l.id, l.part_code, l.description, l.qty, l.supplier, l.supplier_po, l.eta, !!l.drop_ship, l.qty_received, l.qty_shipped, l.note]))
@@ -436,7 +455,7 @@ partsOrders.patch("/:id", async (c) => {
 partsOrders.delete("/:id", async (c) => {
   const u = requirePerm(c, "partsorders.remove");
   const id = c.req.param("id");
-  const r = await c.env.DB.prepare("UPDATE parts_orders SET removed_at = ?, updated_by = ? WHERE id = ? AND removed_at IS NULL").bind(now(), u.id, id).run();
+  const r = await c.env.DB.prepare("UPDATE parts_orders SET removed_at = ?, updated_by = ?, quote_request_id = NULL WHERE id = ? AND removed_at IS NULL").bind(now(), u.id, id).run();
   if (!r.meta.changes) fail(404, "Not found.");
   await audit(c.env.DB, { userId: u.id, action: "parts_order.remove", targetType: "parts_order", targetId: id, ip: c.get("ip") });
   return c.json({ ok: true });

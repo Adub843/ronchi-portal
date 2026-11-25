@@ -148,7 +148,7 @@ function WorkLog({ job, entries, fill, me, canSchedule, onChange }: { job: any; 
                 <strong>{fmtDate(e.day)}</strong>
                 <span className="muted">{e.who}{e.work ? ` · ${t(e.work)}` : ""}</span>
                 <span className="spacer" />
-                <span className="muted">{e.done === "Y" ? t("Done") : e.pct ? e.pct : e.done === "N" ? t("Not finished") : ""}</span>
+                <span className="muted">{e.done === "Y" ? t("Done") : e.pct ? t(e.pct) : e.done === "N" ? t("Not finished") : ""}</span>
                 {fill && (e.user_id === me.id || canSchedule) && <button className="linkish" onClick={() => remove(e.id)}>{t("Remove")}</button>}
               </div>
               <div style={{ whiteSpace: "pre-wrap" }}>{e.description}</div>
@@ -168,7 +168,7 @@ function WorkLog({ job, entries, fill, me, canSchedule, onChange }: { job: any; 
             </select>
           </div>
           <div className="field" style={{ gridColumn: "1 / -1" }}><label htmlFor="wl-desc">{t("What was done today")} *</label><textarea id="wl-desc" rows={3} required value={f.description} onChange={(e) => set("description", e.target.value)} /></div>
-          {f.done === "N" && <div className="field"><label htmlFor="wl-pct">{t("How far along")}</label><Select id="wl-pct" value={f.pct} list={PCT} onChange={(v) => set("pct", v)} /></div>}
+          {f.done === "N" && <div className="field"><label htmlFor="wl-pct">{t("How far along")}</label><Select id="wl-pct" value={f.pct} list={PCT} label={(v) => t(v)} onChange={(v) => set("pct", v)} /></div>}
           <div className="field" style={{ gridColumn: "1 / -1" }}>
             <label htmlFor="wl-issues">{t("Issues found")}</label>
             <textarea id="wl-issues" rows={2} value={f.issues} placeholder={t("One problem per line. Each becomes a quick note on the machine when the report is submitted.")} onChange={(e) => set("issues", e.target.value)} />

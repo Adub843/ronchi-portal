@@ -28,7 +28,7 @@ const LOCKED = () => [
   t("Customers never see the business side. The help center and parts site are separate, with their own data."),
   t("Sign-in is with passkeys only (Face ID, fingerprint, Windows Hello). There are no passwords."),
   t("Each file can be at most 25 MB, and only safe file types can be sent."),
-  t("No money amounts or sales totals are shown anywhere in the portal, except parts order prices and sales, which only people with See parts prices can see."),
+  t("No money amounts or sales totals are shown anywhere in the portal, except parts order prices and sales, which only people with See parts prices can see, and the expenses engineers enter on a job's work order, which only the people on the job, schedulers and billing can see."),
   t("The activity log can't be edited or deleted."),
 ];
 

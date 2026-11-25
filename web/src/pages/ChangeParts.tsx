@@ -558,7 +558,7 @@ export function ChangePartPage({ id, me }: { id: string; me: Me }) {
       <PageHead title={o.customer ?? ""} sub={[sale ? t("Sale") : t("Order"), o.machine, o.part].filter(Boolean).join(" · ")}>
         <StatusPill status={o.status} isLate={!sale && late(o)} />
         {canSell && !editing && !selling && o.open && <button className="btn primary" onClick={() => setSelling(true)}>{t("Mark sold")}</button>}
-        {!sale && edit && o.open && !editing && <button className="btn primary" onClick={complete}>{t("Mark completed")}</button>}
+        {!sale && edit && approving(o) && !editing && <button className="btn primary" onClick={complete}>{t("Mark completed")}</button>}
         {edit && !editing && !selling && <button className="btn" onClick={() => setEditing(true)}>{t("Edit")}</button>}
         {can(me, sale ? "cpsales.edit" : "orders.remove") && !editing && !selling && <button className="btn danger" onClick={remove}>{sure ? t("Yes, remove") : t("Remove")}</button>}
       </PageHead>

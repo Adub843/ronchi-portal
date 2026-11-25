@@ -103,3 +103,9 @@ CREATE TABLE wb_recipients (
 
 -- The job's own chat (a members-only chat in boards), made the first time someone opens it.
 ALTER TABLE jobs ADD COLUMN chat_id TEXT;
+
+-- A built-in role an admin already saved keeps its own list, so give billing and managers the billing
+-- week (the same as roles.ts) once.
+UPDATE roles SET perms = json_insert(perms, '$[#]', 'workbook.billing')
+ WHERE json_valid(perms) AND id IN ('billing', 'manager')
+   AND NOT EXISTS (SELECT 1 FROM json_each(roles.perms) WHERE value = 'workbook.billing');

@@ -239,6 +239,23 @@ describe("parts orders", () => {
     expect(page.order.shipped_at).toBeTruthy();
     expect(page.history[0]).toMatchObject({ action: "parts_order.update", changes: { status: ["ready", "shipped"] } });
     expect(page.shipments.length).toBe(2);
+    // Saving the order as shown doesn't copy Shipping's counts into the typed ones: cancel the shipment
+    // and the parts no longer count as shipped.
+    expect((await sales.json(`/api/parts-orders/${data.id}`, { method: "PATCH", body: { revision: page.order.revision, notes: "Called the customer", lines: page.lines } })).status).toBe(200);
+    const so = (await sales.json(`/api/shipping/${out.data.id}`)).data.shipment;
+    expect((await sales.json(`/api/shipping/${out.data.id}`, { method: "PATCH", body: { revision: so.revision, status: "cancelled" } })).status).toBe(200);
+    page = (await sales.json(`/api/parts-orders/${data.id}`)).data;
+    expect(page.lines.map((l: any) => l.qty_shipped)).toEqual([0, 0]);
+    expect(page.shipments.find((s: any) => s.direction === "out").ship_date).toBeTruthy();
+  });
+
+  it("lets a quote request become an order again after its order was removed", async () => {
+    const sales = await person("sales");
+    const { data } = await sales.json("/api/parts-orders", { body: ORDER });
+    await env.DB.prepare("UPDATE parts_orders SET quote_request_id = 'q-removed-1' WHERE id = ?").bind(data.id).run();
+    expect((await sales.fetch(`/api/parts-orders/${data.id}`, { method: "DELETE" })).status).toBe(200);
+    const row = await env.DB.prepare("SELECT quote_request_id FROM parts_orders WHERE id = ?").bind(data.id).first<{ quote_request_id: string | null }>();
+    expect(row!.quote_request_id).toBeNull();
   });
 
   it("moves the status on by itself as parts are ordered, arrive and ship, and never backwards", async () => {

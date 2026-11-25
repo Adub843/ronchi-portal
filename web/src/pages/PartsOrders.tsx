@@ -11,6 +11,8 @@ import { api, can, fmtTime, type Me } from "../api";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad } from "../components/ui";
 import { loc, t } from "../i18n";
 import { navigate } from "../router";
+import { carrierName } from "../../../src/shared/shipping";
+import { ShipStatus, startShipment } from "./Shipping";
 
 type Row = Record<string, any>;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -340,7 +342,7 @@ export function PartsOrderPage({ id, me }: { id: string; me: Me }) {
     return <span style={{ whiteSpace: "pre-wrap" }}>{v}</span>;
   };
   const dl = (keys: OrderField[]) => <dl className="cp-dl">{keys.map((k) => <div key={k}><dt>{L(k)}</dt><dd>{show(k)}</dd></div>)}</dl>;
-  const shipOk = !!me.permissions.includes("shipping.edit") || !!me.permissions.includes("shipping.view");
+  const shipOk = can(me, "shipping.edit");
 
   return (
     <>
@@ -352,7 +354,7 @@ export function PartsOrderPage({ id, me }: { id: string; me: Me }) {
         ) : <PoStatus status={o.status} />}
         {edit && <button className="btn" onClick={() => setEditing(true)}>{t("Edit")}</button>}
         {can(me, "partsorders.add") && <button className="btn" onClick={copy}>{t("Order again")}</button>}
-        {shipOk && isOpen(o.status) && <Link to={`/shipping/new?source=parts_order&id=${enc(o.id)}`} className="btn">{t("Ship this order")}</Link>}
+        {shipOk && isOpen(o.status) && <button className="btn" onClick={() => startShipment({ source: "parts_order", id: o.id })}>{t("Ship this order")}</button>}
         {can(me, "partsorders.remove") && <button className="btn danger" onClick={remove}>{sure ? t("Yes, remove") : t("Remove")}</button>}
       </PageHead>
       <div className={`panel po-where${orderLate(o as { status: string; promised: string | null }, today()) ? " late" : ""}`}>
@@ -414,7 +416,7 @@ export function PartsOrderPage({ id, me }: { id: string; me: Me }) {
           <h2>{t("Shipments")}</h2>
           <table><tbody>
             {data.shipments.map((s: Row) => (
-              <tr key={s.id}><td className="mono"><Link to={`/shipping/${s.id}`}>{s.number}</Link></td><td>{s.direction === "in" ? t("Coming in") : t("Going out")}</td><td>{s.status}</td><td>{s.carrier ?? ""} {s.tracking ?? ""}</td></tr>
+              <tr key={s.id}><td className="mono"><Link to={`/shipping/${s.id}`}>{s.number}</Link></td><td>{s.direction === "in" ? t("Coming in") : t("Going out")}</td><td><ShipStatus status={s.status} /></td><td>{s.carrier ? (s.carrier === "other" ? s.carrier_other ?? t("Other") : t(carrierName(s.carrier))) : ""} <span className="mono">{s.tracking ?? ""}</span></td></tr>
             ))}
           </tbody></table>
         </div>

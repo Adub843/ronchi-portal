@@ -28,6 +28,7 @@ export const WORKBOOK_DYNAMIC: string[] = [
   "Tools / supplies",
   "Clothing / PPE",
   "Phone / internet",
+  "Under 25%",
   "Shipping",
   "Other",
   "Billing from work orders",
@@ -146,6 +147,7 @@ export const WORKBOOK_ES: Record<string, string> = {
   "Tools / supplies": "Herramientas / suministros",
   "Clothing / PPE": "Ropa / EPP",
   "Phone / internet": "Teléfono / internet",
+  "Under 25%": "Menos del 25%",
   "Shipping": "Envío",
   "Other": "Otro",
 };
@@ -262,6 +264,7 @@ export const WORKBOOK_IT: Record<string, string> = {
   "Tools / supplies": "Attrezzi / materiali",
   "Clothing / PPE": "Abbigliamento / DPI",
   "Phone / internet": "Telefono / internet",
+  "Under 25%": "Meno del 25%",
   "Shipping": "Spedizione",
   "Other": "Altro",
 };

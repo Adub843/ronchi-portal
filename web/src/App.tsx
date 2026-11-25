@@ -136,7 +136,7 @@ export function App() {
   else if (m?.[1] === "boards" || m?.[1] === "chats") page = <BoardPage key={m[2]} id={m[2]!} me={me} />;
   else if (m?.[1] === "machines") page = <MachinePage id={m[2]!} me={me} />;
   else if (path === "/jobs/new") page = <NewJob me={me} />;
-  else if (path === "/jobs/billing" && switches.workbook) page = <BillingWeek me={me} />;
+  else if (path === "/jobs/billing") page = switches.workbook ? <BillingWeek me={me} /> : <JobList me={me} workbook={false} />;
   else if (m?.[1] === "jobs") page = <JobPage key={m[2]} id={m[2]!} me={me} />;
   else if (wo) page = <JobPage key={wo[1]} id={wo[1]!} me={me} tab="work-order" />;
   else if (section === "/jobs") page = <JobList me={me} workbook={switches.workbook} />;

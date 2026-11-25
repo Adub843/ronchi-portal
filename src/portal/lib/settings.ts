@@ -79,7 +79,7 @@ export const LOCKED_RULES = [
   "Customers never see the business side. The help center and parts site are separate, with their own data.",
   "Sign-in is with passkeys only (Face ID, fingerprint, Windows Hello). There are no passwords.",
   "Each file can be at most 25 MB, and only safe file types can be sent.",
-  "No money amounts or sales totals are shown anywhere in the portal, except parts order prices and sales, which only people with See parts prices can see.",
+  "No money amounts or sales totals are shown anywhere in the portal, except parts order prices and sales, which only people with See parts prices can see, and the expenses engineers enter on a job's work order, which only the people on the job, schedulers and billing can see.",
   "The activity log can't be edited or deleted.",
 ];
 

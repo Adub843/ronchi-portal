@@ -86,3 +86,15 @@ CREATE TABLE shipment_files (
   deleted_at   TEXT
 );
 CREATE INDEX shipment_files_shipment ON shipment_files(shipment_id);
+
+-- A role an admin already saved keeps its own list, so give it Shipping's defaults (the same as
+-- roles.ts) once: every staff role sees shipments; scheduling, service, sales and managers make them.
+WITH defaults(role, perm) AS (VALUES
+  ('manager', 'shipping.view'), ('manager', 'shipping.edit'), ('scheduling', 'shipping.edit'),
+  ('service', 'shipping.edit'), ('sales', 'shipping.edit'))
+UPDATE roles SET perms = (
+    SELECT json_group_array(value) FROM (
+      SELECT value FROM json_each(roles.perms)
+      UNION SELECT perm FROM defaults WHERE defaults.role = roles.id
+      UNION SELECT 'shipping.view' WHERE EXISTS (SELECT 1 FROM json_each(roles.perms) WHERE value = 'jobs.view')))
+ WHERE json_valid(perms);
