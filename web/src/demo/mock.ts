@@ -179,11 +179,11 @@ function seed(): DB {
     row._h = [{ at, action: "cp_order.create", who: "Imported from SharePoint", changes: null }];
     return row;
   }) : [
-    o("Example Pharma Co.", "3069MB", "250 ml oval bottle set (star wheels, guides, scroll)", "In production", { customer_po: "EPC-44817", ra_po: "RA-2611", aa: "AA-1093", samples_received: dayIso(-41), samples_shipped: dayIso(-38), fill_test: "Passed in Italy", ship_date: dayIso(12), notes: "Example order. Customer wants it before their January shutdown." }, andrew, 2),
+    o("Example Pharma Co.", "3069MB", "250 ml oval bottle set (star wheels, guides, scroll)", "Being built", { customer_po: "EPC-44817", ra_po: "RA-2611", aa: "AA-1093", samples_received: dayIso(-41), samples_shipped: dayIso(-38), fill_test: "Passed in Italy", ship_date: dayIso(12), notes: "Example order. Customer wants it before their January shutdown." }, andrew, 2),
     o("Example Foods Inc.", "4222TP", "Piston resize kit 1 L", "Waiting on samples", { customer_po: "EF-2210", ra_po: "RA-2614", notes: "Example. 24 bottles and caps promised by Friday." }, michele, 5),
-    o("Example Home Care", "4212MB", "Trigger sprayer cap chuck set", "Ready to ship", { customer_po: "EHC-90021", ra_po: "RA-2598", aa: "AA-1081", samples_received: dayIso(-70), samples_shipped: dayIso(-66), fill_test: "Passed", ship_date: dayIso(-4) }, andrew, 1),
+    o("Example Home Care", "4212MB", "Trigger sprayer cap chuck set", "Dry fit test", { customer_po: "EHC-90021", ra_po: "RA-2598", aa: "AA-1081", samples_received: dayIso(-70), samples_shipped: dayIso(-66), fill_test: "Passed", ship_date: dayIso(-4) }, andrew, 1),
     o("Example Personal Care", "3535MB", "60 ml round bottle set", "Quote", { notes: "Example. Quote sent, waiting on PO." }, michele, 8),
-    o("Example Pharma Co.", "3811CP", "38 mm cap chucks", "Shipped", { customer_po: "EPC-43002", ra_po: "RA-2560", aa: "AA-1040", samples_received: dayIso(-120), samples_shipped: dayIso(-115), fill_test: "Passed", ship_date: dayIso(-30) }, andrew, 29),
+    o("Example Pharma Co.", "3811CP", "38 mm cap chucks", "Completed", { customer_po: "EPC-43002", ra_po: "RA-2560", aa: "AA-1040", samples_received: dayIso(-120), samples_shipped: dayIso(-115), fill_test: "Passed", ship_date: dayIso(-30) }, andrew, 29),
     o("Example Beverage LLC", "", "Neck guides for 2 L PET", "In design", { customer_po: "EB-7781", samples_received: dayIso(-9), samples_shipped: dayIso(-7) }, andrew, 4),
   ];
   // Example sales Andrew and Michele are working (made up). They become orders when marked sold.
@@ -199,7 +199,7 @@ function seed(): DB {
     sale("Example Home Care", "4212MB", "Pump cap chucks", "Quoting", { quote: "MF-2207", follow_up: dayIso(9) }, michele, 2),
     sale("Example Personal Care", "3535MB", "30 ml vial set", "Lost", { quote: "AY-0388", notes: "Example. Went with a local machine shop." }, andrew, 20),
   );
-  if (!real) orders[0]._h.unshift({ at: iso(daysAgo(1, 15, 20)), action: "cp_order.update", who: andrew.name, changes: { status: ["Fill test", "In production"], ship_date: [dayIso(5), dayIso(12)] } });
+  if (!real) orders[0]._h.unshift({ at: iso(daysAgo(1, 15, 20)), action: "cp_order.update", who: andrew.name, changes: { status: ["Fill test", "Being built"], ship_date: [dayIso(5), dayIso(12)] } });
   return {
     // Quick links on Home (Aaron adds these himself in the live portal).
     links: [
