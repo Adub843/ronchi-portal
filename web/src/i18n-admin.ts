@@ -134,6 +134,7 @@ export const ADMIN_ES: Record<string, string> = {
   "Type OWNER to confirm.": "Escriba OWNER para confirmar.",
   "Hand over": "Pasar",
   "Done. The command center now belongs to them.": "Listo. El centro de mando ahora es de esa persona.",
+  "Change-part sales": "Ventas de cambio de formato",
 };
 
 export const ADMIN_IT: Record<string, string> = {
@@ -269,4 +270,5 @@ export const ADMIN_IT: Record<string, string> = {
   "Type OWNER to confirm.": "Scrivi OWNER per confermare.",
   "Hand over": "Passa",
   "Done. The command center now belongs to them.": "Fatto. Il centro di comando ora è di quella persona.",
+  "Change-part sales": "Vendite cambio formato",
 };

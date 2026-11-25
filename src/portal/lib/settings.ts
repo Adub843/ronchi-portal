@@ -23,6 +23,7 @@ export const SECTIONS = {
   machines: { label: "Machines", perms: ["machines.view", "machines.add", "machines.edit"] },
   catalog: { label: "Parts catalog", perms: ["catalog.view", "catalog.edit"] },
   customers: { label: "Customers and quote requests", perms: ["customers.manage", "customers.invite", "quotes.manage"] },
+  cpSales: { label: "Change-part sales", perms: ["cpsales.view", "cpsales.edit"] },
   changeParts: { label: "Change parts", perms: ["orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import"] },
   knowledge: { label: "Knowledge base", perms: ["kb.view", "kb.write", "kb.edit_all", "kb.import", "kb.publish"] },
   software: { label: "Software downloads", perms: ["software.view", "software.manage"] },
