@@ -8,6 +8,9 @@ export const SOFTWARE_DYNAMIC = [
 ];
 
 export const SOFTWARE_ES: Record<string, string> = {
+  "SharePoint connection: on. Downloads come through the portal, so staff don't need SharePoint access, and whole folders can be linked at once.": "Conexión con SharePoint: activa. Las descargas pasan por el portal, así que el personal no necesita acceso a SharePoint, y se pueden enlazar carpetas enteras de una vez.",
+  "SharePoint connection: not set up yet. Downloads open SharePoint with each person's own Microsoft sign-in. An admin can turn it on later (docs/SHAREPOINT.md).": "Conexión con SharePoint: aún no configurada. Las descargas abren SharePoint con el inicio de sesión de Microsoft de cada persona. Un administrador puede activarla más adelante (docs/SHAREPOINT.md).",
+  "In SharePoint, copy the link to a file or a whole folder. A folder brings in every file inside it, subfolders and all. Downloads come through the portal.": "En SharePoint, copie el enlace de un archivo o de una carpeta entera. Una carpeta trae todos los archivos que contiene, con sus subcarpetas. Las descargas pasan por el portal.",
   "These come straight from SharePoint with your own Microsoft sign-in, into your Downloads folder.": "Estos vienen directamente de SharePoint con su propio inicio de sesión de Microsoft, a su carpeta de Descargas.",
   "on SharePoint": "en SharePoint",
   "How": "Cómo",
@@ -87,6 +90,9 @@ export const SOFTWARE_ES: Record<string, string> = {
 };
 
 export const SOFTWARE_IT: Record<string, string> = {
+  "SharePoint connection: on. Downloads come through the portal, so staff don't need SharePoint access, and whole folders can be linked at once.": "Connessione SharePoint: attiva. I download passano dal portale, quindi il personale non ha bisogno dell'accesso a SharePoint, e si possono collegare intere cartelle in una volta.",
+  "SharePoint connection: not set up yet. Downloads open SharePoint with each person's own Microsoft sign-in. An admin can turn it on later (docs/SHAREPOINT.md).": "Connessione SharePoint: non ancora configurata. I download aprono SharePoint con l'accesso Microsoft di ciascuno. Un amministratore può attivarla in seguito (docs/SHAREPOINT.md).",
+  "In SharePoint, copy the link to a file or a whole folder. A folder brings in every file inside it, subfolders and all. Downloads come through the portal.": "In SharePoint, copia il link di un file o di un'intera cartella. Una cartella porta tutti i file che contiene, sottocartelle comprese. I download passano dal portale.",
   "These come straight from SharePoint with your own Microsoft sign-in, into your Downloads folder.": "Questi arrivano direttamente da SharePoint con il tuo accesso Microsoft, nella cartella Download.",
   "on SharePoint": "su SharePoint",
   "How": "Come",

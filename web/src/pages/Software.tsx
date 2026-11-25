@@ -71,7 +71,9 @@ interface Progress { done: number; total: number; bytes: number; totalBytes: num
 const canPickFolder = () => typeof (window as any).showDirectoryPicker === "function";
 
 export function SoftwarePicker({ pkg, onClose }: { pkg: Pkg; onClose: () => void }) {
-  const { data, error } = useLoad<{ package: Pkg; files: FileRow[] }>(() => api(`/software/${encodeURIComponent(pkg.id)}`), [pkg.id]);
+  const { data, error } = useLoad<{ package: Pkg; files: FileRow[]; sharepoint?: boolean }>(() => api(`/software/${encodeURIComponent(pkg.id)}`), [pkg.id]);
+  // With the Microsoft connection set, SharePoint files come through the portal like stored ones.
+  const viaPortal = (f: FileRow) => !f.link || !!data?.sharepoint;
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [openLines, setOpenLines] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -108,7 +110,7 @@ export function SoftwarePicker({ pkg, onClose }: { pkg: Pkg; onClose: () => void
     if (!chosen.length) return;
     stop.current = false;
     let dir: any = null;
-    if (canPickFolder() && chosen.some((f) => !f.link)) {
+    if (canPickFolder() && chosen.some(viaPortal)) {
       try {
         dir = await (window as any).showDirectoryPicker({ id: "ronchi-software", mode: "readwrite", startIn: "downloads" });
       } catch (e) {
@@ -124,8 +126,8 @@ export function SoftwarePicker({ pkg, onClose }: { pkg: Pkg; onClose: () => void
       p.current = f.folder ? `${f.folder}/${f.name}` : f.name;
       setProgress({ ...p });
       try {
-        // Files kept on SharePoint always go through the browser, which uses the person's own Microsoft sign-in.
-        if (root && !f.link) await saveInto(root, f, (n) => { p.bytes += n; setProgress({ ...p }); });
+        // Without the Microsoft connection, SharePoint files go through the browser and the person's own sign-in.
+        if (root && viaPortal(f)) await saveInto(root, f, (n) => { p.bytes += n; setProgress({ ...p }); });
         else { await clickDownload(f); p.bytes += f.size; }
       } catch {
         p.failed.push(p.current);
@@ -197,7 +199,7 @@ export function SoftwarePicker({ pkg, onClose }: { pkg: Pkg; onClose: () => void
                   })}
                 </ul>
                 <p className="muted small-note sw-how">
-                  {chosen.length > 0 && chosen.every((f) => f.link)
+                  {chosen.length > 0 && !chosen.some(viaPortal)
                     ? t("These come straight from SharePoint with your own Microsoft sign-in, into your Downloads folder.")
                     : canPickFolder()
                     ? t("You choose a folder on your computer and everything is saved there, folders and all.")
@@ -284,7 +286,7 @@ async function clickDownload(f: FileRow) {
 interface Upload { key: string; name: string; folder: string; size: number; sent: number; state: "waiting" | "sending" | "done" | "failed"; error?: string }
 
 export function SoftwareManage({ me }: { me: Me }) {
-  const { data, error, reload } = useLoad<{ packages: Pkg[] }>(() => api("/software"), []);
+  const { data, error, reload } = useLoad<{ packages: Pkg[]; sharepoint?: boolean }>(() => api("/software"), []);
   const [sel, setSel] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", description: "", legacy: false });
   if (!can(me, "software.manage")) return <ErrorNote error={t("Your role doesn't allow this.")} />;
@@ -313,6 +315,13 @@ export function SoftwareManage({ me }: { me: Me }) {
         <button className="btn" onClick={() => navigate("/kb")}>{t("Back to the knowledge base")}</button>
       </div>
       <ErrorNote error={error} />
+      {data && (
+        <p className={`small-note sw-connection${data.sharepoint ? " on" : ""}`}>
+          {data.sharepoint
+            ? t("SharePoint connection: on. Downloads come through the portal, so staff don't need SharePoint access, and whole folders can be linked at once.")
+            : t("SharePoint connection: not set up yet. Downloads open SharePoint with each person's own Microsoft sign-in. An admin can turn it on later (docs/SHAREPOINT.md).")}
+        </p>
+      )}
       <div className="sw-manage">
         <aside className="panel sw-pkgs">
           <h2>{t("Packages")}</h2>
@@ -419,7 +428,7 @@ const NEW = "__new__";
 const PLACES = [{ id: "software", label: "Software and setup files" }];
 
 export function UploadDialog({ startPkg, onClose, onUploaded }: { startPkg?: string; onClose: () => void; onUploaded: () => void }) {
-  const pkgs = useLoad<{ packages: Pkg[] }>(() => api("/software"), []);
+  const pkgs = useLoad<{ packages: Pkg[]; sharepoint?: boolean }>(() => api("/software"), []);
   const [place, setPlace] = useState(PLACES[0]!.id);
   const [pkgId, setPkgId] = useState(startPkg ?? "");
   const [newPkg, setNewPkg] = useState({ name: "", legacy: false });
@@ -560,7 +569,9 @@ export function UploadDialog({ startPkg, onClose, onUploaded }: { startPkg?: str
               <div className="sw-links">
                 <label htmlFor="up-links">{t("SharePoint links, one per line")}</label>
                 <textarea id="up-links" rows={4} value={links} onChange={(e) => { setLinks(e.target.value); setAdded(null); }} placeholder="https://ronchiam.sharepoint.com/sites/HelpReferenceDocuments/…/Studio 5000 v32.iso" />
-                <p className="muted small-note">{t("In SharePoint, open the file's menu and copy its link, or copy the address while the file is open. Links to a whole folder can't be used; add the files inside it. People download with their own Microsoft sign-in.")}</p>
+                <p className="muted small-note">{pkgs.data?.sharepoint
+                  ? t("In SharePoint, copy the link to a file or a whole folder. A folder brings in every file inside it, subfolders and all. Downloads come through the portal.")
+                  : t("In SharePoint, open the file's menu and copy its link, or copy the address while the file is open. Links to a whole folder can't be used; add the files inside it. People download with their own Microsoft sign-in.")}</p>
                 {added !== null && <p className="small-note sw-goes">{t("{n} links added to {where}", { n: added, where })}</p>}
               </div>
             )}

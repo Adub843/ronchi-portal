@@ -84,3 +84,33 @@ export function sharePointLink(input: string): { download: string; name: string 
   const site = path.split("/").slice(0, 3).join("/"); // /sites/HelpReferenceDocuments
   return { download: `https://${u.hostname}${site}/_layouts/15/download.aspx?SourceUrl=${encodeURIComponent(path)}`, name };
 }
+
+/**
+ * Where a pasted SharePoint link points, for the Microsoft Graph shares API: the absolute URL to
+ * look up and whether it is a folder. Null for anything that isn't on Ronchi's SharePoint.
+ */
+export function sharePointTarget(input: string): { url: string; folder: boolean } | null {
+  let u: URL;
+  try {
+    u = new URL(input.trim());
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" || !/^[a-z0-9-]+\.sharepoint\.com$/i.test(u.hostname) || u.username || u.password) return null;
+  const share = /^\/:([a-z]):\//i.exec(u.pathname);
+  if (share) {
+    u.searchParams.delete("download");
+    return { url: u.toString(), folder: share[1]!.toLowerCase() === "f" };
+  }
+  const path = u.searchParams.get("id") ?? decodeURIComponent(u.pathname);
+  if (!path.startsWith("/sites/") && !path.startsWith("/teams/")) return null;
+  if (/\/Forms\/[^/]+\.aspx$/i.test(path) || path.includes("/_layouts/")) return null;
+  const encoded = path.split("/").map((s) => encodeURIComponent(s)).join("/");
+  return { url: `https://${u.hostname}${encoded}`, folder: !/\.[A-Za-z0-9]{1,8}$/.test(path.split("/").pop() ?? "") };
+}
+
+/** Graph's id for a shared URL: "u!" + unpadded base64url of the URL. */
+export function graphShareId(url: string): string {
+  const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(url)));
+  return "u!" + b64.replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+}

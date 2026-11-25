@@ -14,10 +14,11 @@
 // Range requests, so a browser can resume a big download.
 import { Hono } from "hono";
 import { randomId } from "../../shared/crypto";
-import { cleanFolder, MAX_SOFTWARE_BYTES, PART_BYTES, sharePointLink, softwareFileName } from "../../shared/software";
+import { cleanFolder, MAX_SOFTWARE_BYTES, PART_BYTES, sharePointLink, sharePointTarget, softwareFileName } from "../../shared/software";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
 import { body, fail, mustStr, requirePerm, str } from "../lib/http";
+import { graphConfigured, sharePointDownload, sharePointFolder, type FolderFile } from "../lib/sharepoint";
 
 export const software = new Hono<AppEnv>();
 
@@ -55,15 +56,27 @@ software.get("/", async (c) => {
       WHERE p.archived_at IS NULL
       GROUP BY p.id ORDER BY p.legacy, p.position, p.name`,
   ).all<PackageRow>();
-  return c.json({ packages: results.map(shapePackage) });
+  return c.json({ packages: results.map(shapePackage), sharepoint: graphConfigured(c.env) });
 });
 
 software.get("/files/:id", async (c) => {
   requirePerm(c, "software.view");
   const f = await loadFile(c.env.DB, c.req.param("id"));
   if (!f.ready_at) fail(404, "Not found.");
-  // Kept on SharePoint: send the person there. Their own Microsoft sign-in opens it.
+  // Kept on SharePoint. With the Microsoft connection set, the portal fetches it and passes it on.
+  // Without it (or if Microsoft won't answer), send the person there: their own sign-in opens it.
   if (f.source_url) {
+    if (graphConfigured(c.env)) {
+      const file = await sharePointDownload(c.env, f.source_url, c.req.header("range"));
+      if (file) {
+        const headers = attachmentHeaders(f.name);
+        for (const h of ["content-length", "content-range"]) {
+          const v = file.headers.get(h);
+          if (v) headers[h === "content-length" ? "Content-Length" : "Content-Range"] = v;
+        }
+        return new Response(file.body, { status: file.status, headers });
+      }
+    }
     const link = sharePointLink(f.source_url);
     if (!link) fail(404, "Not found.");
     return new Response(null, { status: 302, headers: { Location: link.download, "Cache-Control": "private, no-store" } });
@@ -71,20 +84,24 @@ software.get("/files/:id", async (c) => {
   const range = parseRange(c.req.header("range"), f.size);
   const obj = await c.env.FILES.get(key(f.id), range ? { range: { offset: range.start, length: range.end - range.start + 1 } } : undefined);
   if (!obj) fail(404, "Not found.");
-  const name = softwareFileName(f.name);
+  const headers = attachmentHeaders(f.name);
+  headers["Content-Length"] = String(range ? range.end - range.start + 1 : f.size);
+  if (range) headers["Content-Range"] = `bytes ${range.start}-${range.end}/${f.size}`;
+  return new Response(obj.body, { status: range ? 206 : 200, headers });
+});
+
+/** Always a download, whatever the file is. Nothing here is ever shown or run inside the portal. */
+function attachmentHeaders(fileName: string): Record<string, string> {
+  const name = softwareFileName(fileName);
   const ascii = name.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "");
-  const headers: Record<string, string> = {
-    // Always a download, whatever the file is. Nothing here is ever shown or run inside the portal.
+  return {
     "Content-Type": "application/octet-stream",
     "Content-Disposition": `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`,
-    "Content-Length": String(range ? range.end - range.start + 1 : f.size),
     "Accept-Ranges": "bytes",
     "Cache-Control": "private, no-store",
     "Content-Security-Policy": "default-src 'none'; sandbox",
   };
-  if (range) headers["Content-Range"] = `bytes ${range.start}-${range.end}/${f.size}`;
-  return new Response(obj.body, { status: range ? 206 : 200, headers });
-});
+}
 
 /** "bytes=a-b", "bytes=a-" or "bytes=-n" for one range inside the file; anything else means the whole file. */
 export function parseRange(header: string | undefined, size: number): { start: number; end: number } | null {
@@ -109,7 +126,7 @@ software.get("/:id", async (c) => {
     "SELECT id, folder, name, size, ready_at, source_url FROM software_files WHERE package_id = ? AND deleted_at IS NULL AND ready_at IS NOT NULL ORDER BY folder, name",
   ).bind(p.id).all<FileRow>();
   const size = results.reduce((n, f) => n + f.size, 0);
-  return c.json({ package: shapePackage({ ...p, files: results.length, size }), files: results.map((f) => ({ id: f.id, folder: f.folder, name: f.name, size: f.size, link: !!f.source_url })) });
+  return c.json({ sharepoint: graphConfigured(c.env), package: shapePackage({ ...p, files: results.length, size }), files: results.map((f) => ({ id: f.id, folder: f.folder, name: f.name, size: f.size, link: !!f.source_url })) });
 });
 
 // ---------- Packages (software.manage) ----------
@@ -186,20 +203,40 @@ software.post("/:id/links", async (c) => {
   const raw = Array.isArray(b.links) ? b.links : [];
   if (!raw.length) fail(400, "Paste at least one SharePoint link.");
   if (raw.length > 500) fail(400, "Up to 500 links at a time.");
-  const rows: { url: string; name: string }[] = [];
+  const rows: { url: string; name: string; folder: string; size: number }[] = [];
+  const connected = graphConfigured(c.env);
   for (const item of raw) {
     const url = typeof item === "string" ? item : String((item as { url?: unknown })?.url ?? "");
     const given = typeof item === "object" && item ? str((item as { name?: unknown }).name, 255) : null;
-    const link = url.length <= 2000 ? sharePointLink(url) : null;
+    const target = url.length <= 2000 ? sharePointTarget(url) : null;
+    if (target?.folder) {
+      // A whole folder: with the Microsoft connection, list it and add every file inside.
+      if (!connected) fail(400, "That's a folder. Adding a whole folder needs the Microsoft connection (see Manage software). For now, link each file.");
+      let found: FolderFile[];
+      try {
+        found = await sharePointFolder(c.env, url, 500 - rows.length);
+      } catch (e) {
+        fail(400, `Couldn't read that SharePoint folder: ${(e as Error).message}`);
+      }
+      for (const ff of found) {
+        const sub = cleanFolder([folder, ff.folder].filter(Boolean).join("/"));
+        if (sub === null) continue; // a folder name the portal can't keep
+        rows.push({ url: ff.url, name: softwareFileName(ff.name), folder: sub, size: ff.size });
+      }
+      continue;
+    }
+    const link = target ? sharePointLink(url) : null;
     if (!link) fail(400, `That isn't a link to one file on Ronchi's SharePoint: ${url.slice(0, 120)}`);
     const name = given ?? link.name;
     if (!name) fail(400, "Give a file name for each sharing link.");
-    rows.push({ url: url.trim(), name: softwareFileName(name) });
+    rows.push({ url: url.trim(), name: softwareFileName(name), folder, size: 0 });
   }
+  if (!rows.length) fail(400, "There were no files in that folder.");
+  if (rows.length > 500) fail(400, "Up to 500 files at a time.");
   const at = now();
   await c.env.DB.batch(rows.map((r) =>
-    c.env.DB.prepare("INSERT INTO software_files (id, package_id, folder, name, size, source_url, ready_at, uploaded_by, created_at) VALUES (?,?,?,?,0,?,?,?,?)")
-      .bind(randomId(), p.id, folder, r.name, r.url, at, u.id, at),
+    c.env.DB.prepare("INSERT INTO software_files (id, package_id, folder, name, size, source_url, ready_at, uploaded_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)")
+      .bind(randomId(), p.id, r.folder, r.name, r.size, r.url, at, u.id, at),
   ));
   await c.env.DB.prepare("UPDATE software_packages SET updated_at = ? WHERE id = ?").bind(at, p.id).run();
   await audit(c.env.DB, { userId: u.id, action: "software.links.add", targetType: "software_package", targetId: p.id, detail: { count: rows.length, folder }, ip: c.get("ip") });
