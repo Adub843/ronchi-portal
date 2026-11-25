@@ -54,7 +54,7 @@ describe("Submit", () => {
       entries: [{ day: "2026-11-24", who: "Aaron Lewis", work: "Line Down", description: "Found worn starwheel", done: "N", pct: "51–75%", issues: "Starwheel worn" }],
       hours: [{ day: "2026-11-24", who: "Aaron Lewis", travel_wd: 2, travel_we: 0, regular: 8, training: 0, overtime: 1, warranty: 0, miles: 40 }],
       expenses: [{ day: "2026-11-24", who: "Aaron Lewis", type: "Hotel", amount_cents: 12900, billable: "Y", description: "Hampton Inn" }],
-      photos: 3, by: "Aaron Lewis", link: "https://portal/work-orders/j1",
+      photos: 3, by: "Aaron Lewis", link: "https://portal/jobs/j1/work-order",
     });
     expect(r.subject).toBe("Service report 26-0287-S1: Acme 3069MB");
     expect(r.text).toContain("Found worn starwheel [51–75%]");

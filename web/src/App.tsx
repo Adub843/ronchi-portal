@@ -8,7 +8,7 @@ import { Chevron } from "./components/icons";
 import { Menu, type MenuItem } from "./components/Menu";
 import { Link, toast } from "./components/ui";
 import { isLang, LANGS, setLang, t, useLang } from "./i18n";
-import { goBack, navigate, usePath } from "./router";
+import { DEMO, goBack, navigate, usePath } from "./router";
 import { applyTheme, type Prefs } from "./theme";
 import { SignIn } from "./pages/SignIn";
 import { Welcome } from "./pages/Welcome";
@@ -23,11 +23,10 @@ import { Catalog } from "./pages/Catalog";
 import { Customers, Quotes } from "./pages/Customers";
 import { Settings } from "./pages/Settings";
 import { JobList, JobPage, NewJob } from "./pages/Jobs";
-import { WorkOrderPage, WorkOrders } from "./pages/WorkOrders";
 import { BillingWeek } from "./pages/Workbook";
 import { Learn } from "./pages/Learn";
 import { NewShipment, ShipmentPage, Shipping } from "./pages/Shipping";
-import { menuFor, pageAllowed } from "./nav";
+import { fromOldAddress, menuFor, pageAllowed } from "./nav";
 import { roleLabel, useRoleNames } from "./roles";
 
 // Chrome and Edge offer to install the portal as an app (own window, icon on the desktop or home screen).
@@ -66,7 +65,12 @@ function useInstallPrompt() {
 export const DEFAULT_PREFS: Prefs = { theme: "ronchi", mode: "auto", layout: "L2", tiles: null, lang: "en", popups: true };
 
 export function App() {
-  const path = usePath();
+  const typed = usePath();
+  // Work orders used to be their own pages; old links and emails open the job's Work order tab.
+  const path = fromOldAddress(typed);
+  useEffect(() => {
+    if (path !== typed && !DEMO) history.replaceState(null, "", path);
+  }, [path, typed]);
   const lang = useLang();
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   useRoleNames(me?.id);
@@ -123,7 +127,8 @@ export function App() {
   const popups = prefs?.popups !== false;
 
   let page;
-  const m = /^\/(boards|machines|chats|change-parts|jobs|work-orders)\/([A-Za-z0-9_-]+)$/.exec(path);
+  const m = /^\/(boards|machines|chats|change-parts|jobs)\/([A-Za-z0-9_-]+)$/.exec(path);
+  const wo = /^\/jobs\/([A-Za-z0-9_-]+)\/work-order$/.exec(path);
   const po = /^\/parts-orders(?:\/([A-Za-z0-9_-]+))?$/.exec(path);
   if (po && (po[1] === "new")) page = <NewPartsOrder me={me} />;
   else if (po && (!po[1] || po[1] === "to-order" || po[1] === "reports")) page = <PartsOrders key={path} me={me} tab={po[1]} />;
@@ -131,12 +136,10 @@ export function App() {
   else if (m?.[1] === "boards" || m?.[1] === "chats") page = <BoardPage key={m[2]} id={m[2]!} me={me} />;
   else if (m?.[1] === "machines") page = <MachinePage id={m[2]!} me={me} />;
   else if (path === "/jobs/new") page = <NewJob me={me} />;
+  else if (path === "/jobs/billing" && switches.workbook) page = <BillingWeek me={me} />;
   else if (m?.[1] === "jobs") page = <JobPage key={m[2]} id={m[2]!} me={me} />;
-  else if (path === "/work-orders/billing" && switches.workbook) page = <BillingWeek me={me} />;
-  else if (m?.[1] === "work-orders" && switches.workbook) page = <WorkOrderPage key={m[2]} id={m[2]!} me={me} />;
-  else if (m?.[1] === "work-orders") page = <JobPage key={m[2]} id={m[2]!} me={me} />;
-  else if (section === "/jobs") page = <JobList me={me} base="/jobs" title={t("Jobs")} sub={t("Field service visits: who is going where, and when.")} />;
-  else if (section === "/work-orders" && switches.workbook) page = <WorkOrders me={me} />;
+  else if (wo) page = <JobPage key={wo[1]} id={wo[1]!} me={me} tab="work-order" />;
+  else if (section === "/jobs") page = <JobList me={me} workbook={switches.workbook} />;
   else if (/^\/kb\/[A-Za-z0-9_-]+$/.test(path)) page = <KbArticle key={path} id={path.slice(4)} me={me} />;
   else if (section === "/kb") page = <KnowledgeBase me={me} />;
   else if (section === "/catalog") page = <Catalog me={me} path={path} />;

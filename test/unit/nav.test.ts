@@ -1,19 +1,18 @@
 // The main menu shows each person only the pages they can use (web/src/nav.ts).
 import { describe, expect, it } from "vitest";
-import { menuFor, pageAllowed } from "../../web/src/nav";
+import { fromOldAddress, menuFor, pageAllowed } from "../../web/src/nav";
 
 const paths = (perms: string[], workbook = true) => menuFor(new Set(perms), { workbook }).map((n) => n.to);
 
 describe("the main menu", () => {
-  it("hides Jobs and Work orders from someone who can't see jobs", () => {
+  it("hides Jobs from someone who can't see jobs", () => {
     expect(paths(["boards.use", "catalog.view"])).not.toContain("/jobs");
-    expect(paths(["boards.use", "catalog.view"])).not.toContain("/work-orders");
-    expect(paths(["jobs.view"])).toEqual(expect.arrayContaining(["/jobs", "/work-orders"]));
+    expect(paths(["jobs.view"])).toContain("/jobs");
   });
 
-  it("hides Work orders when the Ronchi workbook is switched off, and keeps Jobs", () => {
+  it("has one Jobs line for a visit and its work order, with the workbook on or off (Aaron, 2026-11-25)", () => {
+    expect(paths(["jobs.view"])).not.toContain("/work-orders");
     expect(paths(["jobs.view"], false)).toContain("/jobs");
-    expect(paths(["jobs.view"], false)).not.toContain("/work-orders");
   });
 
   it("gives someone who reads quote requests but doesn't manage customers (Billing) a way to Quote requests", () => {
@@ -44,5 +43,14 @@ describe("opening a page by its address", () => {
     expect(ok("/settings/admin", [])).toBe(true);
     expect(ok("/change-parts/sales", ["cpsales.view"])).toBe(true);
     expect(ok("/change-parts", ["orders.view"])).toBe(true);
+  });
+});
+
+describe("old Work orders addresses", () => {
+  it("open the job's Work order tab", () => {
+    expect(fromOldAddress("/work-orders")).toBe("/jobs");
+    expect(fromOldAddress("/work-orders/billing")).toBe("/jobs/billing");
+    expect(fromOldAddress("/work-orders/abc123")).toBe("/jobs/abc123/work-order");
+    expect(fromOldAddress("/jobs/abc123")).toBe("/jobs/abc123");
   });
 });

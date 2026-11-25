@@ -13,7 +13,7 @@ function hashToPath(hash: string): string {
   if (!h) return "/";
   const k = /^kb-([A-Za-z0-9_-]+)$/.exec(h);
   if (k) return `/kb/${k[1]}`;
-  const m = /^(board|machine|chat|change-part|job|work-order)-([A-Za-z0-9_-]+)$/.exec(h);
+  const m = /^(board|machine|chat|change-part|job|work-order)-([A-Za-z0-9_-]+(?:\/work-order)?)$/.exec(h);
   if (m) return `/${m[1]}s/${m[2]}`;
   return `/${HASH_ALIAS[h] ?? h}`;
 }

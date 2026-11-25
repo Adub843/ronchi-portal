@@ -35,6 +35,9 @@ export const WORKBOOK_DYNAMIC: string[] = [
 ];
 
 export const WORKBOOK_ES: Record<string, string> = {
+  "Schedule": "Programación",
+  "Work order": "Orden de trabajo",
+  "Field service visits: who is going where and when, with each visit's work order.": "Visitas de servicio de campo: quién va adónde y cuándo, con la orden de trabajo de cada visita.",
   "Add photos": "Agregar fotos",
   "Add the expense": "Agregar el gasto",
   "Add to the log": "Agregar al registro",
@@ -148,6 +151,9 @@ export const WORKBOOK_ES: Record<string, string> = {
 };
 
 export const WORKBOOK_IT: Record<string, string> = {
+  "Schedule": "Programmazione",
+  "Work order": "Ordine di lavoro",
+  "Field service visits: who is going where and when, with each visit's work order.": "Interventi di assistenza sul campo: chi va dove e quando, con l'ordine di lavoro di ogni intervento.",
   "Add photos": "Aggiungi foto",
   "Add the expense": "Aggiungi la spesa",
   "Add to the log": "Aggiungi al registro",

@@ -13,8 +13,6 @@ export const NAV: NavItem[] = [
   { to: "/chats", label: "Chats", perm: "boards.use", count: "chats" },
   { to: "/boards", label: "Boards", perm: "boards.use", count: "boards" },
   { to: "/jobs", label: "Jobs", perm: "jobs.view" },
-  // Hidden when an admin switches the Ronchi workbook off in Settings.
-  { to: "/work-orders", label: "Work orders", perm: "jobs.view", workbook: true },
   { to: "/kb", label: "Knowledge base", perm: "kb.view" },
   { to: "/machines", label: "Machines", perm: "machines.view" },
   { to: "/catalog", label: "Parts catalog", perm: "catalog.view" },
@@ -32,7 +30,7 @@ export const NAV: NavItem[] = [
   { to: "/settings", label: "Settings", phone: false },
 ];
 
-/** The menu lines one person sees: pages their permissions allow, and Work orders only while the workbook is on. */
+/** The menu lines one person sees: pages their permissions allow (and any line marked workbook only while the workbook is on). */
 export function menuFor(perms: ReadonlySet<string>, switches: { workbook: boolean }): NavItem[] {
   return NAV.filter((n) => (!n.perm || n.perm.split("|").some((p) => perms.has(p))) && (!n.unless || !perms.has(n.unless)) && (!n.workbook || switches.workbook));
 }
@@ -44,4 +42,12 @@ export function pageAllowed(path: string, perms: ReadonlySet<string>): boolean {
   const section = "/" + (path.split("/")[1] ?? "");
   const item = NAV.find((n) => n.to === section);
   return !item?.perm || item.perm.split("|").some((p) => perms.has(p));
+}
+
+/** Work orders used to be their own pages (/work-orders...). Now each is the Work order tab of its job. */
+export function fromOldAddress(path: string): string {
+  if (path === "/work-orders") return "/jobs";
+  if (path === "/work-orders/billing") return "/jobs/billing";
+  const m = /^\/work-orders\/([A-Za-z0-9_-]+)$/.exec(path);
+  return m ? `/jobs/${m[1]}/work-order` : path;
 }

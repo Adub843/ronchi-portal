@@ -58,7 +58,7 @@ export const AREAS: Area[] = [
     blurb: T("Team rooms for service, engineering, sales and the office.", "Salas de equipo para servicio, ingeniería, ventas y la oficina.", "Stanze di squadra per assistenza, ingegneria, vendite e ufficio."),
   },
   {
-    id: "jobs", paths: ["/jobs", "/work-orders"],
+    id: "jobs", paths: ["/jobs"],
     title: T("Jobs and work orders", "Trabajos y órdenes de trabajo", "Lavori e ordini di lavoro"),
     blurb: T("Field service visits: who is going where, and when, plus the Ronchi workbook's work orders.", "Visitas de servicio de campo: quién va adónde y cuándo, más las órdenes de trabajo del cuaderno de trabajo Ronchi.", "Interventi di assistenza sul campo: chi va dove e quando, più gli ordini di lavoro del quaderno di lavoro Ronchi."),
   },
@@ -323,22 +323,22 @@ export const GUIDES: Guide[] = [
     tip: T("If portal email isn't set up yet, use Send it from my email on the job to send the same message yourself.", "Si el correo del portal aún no está listo, use Enviarlo desde mi correo en el trabajo para enviar el mismo mensaje usted.", "Se l'email del portale non è ancora attiva, usa Inviala dalla mia email nel lavoro per mandare tu lo stesso messaggio."),
   },
   {
-    id: "work-orders", area: "jobs", needs: ["jobs.view"], open: "/work-orders",
+    id: "work-orders", area: "jobs", needs: ["jobs.view"], open: "/jobs",
     title: T("Use work orders and the machine's log", "Usar las órdenes de trabajo y el historial de la máquina", "Usare gli ordini di lavoro e lo storico della macchina"),
     summary: T("The Ronchi workbook: the current work order plus every past work order for the same machine.", "El cuaderno de trabajo Ronchi: la orden de trabajo actual y todas las anteriores de la misma máquina.", "Il quaderno di lavoro Ronchi: l'ordine di lavoro attuale e tutti quelli passati della stessa macchina."),
     steps: [
-      T("Open Work orders, or press Open work order on a job.", "Abra Órdenes de trabajo, o pulse Abrir orden de trabajo en un trabajo.", "Apri Ordini di lavoro, o premi Apri ordine di lavoro in un lavoro."),
+      T("Open Jobs, open the job and press its Work order tab.", "Abra Trabajos, abra el trabajo y pulse su pestaña Orden de trabajo.", "Apri Lavori, apri il lavoro e premi la sua scheda Ordine di lavoro."),
       T("Read the past work orders, quick notes and change-part orders for that machine before you go.", "Lea las órdenes anteriores, notas rápidas y pedidos de cambio de formato de esa máquina antes de ir.", "Leggi gli ordini passati, le note rapide e gli ordini cambio formato di quella macchina prima di partire."),
       T("Use Print or save as PDF, or Download the log (CSV).", "Use Imprimir o guardar como PDF, o Descargar el registro (CSV).", "Usa Stampa o salva in PDF, o Scarica il registro (CSV)."),
     ],
-    tip: T("If an admin switches the Ronchi workbook off, Work orders leaves the menu but jobs keep working.", "Si un administrador apaga el cuaderno de trabajo Ronchi, Órdenes de trabajo sale del menú pero los trabajos siguen funcionando.", "Se un amministratore spegne il quaderno di lavoro Ronchi, Ordini di lavoro sparisce dal menu ma i lavori continuano a funzionare."),
+    tip: T("If an admin switches the Ronchi workbook off, the Work order tab is gone but jobs keep working.", "Si un administrador apaga el cuaderno de trabajo Ronchi, la pestaña Orden de trabajo desaparece pero los trabajos siguen funcionando.", "Se un amministratore spegne il quaderno di lavoro Ronchi, la scheda Ordine di lavoro sparisce ma i lavori continuano a funzionare."),
   },
   {
-    id: "fill-work-order", area: "jobs", needs: ["jobs.view"], open: "/work-orders",
+    id: "fill-work-order", area: "jobs", needs: ["jobs.view"], open: "/jobs",
     title: T("Fill in the service report on a work order", "Llenar el informe de servicio en una orden de trabajo", "Compilare il rapporto di assistenza in un ordine di lavoro"),
     summary: T("The Ronchi workbook lives in each work order: daily log, photos, billable hours, expenses and the customer's signature. It saves as you go.", "El cuaderno de trabajo Ronchi vive en cada orden de trabajo: registro diario, fotos, horas facturables, gastos y la firma del cliente. Se guarda mientras escribe.", "Il quaderno di lavoro Ronchi è in ogni ordine di lavoro: registro giornaliero, foto, ore fatturabili, spese e firma del cliente. Si salva mentre scrivi."),
     steps: [
-      T("Open your job's work order. Pick the type of work and add each day to the Daily work log, with any issues found (one per line).", "Abra la orden de trabajo de su trabajo. Elija el tipo de trabajo y agregue cada día al Registro diario, con los problemas encontrados (uno por línea).", "Apri l'ordine di lavoro del tuo lavoro. Scegli il tipo di lavoro e aggiungi ogni giorno al Registro giornaliero, con i problemi trovati (uno per riga)."),
+      T("Open your job and press its Work order tab. Pick the type of work and add each day to the Daily work log, with any issues found (one per line).", "Abra su trabajo y pulse la pestaña Orden de trabajo. Elija el tipo de trabajo y agregue cada día al Registro diario, con los problemas encontrados (uno por línea).", "Apri il tuo lavoro e premi la scheda Ordine di lavoro. Scegli il tipo di lavoro e aggiungi ogni giorno al Registro giornaliero, con i problemi trovati (uno per riga)."),
       T("Add photos of the machine and the recipe screens, with a caption.", "Agregue fotos de la máquina y de las pantallas de receta, con una leyenda.", "Aggiungi foto della macchina e delle schermate delle ricette, con una didascalia."),
       T("Enter each day's billable hours (what the customer is billed for, not a time clock) and your expenses with a receipt photo.", "Anote las horas facturables de cada día (lo que se le factura al cliente, no un reloj de fichaje) y sus gastos con foto del recibo.", "Inserisci le ore fatturabili di ogni giorno (ciò che si fattura al cliente, non una timbratura) e le spese con la foto della ricevuta."),
       T("Have the customer sign on the screen, then press Submit. The office gets the report and each issue becomes a quick note on the machine.", "Pida al cliente que firme en la pantalla y pulse Enviar. La oficina recibe el informe y cada problema se convierte en una nota rápida de la máquina.", "Fai firmare il cliente sullo schermo, poi premi Invia. L'ufficio riceve il rapporto e ogni problema diventa una nota rapida sulla macchina."),
@@ -346,11 +346,11 @@ export const GUIDES: Guide[] = [
     tip: T("Use Open the job chat to talk with everyone on the job. After Submit the report locks; a scheduler can reopen it.", "Use Abrir el chat del trabajo para hablar con todos los del trabajo. Después de Enviar el informe se bloquea; un programador puede reabrirlo.", "Usa Apri la chat del lavoro per parlare con tutti quelli del lavoro. Dopo Invia il rapporto si blocca; un pianificatore può riaprirlo."),
   },
   {
-    id: "billing-week", area: "jobs", needs: ["jobs.view", "workbook.billing"], open: "/work-orders",
+    id: "billing-week", area: "jobs", needs: ["jobs.view", "workbook.billing"], open: "/jobs",
     title: T("Bill customers from work orders", "Facturar a los clientes desde las órdenes de trabajo", "Fatturare ai clienti dagli ordini di lavoro"),
     summary: T("Every field service engineer's billable hours and expenses, one week at a time.", "Las horas facturables y los gastos de cada ingeniero de servicio de campo, semana por semana.", "Ore fatturabili e spese di ogni ingegnere di assistenza sul campo, una settimana alla volta."),
     steps: [
-      T("Open Work orders and press Billing from work orders.", "Abra Órdenes de trabajo y pulse Facturación desde las órdenes de trabajo.", "Apri Ordini di lavoro e premi Fatturazione dagli ordini di lavoro."),
+      T("Open Jobs and press Billing from work orders.", "Abra Trabajos y pulse Facturación desde las órdenes de trabajo.", "Apri Lavori e premi Fatturazione dagli ordini di lavoro."),
       T("Move between weeks, open a job to see its report, and press Download (CSV) for your invoicing.", "Cambie de semana, abra un trabajo para ver su informe y pulse Descargar (CSV) para facturar.", "Spostati tra le settimane, apri un lavoro per vedere il rapporto e premi Scarica (CSV) per la fatturazione."),
     ],
   },
@@ -772,7 +772,7 @@ export const GUIDES: Guide[] = [
   {
     id: "workbook-switch", area: "people", needs: ["settings.manage"], open: "/settings",
     title: T("Switch the Ronchi workbook on or off", "Encender o apagar el cuaderno de trabajo Ronchi", "Accendere o spegnere il quaderno di lavoro Ronchi"),
-    summary: T("If the team keeps its Excel sheets, hide Work orders for everyone.", "Si el equipo sigue con sus hojas de Excel, oculte Órdenes de trabajo para todos.", "Se il team continua con i fogli Excel, nascondi Ordini di lavoro a tutti."),
+    summary: T("If the team keeps its Excel sheets, hide the Work order tab on jobs for everyone.", "Si el equipo sigue con sus hojas de Excel, oculte la pestaña Orden de trabajo de los trabajos para todos.", "Se il team continua con i fogli Excel, nascondi a tutti la scheda Ordine di lavoro dei lavori."),
     steps: [
       T("Open Settings, press Command center and find Use the Ronchi workbook under Sections of the portal.", "Abra Configuración, pulse Centro de mando y busque Usar el cuaderno de trabajo Ronchi en Secciones del portal.", "Apri Impostazioni, premi Centro di comando e cerca Usa il quaderno di lavoro Ronchi in Sezioni del portale."),
       T("Untick it and confirm. Jobs, job emails and job files keep working, and nothing is deleted.", "Desmárquelo y confirme. Los trabajos, sus correos y archivos siguen funcionando y no se borra nada.", "Togli la spunta e conferma. Lavori, email e file dei lavori continuano a funzionare e non si cancella nulla."),

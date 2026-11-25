@@ -133,7 +133,7 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
                   <table>
                     <tbody>
                       {data.jobs.map((j: any) => (
-                        <tr key={j.id}><td><Link to={`/work-orders/${j.id}`}>{j.job_number}</Link></td><td><JobStatusPill status={j.status} /></td><td className="muted">{j.first_day ?? ""}</td></tr>
+                        <tr key={j.id}><td><Link to={`/jobs/${j.id}`}>{j.job_number}</Link></td><td><JobStatusPill status={j.status} /></td><td className="muted">{j.first_day ?? ""}</td></tr>
                       ))}
                     </tbody>
                   </table>

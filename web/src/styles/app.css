@@ -642,3 +642,7 @@ table.recv tr.held td{background:color-mix(in srgb,var(--accent) 8%,transparent)
 .wb-people { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 @media print { .wb-add, .wb-hours-add, .wb-pad, .wb-bar .btn { display: none !important; } }
+
+/* Job page tabs: Job details and Work order */
+.print-only{display:none}
+@media print{.no-print{display:none!important}.print-only{display:block!important}}

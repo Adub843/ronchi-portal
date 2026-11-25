@@ -8,6 +8,7 @@ import { api, apiForm, can, fmtDate, fmtTime, type Me } from "../api";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad } from "../components/ui";
 import { t } from "../i18n";
 import { navigate } from "../router";
+import { JobListTabs } from "./Jobs";
 import { toCsv } from "../../../src/shared/csv";
 import { fileProblem } from "../../../src/shared/files";
 import { addDays, EXPENSE_TYPES, fromCents, HOUR_TYPES, hoursTotal, mondayOf, PCT, RECIPE_SCREENS, SCOPES } from "../../../src/shared/workbook";
@@ -583,6 +584,7 @@ export function BillingWeek({ me }: { me: Me }) {
         <button className="btn" onClick={() => setStart(addDays(start, 7))}>{t("Next week")}</button>
         <button className="btn" onClick={csv} disabled={!hours.length && !expenses.length}>{t("Download (CSV)")}</button>
       </PageHead>
+      <JobListTabs me={me} on="billing" />
       <p className="muted">{t("Week of {date}", { date: fmtDate(start) })}</p>
       {error && <ErrorNote error={error} />}
       {data && !people.length && <div className="panel"><Empty>{t("Nothing entered for this week yet.")}</Empty></div>}
@@ -599,7 +601,7 @@ export function BillingWeek({ me }: { me: Me }) {
                   <tbody>
                     {hs.map((h) => (
                       <tr key={h.id}>
-                        <td>{fmtDate(h.day)}</td><td><Link to={`/work-orders/${h.job_id}`} className="mono">{h.job_number}</Link> <span className="muted">{h.customer}</span></td>
+                        <td>{fmtDate(h.day)}</td><td><Link to={`/jobs/${h.job_id}/work-order`} className="mono">{h.job_number}</Link> <span className="muted">{h.customer}</span></td>
                         {HOUR_TYPES.map((x) => <td key={x.key} className="num">{h[x.key] || ""}</td>)}<td className="num">{h.miles || ""}</td><td className="num"><strong>{hoursTotal(h)}</strong></td>
                       </tr>
                     ))}
@@ -615,7 +617,7 @@ export function BillingWeek({ me }: { me: Me }) {
                   <tbody>
                     {xs.map((x) => (
                       <tr key={x.id}>
-                        <td>{fmtDate(x.day)}</td><td><Link to={`/work-orders/${x.job_id}`} className="mono">{x.job_number}</Link></td><td>{t(x.type)}</td>
+                        <td>{fmtDate(x.day)}</td><td><Link to={`/jobs/${x.job_id}/work-order`} className="mono">{x.job_number}</Link></td><td>{t(x.type)}</td>
                         <td>{x.description}{x.receipt_file && <> · <a href={`/api/jobs/files/${enc(x.receipt_file)}`} target="_blank" rel="noopener noreferrer">{t("Receipt")}</a></>}</td>
                         <td>{x.billable === "Y" ? t("Yes") : t("No")}</td><td className="num">{money(x.amount_cents)}</td>
                       </tr>
