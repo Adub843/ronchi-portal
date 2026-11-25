@@ -16,6 +16,8 @@ describe("deny by default: each role sees only its part", () => {
     const admin = await person("admin");
     for (const path of ["/api/clock/status", "/api/clock/hours", "/api/time/now"]) expect((await admin.fetch(path)).status, path).toBe(404);
     expect((await admin.json("/api/auth/me")).data.user.permissions.some((p: string) => /clock|hours/.test(p))).toBe(false);
+    // The clock was the only thing that read the phone's location, so browsers are told no page may ask for it.
+    expect((await admin.fetch("/api/auth/me")).headers.get("permissions-policy")).toContain("geolocation=()");
   });
 
   it("sales can view machines but not change them", async () => {

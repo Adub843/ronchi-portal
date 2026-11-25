@@ -7,7 +7,7 @@ export function securityHeaders(opts: { csp: string }): Record<string, string> {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
-    "Permissions-Policy": "camera=(), microphone=(), payment=(), usb=(), geolocation=(self)",
+    "Permissions-Policy": "camera=(), microphone=(), payment=(), usb=(), geolocation=()",
     "Cross-Origin-Opener-Policy": "same-origin",
     "Cross-Origin-Resource-Policy": "same-origin",
   };
