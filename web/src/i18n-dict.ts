@@ -2,7 +2,11 @@
 // Add a line here whenever a new t("...") text is added; test/unit/i18n.test.ts checks none is missing.
 // Messages people type are never translated.
 import { ADMIN_ES, ADMIN_IT } from "./i18n-admin";
+import { SHIPPING_DYNAMIC, SHIPPING_ES, SHIPPING_IT } from "./i18n-shipping";
 import { SOFTWARE_DYNAMIC, SOFTWARE_ES, SOFTWARE_IT } from "./i18n-software";
+import { PARTS_ORDERS_DYNAMIC, PARTS_ORDERS_ES, PARTS_ORDERS_IT } from "./i18n-parts-orders";
+import { WORKBOOK_DYNAMIC, WORKBOOK_ES, WORKBOOK_IT } from "./i18n-workbook";
+import { ERRORS_ES, ERRORS_IT } from "./i18n-errors";
 import { THEME_ES, THEME_IT } from "./i18n-themes";
 import { THEMES } from "../../src/shared/themes";
 
@@ -209,7 +213,13 @@ export const DYNAMIC: string[] = [
  "removed this sale",
  "Add the customer's PO to mark it sold.",
  "This is already an order.",
- "Someone else changed this sale while you were working on it. Reload to see their changes."
+ "Someone else changed this sale while you were working on it. Reload to see their changes.",
+ "Waiting on customer approval",
+ "Being built",
+ "Shipping",
+ "Shipped to customer",
+ "Dry fit test",
+ "Trial completed"
 ];
 
 export const ES: Record<string, string> = {
@@ -558,6 +568,13 @@ export const ES: Record<string, string> = {
   "{n} unread": "{n} sin leer",
   "{p} passkey(s), {s} signed in": "{p} llave(s) de acceso, {s} con sesión iniciada",
   "Home": "Inicio",
+  "No access": "Sin acceso",
+  "No jobs for this machine yet.": "Todavía no hay trabajos para esta máquina.",
+  "Open this machine's parts catalog ({n} sheets)": "Abrir el catálogo de piezas de esta máquina ({n} hojas)",
+  "No parts catalog for this machine yet.": "Todavía no hay catálogo de piezas para esta máquina.",
+  "No notes for this machine yet.": "Todavía no hay notas para esta máquina.",
+  "Install as an app": "Instalar como aplicación",
+  "Ask an admin if you need it.": "Pida acceso a un administrador si lo necesita.",
   "Billing": "Facturación",
   "Scheduling": "Programación",
   "Service": "Servicio",
@@ -966,7 +983,7 @@ export const ES: Record<string, string> = {
   "Send it from my email": "Enviarlo desde mi correo",
   "Send the email again": "Enviar el correo otra vez",
   "Street, city, state and ZIP. Field service engineers can open it in Google Maps, Waze or Apple Maps.": "Calle, ciudad, estado y código postal. Los ingenieros de servicio de campo pueden abrirla en Google Maps, Waze o Apple Maps.",
-  "Switch the Ronchi workbook off for everyone? Work orders leave the menu. Jobs, job emails and job files keep working, and nothing is deleted.": "¿Desactivar el cuaderno de trabajo Ronchi para todos? Órdenes de trabajo sale del menú. Los trabajos, sus correos y archivos siguen funcionando y no se borra nada.",
+  "Switch the Ronchi workbook off for everyone? The Work order tab leaves every job. Jobs, job emails and job files keep working, and nothing is deleted.": "¿Desactivar el cuaderno de trabajo Ronchi para todos? La pestaña Orden de trabajo desaparece de cada trabajo. Los trabajos, sus correos y archivos siguen funcionando y no se borra nada.",
   "Field service visits: who is going where, and when.": "Visitas de servicio de campo: quién va a dónde y cuándo.",
   "The Ronchi workbook is off": "El cuaderno de trabajo Ronchi está desactivado",
   "The Ronchi workbook is on": "El cuaderno de trabajo Ronchi está activado",
@@ -1126,7 +1143,16 @@ export const ES: Record<string, string> = {
   "removed this sale": "quitó esta venta",
   "Add the customer's PO to mark it sold.": "Agregue la orden de compra del cliente para marcarla vendida.",
   "This is already an order.": "Esto ya es un pedido.",
-  "Someone else changed this sale while you were working on it. Reload to see their changes.": "Otra persona cambió esta venta mientras usted trabajaba en ella. Recargue para ver sus cambios."
+  "Someone else changed this sale while you were working on it. Reload to see their changes.": "Otra persona cambió esta venta mientras usted trabajaba en ella. Recargue para ver sus cambios.",
+  "Shipped, waiting on customer approval": "Enviado, esperando la aprobación del cliente",
+  "Mark completed": "Marcar completado",
+  "Marked completed": "Marcado como completado",
+  "Waiting on customer approval": "Esperando la aprobación del cliente",
+  "Being built": "En fabricación",
+  "Shipping": "En envío",
+  "Shipped to customer": "Enviado al cliente",
+  "Dry fit test": "Prueba de montaje en seco",
+  "Trial completed": "Prueba completada"
 };
 
 export const IT: Record<string, string> = {
@@ -1475,6 +1501,13 @@ export const IT: Record<string, string> = {
   "{n} unread": "{n} da leggere",
   "{p} passkey(s), {s} signed in": "{p} passkey, {s} con accesso attivo",
   "Home": "Home",
+  "No access": "Accesso non consentito",
+  "No jobs for this machine yet.": "Ancora nessun lavoro per questa macchina.",
+  "Open this machine's parts catalog ({n} sheets)": "Apri il catalogo ricambi di questa macchina ({n} tavole)",
+  "No parts catalog for this machine yet.": "Ancora nessun catalogo ricambi per questa macchina.",
+  "No notes for this machine yet.": "Ancora nessuna nota per questa macchina.",
+  "Install as an app": "Installa come app",
+  "Ask an admin if you need it.": "Se ti serve, chiedi a un amministratore.",
   "Billing": "Fatturazione",
   "Scheduling": "Pianificazione",
   "Service": "Assistenza",
@@ -1883,7 +1916,7 @@ export const IT: Record<string, string> = {
   "Send it from my email": "Inviala dalla mia email",
   "Send the email again": "Invia di nuovo l'email",
   "Street, city, state and ZIP. Field service engineers can open it in Google Maps, Waze or Apple Maps.": "Via, città, stato e CAP. Gli ingegneri di assistenza sul campo possono aprirlo in Google Maps, Waze o Apple Maps.",
-  "Switch the Ronchi workbook off for everyone? Work orders leave the menu. Jobs, job emails and job files keep working, and nothing is deleted.": "Disattivare il quaderno di lavoro Ronchi per tutti? Ordini di lavoro esce dal menu. Lavori, email e file continuano a funzionare e non viene cancellato nulla.",
+  "Switch the Ronchi workbook off for everyone? The Work order tab leaves every job. Jobs, job emails and job files keep working, and nothing is deleted.": "Disattivare il quaderno di lavoro Ronchi per tutti? La scheda Ordine di lavoro sparisce da ogni lavoro. Lavori, email e file continuano a funzionare e non viene cancellato nulla.",
   "Field service visits: who is going where, and when.": "Interventi sul campo: chi va dove, e quando.",
   "The Ronchi workbook is off": "Il quaderno di lavoro Ronchi è disattivato",
   "The Ronchi workbook is on": "Il quaderno di lavoro Ronchi è attivo",
@@ -2043,20 +2076,43 @@ export const IT: Record<string, string> = {
   "removed this sale": "ha rimosso questa vendita",
   "Add the customer's PO to mark it sold.": "Aggiungi l'ordine d'acquisto del cliente per segnarla venduta.",
   "This is already an order.": "Questo è già un ordine.",
-  "Someone else changed this sale while you were working on it. Reload to see their changes.": "Qualcun altro ha cambiato questa vendita mentre ci lavoravi. Ricarica per vedere le modifiche."
+  "Someone else changed this sale while you were working on it. Reload to see their changes.": "Qualcun altro ha cambiato questa vendita mentre ci lavoravi. Ricarica per vedere le modifiche.",
+  "Shipped, waiting on customer approval": "Spedito, in attesa dell'approvazione del cliente",
+  "Mark completed": "Segna completato",
+  "Marked completed": "Segnato come completato",
+  "Waiting on customer approval": "In attesa dell'approvazione del cliente",
+  "Being built": "In costruzione",
+  "Shipping": "In spedizione",
+  "Shipped to customer": "Spedito al cliente",
+  "Dry fit test": "Prova di montaggio a secco",
+  "Trial completed": "Prova completata"
 };
 
 // Settings > Command center (i18n-admin.ts).
 Object.assign(ES, ADMIN_ES);
 Object.assign(IT, ADMIN_IT);
 // The access screen lists the admin-controls permission by name (src/portal/lib/roles.ts).
-DYNAMIC.push("Admin controls", "Portal-wide settings. Admins only.");
+DYNAMIC.push("Command center", "Every switch and control for the portal. The portal owner only.", "Export chats and boards", "Download a whole chat, or a board they run, as a text file.", "Import manuals, fix tables, upload drawings and 3D.", "Publish catalogs to customers", "Put a machine's catalog on the customer parts site, or take it down.", "Export orders", "Download the order list as a spreadsheet.");
 // Software downloads (i18n-software.ts).
 Object.assign(ES, SOFTWARE_ES);
 Object.assign(IT, SOFTWARE_IT);
 DYNAMIC.push(...SOFTWARE_DYNAMIC);
+Object.assign(ES, WORKBOOK_ES);
+Object.assign(IT, WORKBOOK_IT);
+DYNAMIC.push(...WORKBOOK_DYNAMIC);
 
 // The look descriptions in Settings (i18n-themes.ts).
 Object.assign(ES, THEME_ES);
 Object.assign(IT, THEME_IT);
 DYNAMIC.push(...THEMES.map((th) => th.blurb));
+
+// Parts orders (i18n-parts-orders.ts). Words already translated elsewhere keep their translation.
+for (const [k, v] of Object.entries(PARTS_ORDERS_ES)) ES[k] ??= v;
+for (const [k, v] of Object.entries(PARTS_ORDERS_IT)) IT[k] ??= v;
+DYNAMIC.push(...PARTS_ORDERS_DYNAMIC);
+// Shipping and receiving keeps its own words in i18n-shipping.ts (fewer clashes in this file).
+for (const [k, v] of Object.entries(SHIPPING_ES)) ES[k] ??= v;
+for (const [k, v] of Object.entries(SHIPPING_IT)) IT[k] ??= v;
+for (const [k, v] of Object.entries(ERRORS_ES)) ES[k] ??= v;
+for (const [k, v] of Object.entries(ERRORS_IT)) IT[k] ??= v;
+DYNAMIC.push(...SHIPPING_DYNAMIC);

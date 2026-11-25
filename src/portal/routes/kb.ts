@@ -342,3 +342,24 @@ kb.post("/import", async (c) => {
   await audit(c.env.DB, { userId: user.id, action: "kb.import", detail: { added, updated, skipped }, ip: c.get("ip") });
   return c.json({ added, updated, skipped });
 });
+
+/** Add a staff-only quick note from another part of the portal (the workbook's Submit adds one per
+ *  problem found on a job). Same numbering and search as notes typed on the knowledge base page. */
+export async function addQuickNote(db: D1Database, userId: string, n: { title: string; serial: string | null; issue: string; fix: string }): Promise<string> {
+  const id = randomId();
+  const at = now();
+  const title = n.title.slice(0, 200);
+  for (let attempt = 0; ; attempt++) {
+    const code = await nextCode(db, "quick_note");
+    try {
+      await db.prepare(
+        `INSERT INTO kb_articles (id, code, kind, title, summary, machine_type, category, serial, issue, fix, content, body_text, audience, created_by, updated_by, created_at, updated_at)
+         VALUES (?, ?, 'quick_note', ?, '', NULL, ?, ?, ?, ?, '{}', '', 'internal', ?, ?, ?, ?)`,
+      ).bind(id, code, title, guessCategory(title, n.issue, n.fix), n.serial, n.issue.slice(0, 4000), n.fix.slice(0, 4000), userId, userId, at, at).run();
+      return code;
+    } catch (e) {
+      if (attempt < 2 && /UNIQUE/i.test(String(e))) continue;
+      throw e;
+    }
+  }
+}

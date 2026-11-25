@@ -34,8 +34,8 @@ async function findInvite(db: D1Database, token: unknown): Promise<InviteRow> {
     .bind(await sha256Hex(token))
     .first<InviteRow>();
   if (!row) fail(404, "This invite link isn't valid.");
-  if (row.used_at) fail(410, "This invite link has already been used. Ask Paolo for a new one.");
-  if (row.expires_at < now()) fail(410, "This invite link has expired. Ask Paolo for a new one.");
+  if (row.used_at) fail(410, "This invite link has already been used. Ask your admin for a new one.");
+  if (row.expires_at < now()) fail(410, "This invite link has expired. Ask your admin for a new one.");
   return row;
 }
 

@@ -2,12 +2,13 @@
 // the orders it turns into (replaces the old Change Parts Console). Lists with search, filters and
 // export; one page per sale or order with its history; CSV import for orders.
 import { useMemo, useState } from "react";
-import { CP_FIELDS, CP_LABELS, CP_SALE_FIELDS, CP_SALE_STAGES, CP_STATUSES, normalDate, type CpField } from "../../../src/shared/change-parts";
+import { CP_FIELDS, CP_LABELS, CP_SALE_FIELDS, CP_SALE_STAGES, CP_STATUSES, isShipped, normalDate, type CpField } from "../../../src/shared/change-parts";
 import { toCsv } from "../../../src/shared/csv";
 import { api, can, fmtTime, type Me } from "../api";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad, Tip } from "../components/ui";
 import { loc, t } from "../i18n";
 import { navigate } from "../router";
+import { LinkedShipments } from "./Shipping";
 
 type Order = Record<CpField, string | null> & { id: string; open: boolean; revision: number; updated_at: string; machine_id?: string | null; phase?: "sale" | "order"; sold_at?: string | null };
 
@@ -21,8 +22,11 @@ function shortDate(iso: string | null): string {
 
 /** The ship date as YYYY-MM-DD when it reads as a real date ("Mid Nov 2026" doesn't). */
 const shipDay = (o: Order) => normalDate(o.ship_date);
-const late = (o: Order) => { const d = shipDay(o); return o.open && !!d && d < today(); };
-const soon = (o: Order) => { const d = shipDay(o); return o.open && !!d && d >= today() && d <= inDays(30); };
+// Once parts have shipped the ship date no longer matters; the job waits for the customer's approval.
+const late = (o: Order) => { const d = shipDay(o); return o.open && !isShipped(o.status) && !!d && d < today(); };
+const soon = (o: Order) => { const d = shipDay(o); return o.open && !isShipped(o.status) && !!d && d >= today() && d <= inDays(30); };
+/** Shipped but not checked off yet: waiting for the customer to approve the parts. */
+const approving = (o: Order) => o.open && isShipped(o.status);
 
 export function StatusPill({ status, isLate }: { status: string | null; isLate?: boolean }) {
   const s = (status ?? "").toLowerCase();
@@ -33,7 +37,7 @@ export function StatusPill({ status, isLate }: { status: string | null; isLate?:
 /** Labels shown on screen, in the chosen language. */
 const label = (f: CpField) => t(CP_LABELS[f]);
 
-type View = "open" | "late" | "soon" | "done" | "folder" | "all";
+type View = "open" | "late" | "soon" | "approval" | "done" | "folder" | "all";
 
 /** Jobs found only as a SharePoint project folder, not on the master sheet. Kept apart until someone checks them. */
 const folderOnly = (o: Order) => (o.status ?? "").toLowerCase() === "folder only";
@@ -55,7 +59,7 @@ export function ChangeParts({ me, tab }: { me: Me; tab?: "sales" | "orders" }) {
 }
 
 function OrderList({ me }: { me: Me }) {
-  const { data, error, reload } = useLoad<{ orders: Order[] }>(() => api("/change-parts"));
+  const { data, error, reload } = useLoad<{ orders: Order[] }>(() => api("/change-parts"), [], { live: true });
   const [view, setView] = useState<View>("open");
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
@@ -69,6 +73,7 @@ function OrderList({ me }: { me: Me }) {
     folder: all.filter(folderOnly).length,
     late: all.filter(late).length,
     soon: all.filter(soon).length,
+    approval: all.filter(approving).length,
     done: all.filter((o) => !o.open).length,
   }), [all]);
   const statuses = useMemo(() => [...new Set(all.map((o) => o.status ?? ""))].sort((a, b) => {
@@ -84,6 +89,7 @@ function OrderList({ me }: { me: Me }) {
       if (view === "done" && o.open) return false;
       if (view === "late" && !late(o)) return false;
       if (view === "soon" && !soon(o)) return false;
+      if (view === "approval" && !approving(o)) return false;
       if (status && (o.status ?? "") !== status) return false;
       if (!words.length) return true;
       const text = CP_FIELDS.map((f) => o[f] ?? "").join(" ").toLowerCase();
@@ -106,14 +112,15 @@ function OrderList({ me }: { me: Me }) {
     { v: "open", n: counts.open, l: t("Open jobs") },
     { v: "soon", n: counts.soon, l: t("Ship in the next 30 days") },
     { v: "late", n: counts.late, l: t("Past ship date") },
-    { v: "done", n: counts.done, l: t("Shipped or closed") },
+    { v: "approval", n: counts.approval, l: t("Shipped, waiting on customer approval") },
+    { v: "done", n: counts.done, l: t("Completed") },
     ...(counts.folder ? [{ v: "folder" as View, n: counts.folder, l: t("Folders not on the master sheet") }] : []),
   ];
 
   return (
     <>
       <PageHead title={t("Change parts")} sub={t("Every change-part job, from the first request to shipped.")} tip="change-parts.head">
-        <button className="btn" onClick={exportCsv} disabled={!shown.length}>{t("Export CSV")}</button>
+        {can(me, "orders.export") && <button className="btn" onClick={exportCsv} disabled={!shown.length}>{t("Export CSV")}</button>}
         {can(me, "orders.import") && <button className="btn" onClick={() => setPanel(panel === "import" ? null : "import")}>{panel === "import" ? t("Cancel") : t("Import CSV")}</button>}
         {can(me, "orders.add") && <button className="btn primary" onClick={() => setPanel(panel === "new" ? null : "new")}>{panel === "new" ? t("Cancel") : t("New order")}</button>}
       </PageHead>
@@ -121,7 +128,7 @@ function OrderList({ me }: { me: Me }) {
       {panel === "new" && <OrderForm onSaved={(id) => navigate(`/change-parts/${id}`)} onCancel={() => setPanel(null)} />}
       {panel === "import" && <ImportPanel onDone={() => { setPanel(null); reload(); }} />}
       <ErrorNote error={error} />
-      <div className={`cp-tiles${counts.folder ? " five" : ""}`}>
+      <div className={`cp-tiles${counts.folder ? " six" : " five"}`}>
         {tiles.map((x) => (
           <button key={x.v} type="button" className={`panel cp-tile${view === x.v ? " on" : ""}${x.v === "late" && x.n ? " warn" : ""}`} aria-pressed={view === x.v} onClick={() => setView(view === x.v ? "all" : x.v)}>
             <span className="n">{data ? x.n : "–"}</span><span className="l">{x.l}</span>
@@ -173,6 +180,7 @@ function OrderList({ me }: { me: Me }) {
 /** The add / edit form. Sends the revision it started from so a newer save is never overwritten. */
 function OrderForm({ order, onSaved, onCancel }: { order?: Order; onSaved: (id: string) => void; onCancel: () => void }) {
   const [f, setF] = useState<Record<CpField, string>>(() => Object.fromEntries(CP_FIELDS.map((k) => [k, order?.[k] ?? ""])) as Record<CpField, string>);
+  const [revision] = useState(order?.revision); // the page reloads on its own; keep the revision this form started from
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -182,7 +190,7 @@ function OrderForm({ order, onSaved, onCancel }: { order?: Order; onSaved: (id: 
     setErr(null);
     try {
       if (order) {
-        await api(`/change-parts/${encodeURIComponent(order.id)}`, { method: "PATCH", body: { ...f, revision: order.revision } });
+        await api(`/change-parts/${encodeURIComponent(order.id)}`, { method: "PATCH", body: { ...f, revision } });
         onSaved(order.id);
       } else {
         const r = await api<{ id: string }>("/change-parts", { body: f });
@@ -391,6 +399,7 @@ function SaleList({ me }: { me: Me }) {
 /** Start or edit a sale: only what's known before the customer's PO. */
 function SaleForm({ me, sale, onSaved, onCancel }: { me: Me; sale?: Order; onSaved: (id: string) => void; onCancel: () => void }) {
   const [f, setF] = useState<Record<string, string>>(() => Object.fromEntries(CP_SALE_FIELDS.map((k) => [k, sale?.[k] ?? (k === "salesperson" ? me.name : k === "status" ? CP_SALE_STAGES[0] : "")])));
+  const [revision] = useState(sale?.revision);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   async function save(e: React.FormEvent) {
@@ -399,7 +408,7 @@ function SaleForm({ me, sale, onSaved, onCancel }: { me: Me; sale?: Order; onSav
     setErr(null);
     try {
       if (sale) {
-        await api(`/change-parts/${encodeURIComponent(sale.id)}`, { method: "PATCH", body: { ...f, revision: sale.revision } });
+        await api(`/change-parts/${encodeURIComponent(sale.id)}`, { method: "PATCH", body: { ...f, revision } });
         onSaved(sale.id);
       } else {
         const r = await api<{ id: string }>("/change-parts/sales", { body: f });
@@ -448,6 +457,7 @@ function SaleForm({ me, sale, onSaved, onCancel }: { me: Me; sale?: Order; onSav
 /** Mark a sale sold: the customer's PO turns it into a change-part order. */
 function SoldForm({ sale, onDone, onCancel }: { sale: Order; onDone: () => void; onCancel: () => void }) {
   const [f, setF] = useState({ customer_po: sale.customer_po ?? "", status: "Open", aa: "", ra_po: "", ship_date: "" });
+  const [revision] = useState(sale.revision);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   async function save(e: React.FormEvent) {
@@ -455,7 +465,7 @@ function SoldForm({ sale, onDone, onCancel }: { sale: Order; onDone: () => void;
     setBusy(true);
     setErr(null);
     try {
-      await api(`/change-parts/${encodeURIComponent(sale.id)}/sold`, { body: { ...f, revision: sale.revision } });
+      await api(`/change-parts/${encodeURIComponent(sale.id)}/sold`, { body: { ...f, revision } });
       toast(t("Sold. It's now a change-part order."));
       onDone();
     } catch (x) {
@@ -501,7 +511,7 @@ const HISTORY: Record<string, string> = {
 };
 
 export function ChangePartPage({ id, me }: { id: string; me: Me }) {
-  const { data, error, reload } = useLoad<{ order: Order & Record<string, any>; history: any[] }>(() => api(`/change-parts/${encodeURIComponent(id)}`), [id]);
+  const { data, error, reload } = useLoad<{ order: Order & Record<string, any>; history: any[] }>(() => api(`/change-parts/${encodeURIComponent(id)}`), [id], { live: true });
   const [editing, setEditing] = useState(false);
   const [selling, setSelling] = useState(false);
   const [sure, setSure] = useState(false);
@@ -511,6 +521,17 @@ export function ChangePartPage({ id, me }: { id: string; me: Me }) {
   const sale = o.phase === "sale";
   const edit = can(me, sale ? "cpsales.edit" : "orders.edit");
   const canSell = sale && can(me, "cpsales.edit") && can(me, "orders.add");
+
+  /** Check a job off once the customer has approved the parts. */
+  async function complete() {
+    try {
+      await api(`/change-parts/${encodeURIComponent(id)}`, { method: "PATCH", body: { status: "Completed", revision: o.revision } });
+      toast(t("Marked completed"));
+      reload();
+    } catch (x) {
+      toast((x as Error).message);
+    }
+  }
 
   async function remove() {
     if (!sure) {
@@ -540,6 +561,7 @@ export function ChangePartPage({ id, me }: { id: string; me: Me }) {
       <PageHead title={o.customer ?? ""} sub={[sale ? t("Sale") : t("Order"), o.machine, o.part].filter(Boolean).join(" · ")}>
         <StatusPill status={o.status} isLate={!sale && late(o)} />
         {canSell && !editing && !selling && o.open && <button className="btn primary" onClick={() => setSelling(true)}>{t("Mark sold")}</button>}
+        {!sale && edit && approving(o) && !editing && <button className="btn primary" onClick={complete}>{t("Mark completed")}</button>}
         {edit && !editing && !selling && <button className="btn" onClick={() => setEditing(true)}>{t("Edit")}</button>}
         {can(me, sale ? "cpsales.edit" : "orders.remove") && !editing && !selling && <button className="btn danger" onClick={remove}>{sure ? t("Yes, remove") : t("Remove")}</button>}
       </PageHead>
@@ -586,6 +608,7 @@ export function ChangePartPage({ id, me }: { id: string; me: Me }) {
             <h2>{label("notes")}</h2>
             <p style={{ whiteSpace: "pre-wrap" }}>{o.notes || <span className="muted">{t("No notes yet.")}</span>}</p>
           </div>
+          <LinkedShipments me={me} link={{ type: "cp_order", id: o.id }} shipLabel={t("Ship these change parts")} />
         </div>
       )}
       <div className="panel">

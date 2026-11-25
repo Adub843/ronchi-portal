@@ -101,7 +101,7 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 
 /** The page a job's email links to: its work order in the Ronchi workbook, or the plain job page when the workbook is switched off. */
 export function jobLink(origin: string, id: string, workbook: boolean): string {
-  return `${origin}/${workbook ? "work-orders" : "jobs"}/${encodeURIComponent(id)}`;
+  return `${origin}/jobs/${encodeURIComponent(id)}${workbook ? "/work-order" : ""}`;
 }
 
 /**

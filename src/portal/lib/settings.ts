@@ -18,15 +18,17 @@ export const LANG_IDS: Lang[] = ["en", "es", "it"];
 export const SECTIONS = {
   // A new part of the portal adds one line here: its permissions close to everyone but admins when
   // the owner switches it off in Settings > Command center. `hint` is one optional plain sentence.
-  chats: { label: "Chats and boards", perms: ["boards.use", "boards.create", "chats.start", "files.send", "boards.moderate"] },
-  jobs: { label: "Jobs (field service scheduling)", perms: ["jobs.view", "jobs.schedule"] },
+  chats: { label: "Chats and boards", perms: ["boards.use", "boards.create", "chats.start", "files.send", "boards.moderate", "boards.export"] },
+  jobs: { label: "Jobs (field service scheduling)", perms: ["jobs.view", "jobs.schedule", "workbook.billing"] },
   machines: { label: "Machines", perms: ["machines.view", "machines.add", "machines.edit"] },
-  catalog: { label: "Parts catalog", perms: ["catalog.view", "catalog.edit"] },
+  catalog: { label: "Parts catalog", perms: ["catalog.view", "catalog.edit", "catalog.publish"] },
   customers: { label: "Customers and quote requests", perms: ["customers.manage", "customers.invite", "quotes.manage"] },
   cpSales: { label: "Change-part sales", perms: ["cpsales.view", "cpsales.edit"] },
-  changeParts: { label: "Change parts", perms: ["orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import"] },
+  changeParts: { label: "Change parts", perms: ["orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import", "orders.export"] },
+  partsOrders: { label: "Parts orders", perms: ["partsorders.view", "partsorders.add", "partsorders.edit", "partsorders.remove", "partsorders.prices", "partsorders.reports", "partsorders.export"] },
   knowledge: { label: "Knowledge base", perms: ["kb.view", "kb.write", "kb.edit_all", "kb.import", "kb.publish"] },
   software: { label: "Software downloads", perms: ["software.view", "software.manage"] },
+  shipping: { label: "Shipping and receiving", perms: ["shipping.view", "shipping.edit"] },
 } as const satisfies Record<string, { label: string; perms: Permission[]; hint?: string }>;
 export type Section = keyof typeof SECTIONS;
 export const SECTION_IDS = Object.keys(SECTIONS) as Section[];
@@ -77,7 +79,7 @@ export const LOCKED_RULES = [
   "Customers never see the business side. The help center and parts site are separate, with their own data.",
   "Sign-in is with passkeys only (Face ID, fingerprint, Windows Hello). There are no passwords.",
   "Each file can be at most 25 MB, and only safe file types can be sent.",
-  "No money amounts or sales totals are shown anywhere in the portal.",
+  "No money amounts or sales totals are shown anywhere in the portal, except parts order prices and sales, which only people with See parts prices can see, and the expenses engineers enter on a job's work order, which only the people on the job, schedulers and billing can see.",
   "The activity log can't be edited or deleted.",
 ];
 

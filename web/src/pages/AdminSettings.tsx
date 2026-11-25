@@ -6,6 +6,7 @@ import { ErrorNote, Link, toast, useLoad } from "../components/ui";
 import { LANGS, t } from "../i18n";
 import { THEMES } from "../theme";
 import { STARTING_ROLES, type PortalSettings, type Section } from "../../../src/portal/lib/settings";
+import { AccessCenter } from "./AccessCenter";
 import "../styles/admin.css";
 
 type Role = PortalSettings["people"]["defaultRole"];
@@ -16,7 +17,7 @@ const roleName = (r: string) =>
 // A section added later (lib/settings.ts SECTIONS) shows with the label the server sends until it gets a line here.
 const SECTION_NAMES: Partial<Record<string, () => string>> = {
   chats: () => t("Chats and boards"), jobs: () => t("Jobs (field service scheduling)"), machines: () => t("Machines"), catalog: () => t("Parts catalog"),
-  customers: () => t("Customers and quote requests"), cpSales: () => t("Change-part sales"), changeParts: () => t("Change parts"), knowledge: () => t("Knowledge base"), software: () => t("Software downloads"),
+  customers: () => t("Customers and quote requests"), cpSales: () => t("Change-part sales"), changeParts: () => t("Change parts"), partsOrders: () => t("Parts orders"), knowledge: () => t("Knowledge base"), software: () => t("Software downloads"), shipping: () => t("Shipping and receiving"),
 };
 const sectionName = (s: string, label?: string) => SECTION_NAMES[s]?.() ?? label ?? s;
 const LOCKED = () => [
@@ -27,14 +28,14 @@ const LOCKED = () => [
   t("Customers never see the business side. The help center and parts site are separate, with their own data."),
   t("Sign-in is with passkeys only (Face ID, fingerprint, Windows Hello). There are no passwords."),
   t("Each file can be at most 25 MB, and only safe file types can be sent."),
-  t("No money amounts or sales totals are shown anywhere in the portal."),
+  t("No money amounts or sales totals are shown anywhere in the portal, except parts order prices and sales, which only people with See parts prices can see, and the expenses engineers enter on a job's work order, which only the people on the job, schedulers and billing can see."),
   t("The activity log can't be edited or deleted."),
 ];
 
 type Switches = { workbook: boolean };
 interface Loaded {
   settings: PortalSettings; defaults: PortalSettings; updatedAt: string | null; updatedBy: string | null;
-  sections: Record<string, { label: string; hint?: string }>;
+  sections: Record<string, { label: string; hint?: string; perms: readonly string[] }>;
   owner: { id: string; name: string } | null; admins: { id: string; name: string }[];
 }
 
@@ -171,8 +172,8 @@ export function AdminSettings({ onSaved, switches, onSwitches }: { onSaved: (s: 
         <WorkbookSwitch on={switches.workbook} onSwitches={onSwitches} />
       </Group>
 
-      <Group title={t("Roles and permissions")} sub={t("What each role can do, and changes for one person, are set on the People page so there's only one place to edit them.")}>
-        <div><Link to="/people" className="btn">{t("Open People")}</Link></div>
+      <Group title={t("Each person's access")} sub={t("Pick a person and switch every function of every page on or off for them, for good or for a set time. Roles themselves are edited on People > Roles.")}>
+        <AccessCenter switches={switches} sectionsOff={new Set(Object.entries(saved.sections).filter(([, on]) => !on).flatMap(([k]) => data.sections[k]?.perms ?? []))} />
       </Group>
 
       <Group title={t("Chats and boards")} onReset={() => reset("chats")}>
@@ -339,7 +340,7 @@ function WorkbookSwitch({ on, onSwitches }: { on: boolean; onSwitches: (s: Switc
     <label className="row switchrow">
       <input type="checkbox" checked={on} onChange={async (e) => {
         const next = e.target.checked;
-        if (!next && !window.confirm(t("Switch the Ronchi workbook off for everyone? Work orders leave the menu. Jobs, job emails and job files keep working, and nothing is deleted."))) return;
+        if (!next && !window.confirm(t("Switch the Ronchi workbook off for everyone? The Work order tab leaves every job. Jobs, job emails and job files keep working, and nothing is deleted."))) return;
         try {
           const r = await api("/switches/workbook", { method: "PUT", body: { on: next } });
           onSwitches(r.switches);

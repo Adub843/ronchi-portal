@@ -484,7 +484,7 @@ async function privateTerms(db: Db) {
 }
 
 catalog.post("/machines/:id/publish", async (c) => {
-  const u = requirePerm(c, "catalog.edit");
+  const u = requirePerm(c, "catalog.publish");
   const db = c.env.DB;
   const m = await machineById(db, c.req.param("id"));
   const { results: sheets } = await db.prepare("SELECT * FROM catalog_sheets WHERE machine_id = ? ORDER BY sort").bind(m.id).all<SheetRec>();
@@ -517,7 +517,7 @@ catalog.post("/machines/:id/publish", async (c) => {
   for (const r of rows) (bySheet.get(r.sheet_id) ?? bySheet.set(r.sheet_id, []).get(r.sheet_id)!).push(r);
   const res = await partsCall<{ sheets: number; parts: number }>(c.env, "/publish", {
     body: {
-      by: u.name,
+      by: u.id,
       machine: { serial: m.serial, model: m.model },
       sheets: sheets.map((s) => ({
         id: s.id, parentId: s.parent_id, section: s.section, grp: s.grp, code: s.code, rev: s.rev, title: s.title, titleIt: s.title_it,
@@ -538,7 +538,7 @@ catalog.post("/machines/:id/publish", async (c) => {
  * long. The app calls this with the list publish returned until it's done.
  */
 catalog.post("/machines/:id/publish/files", async (c) => {
-  requirePerm(c, "catalog.edit");
+  requirePerm(c, "catalog.publish");
   const m = await machineById(c.env.DB, c.req.param("id"));
   const b = await body(c);
   const ids = Array.isArray(b.sheets) ? (b.sheets as unknown[]).filter((v): v is string => typeof v === "string" && ID.test(v)).slice(0, 10) : [];
@@ -558,7 +558,7 @@ catalog.post("/machines/:id/publish/files", async (c) => {
 });
 
 catalog.delete("/machines/:id/publish", async (c) => {
-  const u = requirePerm(c, "catalog.edit");
+  const u = requirePerm(c, "catalog.publish");
   const m = await machineById(c.env.DB, c.req.param("id"));
   await partsCall(c.env, `/machines/${encodeURIComponent(m.serial)}`, { method: "DELETE" });
   await c.env.DB.prepare("UPDATE machines SET catalog_published_at = NULL WHERE id = ?").bind(m.id).run();

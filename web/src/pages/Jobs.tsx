@@ -1,12 +1,16 @@
 // Tech jobs: the schedule list, one job's page, and the form schedulers use to make or change a job.
-// The Ronchi workbook's Work orders pages are in WorkOrders.tsx and can be switched off; this works either way.
+// Each job's work order (the Ronchi workbook) is a tab on the job page, in WorkOrders.tsx. An admin can
+// switch the workbook off; then the tab is gone and jobs work as before.
 import { useRef, useState } from "react";
 import { api, apiForm, can, fmtDate, fmtTime, type Me } from "../api";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad } from "../components/ui";
 import { t } from "../i18n";
 import { navigate } from "../router";
+import { LinkedShipments } from "./Shipping";
 import { ACCEPT, fileProblem, fmtSize } from "../../../src/shared/files";
 import { dayRange, type JobStatus } from "../../../src/shared/jobs";
+import { ReportRecipients } from "./Workbook";
+import { WorkOrderTab } from "./WorkOrders";
 
 export const STATUS_LABEL: Record<JobStatus, string> = { scheduled: "Scheduled", in_progress: "In progress", done: "Done", cancelled: "Cancelled" };
 const STATUS_CLASS: Record<JobStatus, string> = { scheduled: "p-info", in_progress: "p-warn", done: "p-ok", cancelled: "p-acc" };
@@ -57,17 +61,19 @@ const VIEWS = [
   { id: "all", label: "All" },
 ] as const;
 
-export function JobList({ me, base, title, sub }: { me: Me; base: "/jobs" | "/work-orders"; title: string; sub: string }) {
-  // Work orders open on the whole log; Jobs open on what's coming up (or your own jobs).
-  const [view, setView] = useState<string>(base === "/work-orders" ? "all" : can(me, "jobs.schedule") ? "upcoming" : "mine");
+export function JobList({ me, workbook }: { me: Me; workbook: boolean }) {
+  // Schedulers open on what's coming up; field service engineers on their own jobs.
+  const [view, setView] = useState<string>(can(me, "jobs.schedule") ? "upcoming" : "mine");
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
-  const { data, error } = useLoad(() => api(`/jobs?view=${view}&q=${encodeURIComponent(query)}`), [view, query]);
+  const { data, error } = useLoad(() => api(`/jobs?view=${view}&q=${encodeURIComponent(query)}`), [view, query], { live: true });
   return (
     <>
-      <PageHead title={title} sub={sub}>
+      <PageHead title={t("Jobs")} sub={workbook ? t("Field service visits: who is going where and when, with each visit's work order.") : t("Field service visits: who is going where, and when.")}>
         {can(me, "jobs.schedule") && <Link to="/jobs/new" className="btn primary">{t("Schedule a job")}</Link>}
       </PageHead>
+      {workbook && <JobListTabs me={me} on="jobs" />}
+      {workbook && <ReportRecipients me={me} />}
       <div className="row">
         <div className="seg" role="radiogroup" aria-label={t("Show")}>
           {VIEWS.map((v) => <button key={v.id} type="button" role="radio" aria-checked={view === v.id} className={view === v.id ? "on" : ""} onClick={() => setView(v.id)}>{t(v.label)}</button>)}
@@ -86,7 +92,7 @@ export function JobList({ me, base, title, sub }: { me: Me; base: "/jobs" | "/wo
             <tbody>
               {data.jobs.map((j: any) => (
                 <tr key={j.id}>
-                  <td className="mono"><Link to={`${base}/${j.id}`}>{j.job_number}</Link>{j.machine && <div className="muted">{j.machine}</div>}</td>
+                  <td className="mono"><Link to={`/jobs/${j.id}`}>{j.job_number}</Link>{j.machine && <div className="muted">{j.machine}</div>}</td>
                   <td>{j.customer}{j.location && <div className="muted small1">{j.location.split("\n")[0]}</div>}</td>
                   <td><DaysText days={j.work_days} /></td>
                   <td>{j.techs.length ? j.techs.map((x: any) => x.name).join(", ") : <span className="muted">{t("No field service engineers yet")}</span>}</td>
@@ -98,6 +104,17 @@ export function JobList({ me, base, title, sub }: { me: Me; base: "/jobs" | "/wo
         )}
       </div>
     </>
+  );
+}
+
+/** With the workbook on, people who bill customers get a second tab on the Jobs list: the billing week. */
+export function JobListTabs({ me, on }: { me: Me; on: "jobs" | "billing" }) {
+  if (!can(me, "workbook.billing")) return null;
+  return (
+    <div className="row cp-tabs" role="tablist">
+      <Link to="/jobs" className={`btn${on === "jobs" ? " primary" : ""}`} aria-current={on === "jobs" ? "page" : undefined}>{t("Jobs")}</Link>
+      <Link to="/jobs/billing" className={`btn${on === "billing" ? " primary" : ""}`} aria-current={on === "billing" ? "page" : undefined}>{t("Billing from work orders")}</Link>
+    </div>
   );
 }
 
@@ -186,8 +203,9 @@ export function JobFiles({ jobId, files, me, canRemoveAll, onChange }: { jobId: 
 
 // ---- One job ----
 
-export function JobPage({ id, me }: { id: string; me: Me }) {
-  const { data, error, reload } = useLoad(() => api(`/jobs/${encodeURIComponent(id)}`), [id]);
+/** One job. With the workbook on it has two tabs: the job itself, and its work order (`tab`). */
+export function JobPage({ id, me, tab = "job" }: { id: string; me: Me; tab?: "job" | "work-order" }) {
+  const { data, error, reload } = useLoad(() => api(`/jobs/${encodeURIComponent(id)}`), [id], { live: true });
   const [editing, setEditing] = useState(false);
   const [emails, setEmails] = useState<EmailResult[]>(() => {
     const r = justScheduled?.id === id ? justScheduled.emails : [];
@@ -198,6 +216,7 @@ export function JobPage({ id, me }: { id: string; me: Me }) {
   if (!data) return null;
   const j = data.job;
   const scheduler = can(me, "jobs.schedule");
+  const onWo = tab === "work-order" && data.workbook;
 
   async function resend() {
     try {
@@ -215,10 +234,16 @@ export function JobPage({ id, me }: { id: string; me: Me }) {
     <>
       <PageHead title={t("Job {number}", { number: j.job_number })} sub={[j.customer, j.machine].filter(Boolean).join(" · ")}>
         <JobStatusPill status={j.status} />
-        {data.workbook && <Link to={`/work-orders/${j.id}`} className="btn">{t("Open work order")}</Link>}
         {scheduler && <button className="btn" onClick={() => setEditing(true)}>{t("Edit")}</button>}
       </PageHead>
       <EmailReport emails={emails} onClose={() => setEmails([])} />
+      {data.workbook && (
+        <div className="row cp-tabs no-print" role="tablist">
+          <Link to={`/jobs/${j.id}`} className={`btn${onWo ? "" : " primary"}`} aria-current={onWo ? undefined : "page"}>{t("Schedule")}</Link>
+          <Link to={`/jobs/${j.id}/work-order`} className={`btn${onWo ? " primary" : ""}`} aria-current={onWo ? "page" : undefined}>{t("Work order")}</Link>
+        </div>
+      )}
+      {onWo ? <WorkOrderTab job={j} me={me} onFiles={reload} /> : (
       <div className="grid g2">
         <div className="panel stack"><h2 style={{ margin: 0 }}>{t("Location")}</h2><Location location={j.location} maps={data.maps} /></div>
         <div className="panel stack"><h2 style={{ margin: 0 }}>{t("Point of contact")}</h2><Contact job={j} /></div>
@@ -246,7 +271,9 @@ export function JobPage({ id, me }: { id: string; me: Me }) {
           <h2 style={{ margin: 0 }}>{t("Files")}</h2>
           <JobFiles jobId={j.id} files={data.files} me={me} canRemoveAll={scheduler} onChange={reload} />
         </div>
+        <LinkedShipments me={me} link={{ type: "job", id: j.id }} shipLabel={t("Ship parts for this job")} />
       </div>
+      )}
     </>
   );
 }
@@ -269,6 +296,7 @@ export function NewJob({ me }: { me: Me }) {
 export function JobForm({ me, job, onDone }: { me: Me; job: any | null; onDone: (r: { id: string; emails: EmailResult[] } | null) => void }) {
   const staff = useLoad(() => api("/jobs/staff"));
   const [f, setF] = useState(() => (job ? { ...EMPTY, ...Object.fromEntries(Object.entries(job).map(([k, v]) => [k, v ?? ""])), work_days: job.work_days, techIds: job.techIds } : EMPTY));
+  const [revision] = useState(job?.revision); // the page reloads on its own; keep the revision this form started from
   const [day, setDay] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -286,7 +314,7 @@ export function JobForm({ me, job, onDone }: { me: Me; job: any | null; onDone: 
     const payload: any = { ...Object.fromEntries(Object.keys(EMPTY).filter((k) => k in rest).map((k) => [k, rest[k]])), work_days, techIds };
     try {
       if (job) {
-        const r = await api(`/jobs/${encodeURIComponent(job.id)}`, { method: "PATCH", body: { ...payload, revision: job.revision } });
+        const r = await api(`/jobs/${encodeURIComponent(job.id)}`, { method: "PATCH", body: { ...payload, revision } });
         toast(t("Saved"));
         onDone({ id: job.id, emails: r.emails });
       } else {

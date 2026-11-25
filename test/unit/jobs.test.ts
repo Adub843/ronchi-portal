@@ -55,8 +55,8 @@ describe("the email to a tech", () => {
     expect(mail.subject).toBe("Scheduled: job J-1042, Acme Bottling, Dec 1 – Dec 2, 2026 (2 days)");
   });
   it("links to the job's work order in the workbook, or the job page when the workbook is off", () => {
-    expect(mail.text).toContain("https://portal.example/work-orders/abc123");
-    expect(mail.html).toContain('href="https://portal.example/work-orders/abc123"');
+    expect(mail.text).toContain("https://portal.example/jobs/abc123/work-order");
+    expect(mail.html).toContain('href="https://portal.example/jobs/abc123/work-order"');
     expect(jobLink("https://portal.example", "abc123", false)).toBe("https://portal.example/jobs/abc123");
   });
   it("carries the location with map links, the contact and the notes", () => {

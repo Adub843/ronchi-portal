@@ -528,7 +528,7 @@ boards.post("/:id/unarchive", async (c) => {
 
 /** The whole conversation as a text file (boards: creator or moderators; chats: anyone in it). */
 boards.get("/:id/export", async (c) => {
-  const u = requirePerm(c, "boards.use");
+  const u = requirePerm(c, "boards.export");
   const board = await loadBoard(c.env.DB, u, c.req.param("id"));
   if (board.kind === "board" && !moderates(u, board)) fail(403, "Only the board's creator or a moderator can export it.");
   const { results } = await c.env.DB.prepare(

@@ -7,8 +7,10 @@ import { adjustable, effective, isPermission, PERMISSION_GROUPS, PERMISSIONS, ro
 import { clean, defaults, LOCKED_RULES, publicPart, SECTIONS, type PortalSettings } from "../../../src/portal/lib/settings";
 import { CP_FIELDS, CP_SALE_FIELDS, isOpen, isSaleOpen, readOrdersCsv } from "../../../src/shared/change-parts";
 import { KbFail, kbRoute, resetKb } from "./kb-mock";
-import { JobsFail, jobsRoute, resetJobs } from "./jobs-mock";
+import { demoJobs, JobsFail, jobsRoute, resetJobs, resetWorkbook, workbookRoute } from "./jobs-mock";
+import { resetShipping, ShippingFail, shippingRoute } from "./shipping-mock";
 import { resetSoftware, SoftwareFail, softwareRoute } from "./software-mock";
+import { demoPartsOrder, PartsOrdersFail, partsOrdersFor, partsOrdersRoute, resetPartsOrders } from "./parts-orders-mock";
 type Role = keyof typeof ROLES;
 
 // Ids for example records. Uses the browser's secure random source like the real server does.
@@ -21,7 +23,7 @@ const daysAgo = (n: number, h: number, m = 0) => {
   return d;
 };
 
-interface User { id: string; email: string; name: string; role: string; status: string; created_at: string; access?: AccessChanges; removed_at?: string | null }
+interface User { id: string; email: string; name: string; role: string; status: string; created_at: string; access?: AccessChanges; until?: Record<string, string>; removed_at?: string | null }
 interface RoleRow { id: string; name: string; perms: string }
 interface DB {
   users: User[];
@@ -91,7 +93,7 @@ function seed(): DB {
     u("Olivia", "r-shipping", "Olivia"),
   ];
   // A role made in People > Roles: Olivia helps with shipping, receiving and the shop.
-  const roles: RoleRow[] = [{ id: "r-shipping", name: "Shipping, receiving and shop", perms: JSON.stringify(["boards.use", "catalog.view", "chats.start", "files.send", "kb.view", "machines.view", "orders.view"]) }];
+  const roles: RoleRow[] = [{ id: "r-shipping", name: "Shipping, receiving and shop", perms: JSON.stringify(["boards.use", "catalog.view", "chats.start", "files.send", "kb.view", "machines.view", "orders.view", "shipping.view", "shipping.edit"]) }];
   const [aaron, paolo, lola, meagan, , steve, andrew, michele] = users as [User, User, User, User, User, User, User, User];
   const m = (serial: string, model: string, customer: string, site: string, notes = "") => ({ id: id(), serial, model, customer, site, notes, sharepoint_url: null, created_at: t0, updated_at: t0 });
   const machines = [
@@ -179,11 +181,11 @@ function seed(): DB {
     row._h = [{ at, action: "cp_order.create", who: "Imported from SharePoint", changes: null }];
     return row;
   }) : [
-    o("Example Pharma Co.", "3069MB", "250 ml oval bottle set (star wheels, guides, scroll)", "In production", { customer_po: "EPC-44817", ra_po: "RA-2611", aa: "AA-1093", samples_received: dayIso(-41), samples_shipped: dayIso(-38), fill_test: "Passed in Italy", ship_date: dayIso(12), notes: "Example order. Customer wants it before their January shutdown." }, andrew, 2),
+    o("Example Pharma Co.", "3069MB", "250 ml oval bottle set (star wheels, guides, scroll)", "Being built", { customer_po: "EPC-44817", ra_po: "RA-2611", aa: "AA-1093", samples_received: dayIso(-41), samples_shipped: dayIso(-38), fill_test: "Passed in Italy", ship_date: dayIso(12), notes: "Example order. Customer wants it before their January shutdown." }, andrew, 2),
     o("Example Foods Inc.", "4222TP", "Piston resize kit 1 L", "Waiting on samples", { customer_po: "EF-2210", ra_po: "RA-2614", notes: "Example. 24 bottles and caps promised by Friday." }, michele, 5),
-    o("Example Home Care", "4212MB", "Trigger sprayer cap chuck set", "Ready to ship", { customer_po: "EHC-90021", ra_po: "RA-2598", aa: "AA-1081", samples_received: dayIso(-70), samples_shipped: dayIso(-66), fill_test: "Passed", ship_date: dayIso(-4) }, andrew, 1),
+    o("Example Home Care", "4212MB", "Trigger sprayer cap chuck set", "Dry fit test", { customer_po: "EHC-90021", ra_po: "RA-2598", aa: "AA-1081", samples_received: dayIso(-70), samples_shipped: dayIso(-66), fill_test: "Passed", ship_date: dayIso(-4) }, andrew, 1),
     o("Example Personal Care", "3535MB", "60 ml round bottle set", "Quote", { notes: "Example. Quote sent, waiting on PO." }, michele, 8),
-    o("Example Pharma Co.", "3811CP", "38 mm cap chucks", "Shipped", { customer_po: "EPC-43002", ra_po: "RA-2560", aa: "AA-1040", samples_received: dayIso(-120), samples_shipped: dayIso(-115), fill_test: "Passed", ship_date: dayIso(-30) }, andrew, 29),
+    o("Example Pharma Co.", "3811CP", "38 mm cap chucks", "Completed", { customer_po: "EPC-43002", ra_po: "RA-2560", aa: "AA-1040", samples_received: dayIso(-120), samples_shipped: dayIso(-115), fill_test: "Passed", ship_date: dayIso(-30) }, andrew, 29),
     o("Example Beverage LLC", "", "Neck guides for 2 L PET", "In design", { customer_po: "EB-7781", samples_received: dayIso(-9), samples_shipped: dayIso(-7) }, andrew, 4),
   ];
   // Example sales Andrew and Michele are working (made up). They become orders when marked sold.
@@ -199,7 +201,7 @@ function seed(): DB {
     sale("Example Home Care", "4212MB", "Pump cap chucks", "Quoting", { quote: "MF-2207", follow_up: dayIso(9) }, michele, 2),
     sale("Example Personal Care", "3535MB", "30 ml vial set", "Lost", { quote: "AY-0388", notes: "Example. Went with a local machine shop." }, andrew, 20),
   );
-  if (!real) orders[0]._h.unshift({ at: iso(daysAgo(1, 15, 20)), action: "cp_order.update", who: andrew.name, changes: { status: ["Fill test", "In production"], ship_date: [dayIso(5), dayIso(12)] } });
+  if (!real) orders[0]._h.unshift({ at: iso(daysAgo(1, 15, 20)), action: "cp_order.update", who: andrew.name, changes: { status: ["Fill test", "Being built"], ship_date: [dayIso(5), dayIso(12)] } });
   return {
     // Quick links on Home (Aaron adds these himself in the live portal).
     links: [
@@ -395,18 +397,31 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     if (!t) throw new Fail(404, "Not found.");
     if (t.id === u.id) throw new Fail(400, "You can't change your own access. Ask another admin.");
     if (t.role === "admin") throw new Fail(400, "Admins always have everything. Change their role first.");
+    if (body.copyFrom) {
+      const from = db.users.find((x) => x.id === body.copyFrom);
+      if (!from || from.role === "admin") throw new Fail(400, "Pick someone else to copy.");
+      t.role = from.role;
+      t.access = { ...(from.access ?? {}) };
+      t.until = { ...(from.until ?? {}) };
+      log("user.access");
+      return { changes: t.access, role: t.role, permissions: [...effective(t.role, t.access, savedPerms(t.role))] };
+    }
     const next: AccessChanges = body.reset ? {} : { ...(t.access ?? {}) };
+    const until: Record<string, string> = body.reset ? {} : { ...(t.until ?? {}) };
     for (const [perm, on] of Object.entries(body.changes ?? {})) {
+      if (on === null || !body.until) delete until[perm];
+      else until[perm] = body.until;
       if (!isPermission(perm) || !adjustable(perm)) throw new Fail(400, "Managing people and the audit log stay with admins. Make them an admin instead.");
       if (on === null) delete next[perm];
       else next[perm] = !!on;
     }
     t.access = next;
+    t.until = until;
     log("user.access");
     return { changes: next, permissions: [...effective(t.role, next, savedPerms(t.role))] };
   }
   if (path === "/users" && method === "GET")
-    return { users: db.users.map((x) => ({ ...x, access: x.role === "admin" ? {} : (x.access ?? {}), permissions: [...effective(x.role, x.access, savedPerms(x.role))], passkeys: 1 + (x.id === u.id ? 1 : 0), sessions: x.status === "active" ? 1 : 0 })), invites: db.invites };
+    return { users: db.users.map((x) => ({ ...x, access: x.role === "admin" ? {} : (x.access ?? {}), until: x.until ?? {}, permissions: [...effective(x.role, x.access, savedPerms(x.role))], passkeys: 1 + (x.id === u.id ? 1 : 0), sessions: x.status === "active" ? 1 : 0 })), invites: db.invites };
   if (path === "/users/invite") {
     if (db.settings.people.invitesPaused) throw new Fail(403, "New invites are paused. The portal owner can turn them back on in Settings > Command center.");
     if (!body.name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email ?? "")) throw new Fail(400, "Enter a name and a valid email.");
@@ -437,9 +452,26 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     return { ok: true };
   }
   // --- parts catalog (the preview has no manuals or customer parts site, so it starts empty) ---
+  if (seg[0] === "parts-orders") {
+    if (q.get("machine") && method === "GET" && seg.length === 1) return { orders: [] };
+    try {
+      return partsOrdersRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id });
+    } catch (e) {
+      if (e instanceof PartsOrdersFail) throw new Fail(e.status, e.message);
+      throw e;
+    }
+  }
   if (seg[0] === "jobs" || seg[0] === "switches") {
     try {
       return jobsRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, users: db.users, machines: db.machines, newId: id, pdf: examplePdf });
+    } catch (e) {
+      if (e instanceof JobsFail) throw new Fail(e.status, e.message);
+      throw e;
+    }
+  }
+  if (seg[0] === "workbook") {
+    try {
+      return workbookRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, users: db.users, machines: db.machines, newId: id, pdf: examplePdf });
     } catch (e) {
       if (e instanceof JobsFail) throw new Fail(e.status, e.message);
       throw e;
@@ -487,11 +519,24 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     const m = db.machines.find((x) => x.id === seg[1]);
     if (!m) throw new Fail(404, "Not found.");
     if (method === "PATCH") {
-      Object.assign(m, { model: body.model || null, customer: body.customer || null, site: body.site || null, notes: body.notes || null, sharepoint_url: body.sharepointUrl || null, updated_at: iso(new Date()) });
+      if (typeof body.updated_at === "string" && body.updated_at !== m.updated_at) throw new Fail(409, "Someone else changed this machine while you were editing. Reload to see their change, then edit again.");
+      const cols: Record<string, string> = { model: "model", customer: "customer", site: "site", notes: "notes", sharepointUrl: "sharepoint_url" };
+      for (const [k, col] of Object.entries(cols)) if (k in body) (m as any)[col] = body[k] || null;
+      m.updated_at = iso(new Date());
       log("machine.update");
       return { ok: true };
     }
-    return { machine: m, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at), orders: db.orders.filter((x) => x.machine === m.serial && !x.removed_at && x.phase !== "sale").map(({ _h, ...x }) => x) };
+    const perms = effective(u.role, u.access, savedPerms(u.role)) as Set<string>;
+    const jobs = perms.has("jobs.view") ? demoJobs().filter((j) => j.machine === m.serial && j.status !== "cancelled").sort((a, b) => (b.first_day ?? "").localeCompare(a.first_day ?? "")).map((j) => ({ id: j.id, job_number: j.job_number, customer: j.customer, status: j.status, first_day: j.first_day, last_day: j.last_day })) : undefined;
+    return { machine: m, jobs, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at), orders: db.orders.filter((x) => x.machine === m.serial && !x.removed_at && x.phase !== "sale").map(({ _h, ...x }) => x), partsOrders: partsOrdersFor(m.serial, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id }) };
+  }
+  if (seg[0] === "shipping") {
+    try {
+      return shippingRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, users: db.users, orders: db.orders, jobs: demoJobs, partsOrder: (pid: string) => demoPartsOrder(pid, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id }), machines: db.machines, newId: id, pdf: examplePdf });
+    } catch (e) {
+      if (e instanceof ShippingFail) throw new Fail(e.status, e.message);
+      throw e;
+    }
   }
   // --- change-part orders ---
   if (seg[0] === "change-parts") {
@@ -802,6 +847,9 @@ export function resetDemo() {
   db = seed();
   resetKb();
   resetJobs();
+  resetWorkbook();
+  resetPartsOrders();
+  resetShipping();
   resetSoftware();
   save();
 }

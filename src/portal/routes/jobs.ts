@@ -18,6 +18,7 @@ import { body, fail, has, requirePerm } from "../lib/http";
 import { isEmail, mailTo, sendMail } from "../lib/mail";
 import { serveFile } from "../lib/serve-file";
 import { isOn } from "../lib/switches";
+import { canFill, NOT_RECEIPT } from "./workbook";
 
 export const jobs = new Hono<AppEnv>();
 
@@ -125,7 +126,7 @@ async function filesOf(db: D1Database, jobIds: string[]) {
   if (!jobIds.length) return new Map<string, Record<string, unknown>[]>();
   const { results } = await db.prepare(
     `SELECT f.id, f.job_id, f.name, f.ext, f.size, f.created_at, f.user_id, u.name AS by_name FROM job_files f LEFT JOIN users u ON u.id = f.user_id
-      WHERE f.deleted_at IS NULL AND f.job_id IN (${marks(jobIds.length)}) ORDER BY f.created_at DESC`,
+      WHERE f.deleted_at IS NULL AND f.job_id IN (${marks(jobIds.length)}) AND ${NOT_RECEIPT} ORDER BY f.created_at DESC`,
   ).bind(...jobIds).all<Record<string, unknown> & { job_id: string }>();
   return groupBy(results);
 }
@@ -181,7 +182,7 @@ jobs.get("/", async (c) => {
   }
   const order = view === "upcoming" || view === "mine" ? "j.first_day IS NULL, j.first_day ASC" : "j.first_day IS NULL, j.first_day DESC";
   const { results } = await c.env.DB.prepare(
-    `SELECT j.*, (SELECT COUNT(*) FROM job_files f WHERE f.job_id = j.id AND f.deleted_at IS NULL) AS files
+    `SELECT j.*, (SELECT COUNT(*) FROM job_files f WHERE f.job_id = j.id AND f.deleted_at IS NULL AND ${NOT_RECEIPT}) AS files
        FROM jobs j ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY ${order} LIMIT 1000`,
   ).bind(...args).all<JobRow & { files: number }>();
   const engineers = await engineersOf(c.env.DB, results.map((j) => j.id));
@@ -200,9 +201,12 @@ jobs.get("/staff", async (c) => {
 // ---- Files ----
 
 jobs.get("/files/:fileId", async (c) => {
-  requirePerm(c, "jobs.view");
-  const f = await c.env.DB.prepare("SELECT id, name FROM job_files WHERE id = ? AND deleted_at IS NULL").bind(c.req.param("fileId")).first<{ id: string; name: string }>();
+  const u = requirePerm(c, "jobs.view");
+  const f = await c.env.DB.prepare("SELECT id, job_id, name FROM job_files WHERE id = ? AND deleted_at IS NULL").bind(c.req.param("fileId")).first<{ id: string; job_id: string; name: string }>();
   if (!f) fail(404, "Not found.");
+  // An expense receipt shows money: only the people on the job, schedulers and billing may open it.
+  const receipt = await c.env.DB.prepare("SELECT 1 FROM wb_expenses WHERE receipt_file = ?").bind(f.id).first();
+  if (receipt && !has(u, "workbook.billing") && !(await canFill(c.env.DB, u, f.job_id))) fail(404, "Not found.");
   return serveFile(c.env.FILES, `jobs/${f.id}`, f.name, { download: c.req.query("download") !== undefined });
 });
 
@@ -220,7 +224,8 @@ jobs.delete("/files/:fileId", async (c) => {
 jobs.post("/:id/files", async (c) => {
   const u = requirePerm(c, "jobs.view");
   const job = await loadJob(c.env.DB, c.req.param("id"));
-  if (!has(u, "files.send")) fail(403, "You can't add photos or files. Ask an admin.");
+  // Adding files to a job is part of jobs.view ("see jobs ... and add files to them", roles.ts), so it keeps
+  // working when Chats and boards (which hold files.send) are switched off.
   let form: FormData;
   try {
     form = await c.req.raw.formData();

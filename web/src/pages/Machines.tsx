@@ -1,14 +1,17 @@
+import { MachinePartsOrders } from "./PartsOrders";
 import { useState } from "react";
-import { api, can, fmtTime, type Me } from "../api";
+import { api, can, fmtDate, fmtTime, type Me } from "../api";
 import { t } from "../i18n";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad, Tip } from "../components/ui";
 import { navigate } from "../router";
 import { StatusPill } from "./ChangeParts";
+import { LinkedShipments } from "./Shipping";
+import { JobStatusPill } from "./Jobs";
 
 export function Machines({ me }: { me: Me }) {
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
-  const { data, error } = useLoad(() => api(`/machines?q=${encodeURIComponent(query)}`), [query]);
+  const { data, error } = useLoad(() => api(`/machines?q=${encodeURIComponent(query)}`), [query], { live: true });
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
   const [form, setForm] = useState({ serial: "", model: "", customer: "", site: "" });
@@ -69,7 +72,7 @@ export function Machines({ me }: { me: Me }) {
 }
 
 export function MachinePage({ id, me }: { id: string; me: Me }) {
-  const { data, error, reload } = useLoad(() => api(`/machines/${encodeURIComponent(id)}`), [id]);
+  const { data, error, reload } = useLoad(() => api(`/machines/${encodeURIComponent(id)}`), [id], { live: true });
   const [edit, setEdit] = useState<any>(null);
   if (error) return <ErrorNote error={error} />;
   if (!data) return null;
@@ -78,7 +81,7 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
   async function save(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await api(`/machines/${encodeURIComponent(id)}`, { method: "PATCH", body: edit });
+      await api(`/machines/${encodeURIComponent(id)}`, { method: "PATCH", body: edit }); // edit keeps the updated_at it started from
       setEdit(null);
       reload();
       toast(t("Saved"));
@@ -92,7 +95,7 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
       <PageHead title={m.serial} sub={[m.model, m.customer, m.site].filter(Boolean).join(" · ") || undefined}>
         <Link to="/machines" className="btn">{t("All machines")}</Link>
         {can(me, "machines.edit") && !edit && (
-          <button className="btn" onClick={() => setEdit({ model: m.model ?? "", customer: m.customer ?? "", site: m.site ?? "", notes: m.notes ?? "", sharepointUrl: m.sharepoint_url ?? "" })}>{t("Edit")}</button>
+          <button className="btn" onClick={() => setEdit({ model: m.model ?? "", customer: m.customer ?? "", site: m.site ?? "", notes: m.notes ?? "", sharepointUrl: m.sharepoint_url ?? "", updated_at: m.updated_at })}>{t("Edit")}</button>
         )}
       </PageHead>
       {edit ? (
@@ -122,6 +125,44 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
             {data.boards.length ? data.boards.map((b: any) => <p key={b.id}><Link to={`/boards/${b.id}`}>{b.name}</Link></p>) : <Empty>{t("No boards for this machine yet.")}</Empty>}
             <Tip id="machines.later">{t("Manuals, service reports, history and remote sessions attach here in later steps.")}</Tip>
           </div>
+          {data.jobs && (
+            <div className="panel">
+              <h2>{t("Jobs")}</h2>
+              {data.jobs.length ? (
+                <div className="tbl">
+                  <table>
+                    <tbody>
+                      {data.jobs.map((j: any) => (
+                        <tr key={j.id}><td><Link to={`/jobs/${j.id}`}>{j.job_number}</Link></td><td><JobStatusPill status={j.status} /></td><td className="muted">{j.first_day ? fmtDate(j.first_day) : ""}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <Empty>{t("No jobs for this machine yet.")}</Empty>}
+            </div>
+          )}
+          {(data.notes || data.catalog) && (
+            <div className="panel">
+              {data.catalog && (
+                <>
+                  <h2>{t("Parts catalog")}</h2>
+                  <p>
+                    {data.catalog.sheets
+                      ? <Link to={`/catalog/m/${encodeURIComponent(m.id)}/catalog`}>{t("Open this machine's parts catalog ({n} sheets)", { n: data.catalog.sheets })}</Link>
+                      : <span className="muted">{t("No parts catalog for this machine yet.")}</span>}
+                  </p>
+                </>
+              )}
+              {data.notes && (
+                <>
+                  <h2>{t("Knowledge base")}</h2>
+                  {data.notes.length
+                    ? data.notes.map((n: any) => <p key={n.id}><Link to={`/kb/${n.id}`}>{n.code ? `${n.code} · ` : ""}{n.title}</Link></p>)
+                    : <Empty>{t("No notes for this machine yet.")}</Empty>}
+                </>
+              )}
+            </div>
+          )}
           {data.orders && (
             <div className="panel" style={{ gridColumn: "1 / -1" }}>
               <h2>{t("Change parts")}</h2>
@@ -138,6 +179,8 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
               ) : <Empty>{t("No change-part orders for this machine.")}</Empty>}
             </div>
           )}
+          {data.partsOrders && <div style={{ gridColumn: "1 / -1" }}><MachinePartsOrders orders={data.partsOrders} /></div>}
+          <LinkedShipments me={me} machine={m.serial} />
         </div>
       )}
     </>

@@ -58,7 +58,7 @@ export const AREAS: Area[] = [
     blurb: T("Team rooms for service, engineering, sales and the office.", "Salas de equipo para servicio, ingeniería, ventas y la oficina.", "Stanze di squadra per assistenza, ingegneria, vendite e ufficio."),
   },
   {
-    id: "jobs", paths: ["/jobs", "/work-orders"],
+    id: "jobs", paths: ["/jobs"],
     title: T("Jobs and work orders", "Trabajos y órdenes de trabajo", "Lavori e ordini di lavoro"),
     blurb: T("Field service visits: who is going where, and when, plus the Ronchi workbook's work orders.", "Visitas de servicio de campo: quién va adónde y cuándo, más las órdenes de trabajo del cuaderno de trabajo Ronchi.", "Interventi di assistenza sul campo: chi va dove e quando, più gli ordini di lavoro del quaderno di lavoro Ronchi."),
   },
@@ -92,9 +92,19 @@ export const AREAS: Area[] = [
     blurb: T("Every change-part job, from the first request to shipped: the sale, then the order.", "Cada trabajo de cambio de formato, de la primera solicitud al envío: la venta y luego el pedido.", "Ogni lavoro di cambio formato, dalla prima richiesta alla spedizione: la vendita, poi l'ordine."),
   },
   {
+    id: "parts-orders", paths: ["/parts-orders"],
+    title: T("Parts orders", "Pedidos de repuestos", "Ordini ricambi"),
+    blurb: T("Spare parts sales, from the customer's first ask to the invoice.", "Ventas de repuestos, desde la primera consulta del cliente hasta la factura.", "Vendite di ricambi, dalla prima richiesta del cliente alla fattura."),
+  },
+  {
     id: "people", paths: ["/people"],
     title: T("People and access", "Personas y acceso", "Persone e accessi"),
     blurb: T("Adding employees, making roles and deciding what each person can do. Admins only.", "Agregar empleados, crear roles y decidir qué puede hacer cada persona. Solo administradores.", "Aggiungere dipendenti, creare ruoli e decidere cosa può fare ogni persona. Solo amministratori."),
+  },
+  {
+    id: "shipping", paths: ["/shipping"],
+    title: T("Shipping and receiving", "Envíos y recepción", "Spedizioni e ricevimento"),
+    blurb: T("Machines, spare parts and change parts going out, and parts from Italy, suppliers and customers coming in.", "Máquinas, repuestos y cambios de formato que salen, y piezas de Italia, proveedores y clientes que entran.", "Macchine, ricambi e cambi formato in uscita, e parti dall'Italia, dai fornitori e dai clienti in entrata."),
   },
 ];
 
@@ -132,6 +142,17 @@ export const GUIDES: Guide[] = [
       T("Press Add a phone or computer and copy the link.", "Pulse Agregar un teléfono o computadora y copie el enlace.", "Premi Aggiungi un telefono o computer e copia il link."),
       T("Open the link on the new device within 1 hour and create a passkey there.", "Abra el enlace en el dispositivo nuevo antes de 1 hora y cree allí una llave de acceso.", "Apri il link sul nuovo dispositivo entro 1 ora e crea lì una passkey."),
     ],
+  },
+  {
+    id: "install-app", area: "basics", needs: [],
+    title: T("Put the portal on your phone or desktop as an app", "Poner el portal como aplicación en su teléfono o escritorio", "Mettere il portale come app sul telefono o sul desktop"),
+    summary: T("The portal can open in its own window with a Ronchi icon, like any other app. Nothing to download from a store.", "El portal puede abrirse en su propia ventana con un icono de Ronchi, como cualquier aplicación. No hay que descargar nada de una tienda.", "Il portale può aprirsi in una sua finestra con l'icona Ronchi, come qualsiasi app. Niente da scaricare da uno store."),
+    steps: [
+      T("On a computer or Android phone (Chrome or Edge): open the account menu at the top right and press Install as an app.", "En computadora o teléfono Android (Chrome o Edge): abra el menú de la cuenta arriba a la derecha y pulse Instalar como aplicación.", "Su computer o telefono Android (Chrome o Edge): apri il menu dell'account in alto a destra e premi Installa come app."),
+      T("On an iPhone (Safari): press Share, then Add to Home Screen.", "En iPhone (Safari): pulse Compartir y luego Agregar a pantalla de inicio.", "Su iPhone (Safari): premi Condividi, poi Aggiungi alla schermata Home."),
+      T("Open the portal from the new icon. You stay signed in, and it always shows the latest version.", "Abra el portal desde el icono nuevo. Su sesión sigue iniciada y siempre muestra la versión más reciente.", "Apri il portale dalla nuova icona. Resti collegato e mostra sempre la versione più recente."),
+    ],
+    tip: T("No Install as an app in the menu? It's already installed, or this browser doesn't offer it. Use the browser's own menu instead.", "¿No aparece Instalar como aplicación en el menú? Ya está instalada o este navegador no lo ofrece. Use el menú del propio navegador.", "Non vedi Installa come app nel menu? È già installata o questo browser non lo offre. Usa il menu del browser."),
   },
   {
     id: "lost-device", area: "basics", needs: [], open: "/settings",
@@ -231,6 +252,16 @@ export const GUIDES: Guide[] = [
     tip: T("Each file can be up to 25 MB. Too big together? Send them in two messages.", "Cada archivo puede pesar hasta 25 MB. ¿Demasiado juntos? Envíelos en dos mensajes.", "Ogni file può pesare fino a 25 MB. Troppo grandi insieme? Inviali in due messaggi."),
   },
 
+  {
+    id: "export-chat", area: "chats", needs: ["boards.use", "boards.export"],
+    title: T("Save a copy of a chat", "Guardar una copia de un chat", "Salvare una copia di una chat"),
+    summary: T("Download a whole conversation as a text file.", "Descargue una conversación completa como archivo de texto.", "Scarica un'intera conversazione come file di testo."),
+    steps: [
+      T("Open the chat, or a board you started, and open its menu.", "Abra el chat, o un tablero que usted inició, y abra su menú.", "Apri la chat, o una bacheca che hai creato, e apri il suo menu."),
+      T("Press Export chat (.txt). The file names who wrote what, and when.", "Pulse Exportar chat (.txt). El archivo indica quién escribió qué y cuándo.", "Premi Esporta chat (.txt). Il file indica chi ha scritto cosa e quando."),
+    ],
+  },
+
   // ---------- Boards ----------
   {
     id: "use-boards", area: "boards", needs: ["boards.use"],
@@ -292,15 +323,36 @@ export const GUIDES: Guide[] = [
     tip: T("If portal email isn't set up yet, use Send it from my email on the job to send the same message yourself.", "Si el correo del portal aún no está listo, use Enviarlo desde mi correo en el trabajo para enviar el mismo mensaje usted.", "Se l'email del portale non è ancora attiva, usa Inviala dalla mia email nel lavoro per mandare tu lo stesso messaggio."),
   },
   {
-    id: "work-orders", area: "jobs", needs: ["jobs.view"], open: "/work-orders",
+    id: "work-orders", area: "jobs", needs: ["jobs.view"], open: "/jobs",
     title: T("Use work orders and the machine's log", "Usar las órdenes de trabajo y el historial de la máquina", "Usare gli ordini di lavoro e lo storico della macchina"),
     summary: T("The Ronchi workbook: the current work order plus every past work order for the same machine.", "El cuaderno de trabajo Ronchi: la orden de trabajo actual y todas las anteriores de la misma máquina.", "Il quaderno di lavoro Ronchi: l'ordine di lavoro attuale e tutti quelli passati della stessa macchina."),
     steps: [
-      T("Open Work orders, or press Open work order on a job.", "Abra Órdenes de trabajo, o pulse Abrir orden de trabajo en un trabajo.", "Apri Ordini di lavoro, o premi Apri ordine di lavoro in un lavoro."),
+      T("Open Jobs, open the job and press its Work order tab.", "Abra Trabajos, abra el trabajo y pulse su pestaña Orden de trabajo.", "Apri Lavori, apri il lavoro e premi la sua scheda Ordine di lavoro."),
       T("Read the past work orders, quick notes and change-part orders for that machine before you go.", "Lea las órdenes anteriores, notas rápidas y pedidos de cambio de formato de esa máquina antes de ir.", "Leggi gli ordini passati, le note rapide e gli ordini cambio formato di quella macchina prima di partire."),
       T("Use Print or save as PDF, or Download the log (CSV).", "Use Imprimir o guardar como PDF, o Descargar el registro (CSV).", "Usa Stampa o salva in PDF, o Scarica il registro (CSV)."),
     ],
-    tip: T("If an admin switches the Ronchi workbook off, Work orders leaves the menu but jobs keep working.", "Si un administrador apaga el cuaderno de trabajo Ronchi, Órdenes de trabajo sale del menú pero los trabajos siguen funcionando.", "Se un amministratore spegne il quaderno di lavoro Ronchi, Ordini di lavoro sparisce dal menu ma i lavori continuano a funzionare."),
+    tip: T("If an admin switches the Ronchi workbook off, the Work order tab is gone but jobs keep working.", "Si un administrador apaga el cuaderno de trabajo Ronchi, la pestaña Orden de trabajo desaparece pero los trabajos siguen funcionando.", "Se un amministratore spegne il quaderno di lavoro Ronchi, la scheda Ordine di lavoro sparisce ma i lavori continuano a funzionare."),
+  },
+  {
+    id: "fill-work-order", area: "jobs", needs: ["jobs.view"], open: "/jobs",
+    title: T("Fill in the service report on a work order", "Llenar el informe de servicio en una orden de trabajo", "Compilare il rapporto di assistenza in un ordine di lavoro"),
+    summary: T("The Ronchi workbook lives in each work order: daily log, photos, billable hours, expenses and the customer's signature. It saves as you go.", "El cuaderno de trabajo Ronchi vive en cada orden de trabajo: registro diario, fotos, horas facturables, gastos y la firma del cliente. Se guarda mientras escribe.", "Il quaderno di lavoro Ronchi è in ogni ordine di lavoro: registro giornaliero, foto, ore fatturabili, spese e firma del cliente. Si salva mentre scrivi."),
+    steps: [
+      T("Open your job and press its Work order tab. Pick the type of work and add each day to the Daily work log, with any issues found (one per line).", "Abra su trabajo y pulse la pestaña Orden de trabajo. Elija el tipo de trabajo y agregue cada día al Registro diario, con los problemas encontrados (uno por línea).", "Apri il tuo lavoro e premi la scheda Ordine di lavoro. Scegli il tipo di lavoro e aggiungi ogni giorno al Registro giornaliero, con i problemi trovati (uno per riga)."),
+      T("Add photos of the machine and the recipe screens, with a caption.", "Agregue fotos de la máquina y de las pantallas de receta, con una leyenda.", "Aggiungi foto della macchina e delle schermate delle ricette, con una didascalia."),
+      T("Enter each day's billable hours (what the customer is billed for, not a time clock) and your expenses with a receipt photo.", "Anote las horas facturables de cada día (lo que se le factura al cliente, no un reloj de fichaje) y sus gastos con foto del recibo.", "Inserisci le ore fatturabili di ogni giorno (ciò che si fattura al cliente, non una timbratura) e le spese con la foto della ricevuta."),
+      T("Have the customer sign on the screen, then press Submit. The office gets the report and each issue becomes a quick note on the machine.", "Pida al cliente que firme en la pantalla y pulse Enviar. La oficina recibe el informe y cada problema se convierte en una nota rápida de la máquina.", "Fai firmare il cliente sullo schermo, poi premi Invia. L'ufficio riceve il rapporto e ogni problema diventa una nota rapida sulla macchina."),
+    ],
+    tip: T("Use Open the job chat to talk with everyone on the job. After Submit the report locks; a scheduler can reopen it.", "Use Abrir el chat del trabajo para hablar con todos los del trabajo. Después de Enviar el informe se bloquea; un programador puede reabrirlo.", "Usa Apri la chat del lavoro per parlare con tutti quelli del lavoro. Dopo Invia il rapporto si blocca; un pianificatore può riaprirlo."),
+  },
+  {
+    id: "billing-week", area: "jobs", needs: ["jobs.view", "workbook.billing"], open: "/jobs",
+    title: T("Bill customers from work orders", "Facturar a los clientes desde las órdenes de trabajo", "Fatturare ai clienti dagli ordini di lavoro"),
+    summary: T("Every field service engineer's billable hours and expenses, one week at a time.", "Las horas facturables y los gastos de cada ingeniero de servicio de campo, semana por semana.", "Ore fatturabili e spese di ogni ingegnere di assistenza sul campo, una settimana alla volta."),
+    steps: [
+      T("Open Jobs and press Billing from work orders.", "Abra Trabajos y pulse Facturación desde las órdenes de trabajo.", "Apri Lavori e premi Fatturazione dagli ordini di lavoro."),
+      T("Move between weeks, open a job to see its report, and press Download (CSV) for your invoicing.", "Cambie de semana, abra un trabajo para ver su informe y pulse Descargar (CSV) para facturar.", "Spostati tra le settimane, apri un lavoro per vedere il rapporto e premi Scarica (CSV) per la fatturazione."),
+    ],
   },
 
   // ---------- Knowledge base ----------
@@ -457,7 +509,7 @@ export const GUIDES: Guide[] = [
     tip: T("Add 3D from a STEP or GLB file on a drawing to give it a model customers can turn and take apart.", "Use Añadir 3D desde un archivo STEP o GLB en un dibujo para darle un modelo que los clientes puedan girar y desarmar.", "Usa Aggiungi 3D da un file STEP o GLB su un disegno per dargli un modello che i clienti possono ruotare e smontare."),
   },
   {
-    id: "publish-catalog", area: "catalog", needs: ["catalog.view", "catalog.edit"],
+    id: "publish-catalog", area: "catalog", needs: ["catalog.view", "catalog.publish"],
     title: T("Publish a catalog to customers", "Publicar un catálogo para clientes", "Pubblicare un catalogo per i clienti"),
     summary: T("Customers who own the machine see it on the parts site right away.", "Los clientes dueños de la máquina lo ven de inmediato en el sitio de piezas.", "I clienti che possiedono la macchina lo vedono subito sul sito ricambi."),
     steps: [
@@ -540,7 +592,16 @@ export const GUIDES: Guide[] = [
     steps: [
       T("Open Change parts. The counts at the top show open jobs, ones shipping soon and ones past their ship date.", "Abra Cambio de formato. Los totales de arriba muestran trabajos abiertos, próximos a enviar y atrasados.", "Apri Cambio formato. I conteggi in alto mostrano lavori aperti, in spedizione a breve e in ritardo."),
       T("Search by customer, machine, part, PO or notes, and filter by status.", "Busque por cliente, máquina, pieza, orden de compra o notas, y filtre por estado.", "Cerca per cliente, macchina, ricambio, ordine d'acquisto o note, e filtra per stato."),
-      T("Open an order to see its details and its History. Export CSV gives you a spreadsheet.", "Abra un pedido para ver sus datos y su Historial. Exportar CSV le da una hoja de cálculo.", "Apri un ordine per vederne i dati e la Cronologia. Esporta CSV ti dà un foglio di calcolo."),
+      T("Open an order to see its details and its History.", "Abra un pedido para ver sus datos y su Historial.", "Apri un ordine per vederne i dati e la Cronologia."),
+    ],
+  },
+  {
+    id: "export-orders", area: "change-parts", needs: ["orders.view", "orders.export"],
+    title: T("Download the orders as a spreadsheet", "Descargar los pedidos como hoja de cálculo", "Scaricare gli ordini come foglio di calcolo"),
+    summary: T("Get the orders you're looking at in Excel.", "Obtenga en Excel los pedidos que está viendo.", "Porta in Excel gli ordini che stai guardando."),
+    steps: [
+      T("Open Change parts and search or filter to the orders you want.", "Abra Cambio de formato y busque o filtre los pedidos que quiere.", "Apri Cambio formato e cerca o filtra gli ordini che vuoi."),
+      T("Press Export CSV. The file opens in Excel.", "Pulse Exportar CSV. El archivo se abre en Excel.", "Premi Esporta CSV. Il file si apre in Excel."),
     ],
   },
   {
@@ -560,6 +621,7 @@ export const GUIDES: Guide[] = [
     steps: [
       T("Open the order and press Edit.", "Abra el pedido y pulse Editar.", "Apri l'ordine e premi Modifica."),
       T("Change the status, dates or notes and press Save.", "Cambie estado, fechas o notas y pulse Guardar.", "Cambia stato, date o note e premi Salva."),
+      T("A shipped job stays open. When the customer approves the parts, open it and press Mark completed.", "Un trabajo enviado sigue abierto. Cuando el cliente apruebe las piezas, ábralo y pulse Marcar completado.", "Un lavoro spedito resta aperto. Quando il cliente approva i ricambi, aprilo e premi Segna completato."),
     ],
     tip: T("If someone else saved the order while you were editing, the portal stops you so nothing is overwritten. Reload and try again.", "Si otra persona guardó el pedido mientras usted editaba, el portal lo detiene para no sobrescribir nada. Recargue e intente otra vez.", "Se qualcun altro ha salvato l'ordine mentre lo modificavi, il portale ti ferma per non sovrascrivere nulla. Ricarica e riprova."),
   },
@@ -580,6 +642,76 @@ export const GUIDES: Guide[] = [
       T("In Excel, open the sheet and use File, Save As, CSV.", "En Excel, abra la hoja y use Archivo, Guardar como, CSV.", "In Excel apri il foglio e usa File, Salva con nome, CSV."),
       T("In Change parts press Import CSV and choose the file.", "En Cambio de formato pulse Importar CSV y elija el archivo.", "In Cambio formato premi Importa CSV e scegli il file."),
       T("Check what was found. Orders already here are skipped. Press Add to bring in the rest.", "Revise lo encontrado. Los pedidos que ya existen se omiten. Pulse Agregar para traer el resto.", "Controlla cosa è stato trovato. Gli ordini già presenti vengono saltati. Premi Aggiungi per importare il resto."),
+    ],
+  },
+
+  // ---------- Parts orders ----------
+  {
+    id: "view-parts-orders", area: "parts-orders", needs: ["partsorders.view"],
+    title: T("Follow parts orders", "Seguir los pedidos de repuestos", "Seguire gli ordini ricambi"),
+    summary: T("See where every spare parts order is, and what is late.", "Vea dónde está cada pedido de repuestos y qué está atrasado.", "Vedi a che punto è ogni ordine ricambi e cosa è in ritardo."),
+    steps: [
+      T("Open Parts orders. The counts at the top show open quotes, orders waiting on parts, ready to ship, shipped but not invoiced, and late.", "Abra Pedidos de repuestos. Los totales de arriba muestran cotizaciones abiertas, pedidos esperando repuestos, listos para enviar, enviados sin facturar y atrasados.", "Apri Ordini ricambi. I conteggi in alto mostrano offerte aperte, ordini in attesa dei ricambi, pronti da spedire, spediti non fatturati e in ritardo."),
+      T("Search by order number, customer, machine, PO or part number.", "Busque por número de pedido, cliente, máquina, OC o número de repuesto.", "Cerca per numero d'ordine, cliente, macchina, ordine d'acquisto o codice ricambio."),
+      T("Open an order. The line at the top says where it is and what happens next. Below are its parts, when each arrives, and its History.", "Abra un pedido. La línea de arriba dice dónde está y qué sigue. Abajo están sus repuestos, cuándo llega cada uno y su Historial.", "Apri un ordine. La riga in alto dice a che punto è e cosa succede dopo. Sotto ci sono i ricambi, quando arriva ognuno e la Cronologia."),
+    ],
+  },
+  {
+    id: "add-parts-order", area: "parts-orders", needs: ["partsorders.view", "partsorders.add"],
+    title: T("Start a parts order", "Iniciar un pedido de repuestos", "Avviare un ordine ricambi"),
+    summary: T("From a phone call, an email, a quote request, or an old order.", "Desde una llamada, un correo, una solicitud de cotización o un pedido anterior.", "Da una telefonata, un'email, una richiesta di offerta o un vecchio ordine."),
+    steps: [
+      T("Press New order. Fill in the customer, the machine and the parts with their quantities, then press Add order.", "Pulse Nuevo pedido. Complete el cliente, la máquina y los repuestos con sus cantidades, y pulse Agregar pedido.", "Premi Nuovo ordine. Compila cliente, macchina e ricambi con le quantità, poi premi Aggiungi ordine."),
+      T("When a customer sends a quote request from the parts site, open it and press Make parts order. Its parts come across, nothing typed twice.", "Cuando un cliente envía una solicitud de cotización desde el sitio de repuestos, ábrala y pulse Crear pedido de repuestos. Sus repuestos pasan solos, sin escribir dos veces.", "Quando un cliente invia una richiesta di offerta dal sito ricambi, aprila e premi Crea ordine ricambi. I ricambi passano da soli, senza riscrivere nulla."),
+      T("To repeat an old order, open it and press Order again.", "Para repetir un pedido anterior, ábralo y pulse Pedir de nuevo.", "Per ripetere un vecchio ordine, aprilo e premi Ordina di nuovo."),
+    ],
+  },
+  {
+    id: "edit-parts-order", area: "parts-orders", needs: ["partsorders.view", "partsorders.edit"],
+    title: T("Move an order along", "Hacer avanzar un pedido", "Far avanzare un ordine"),
+    summary: T("Quote, take the PO, order from the supplier, receive and ship.", "Cotizar, recibir la OC, pedir al proveedor, recibir y enviar.", "Offerta, ordine del cliente, ordine al fornitore, arrivo e spedizione."),
+    steps: [
+      T("Change the status at the top when you send the quote and when the customer's PO comes in.", "Cambie el estado arriba cuando envíe la cotización y cuando llegue la OC del cliente.", "Cambia lo stato in alto quando invii l'offerta e quando arriva l'ordine del cliente."),
+      T("Open To order from suppliers to see every part still to order, by supplier. Copy list gives you the text for the order email to Italy.", "Abra Por pedir a proveedores para ver cada repuesto pendiente, por proveedor. Copiar lista le da el texto para el correo de pedido a Italia.", "Apri Da ordinare ai fornitori per vedere ogni ricambio ancora da ordinare, per fornitore. Copia elenco ti dà il testo per l'email d'ordine all'Italia."),
+      T("Press Edit and type the supplier PO and arrival date on each line, then how many arrived and shipped. The status moves on by itself.", "Pulse Editar y escriba en cada línea la OC al proveedor y la fecha de llegada, luego cuántos llegaron y se enviaron. El estado avanza solo.", "Premi Modifica e scrivi su ogni riga l'ordine fornitore e la data di arrivo, poi quanti sono arrivati e spediti. Lo stato avanza da solo."),
+      T("Once it ships, type the QuickBooks invoice number, then close it when it's paid.", "Cuando se envíe, escriba el número de factura de QuickBooks y ciérrelo cuando esté pagado.", "Quando è spedito, scrivi il numero di fattura QuickBooks e chiudilo quando è pagato."),
+    ],
+    tip: T("If someone else saved the order while you were editing, the portal stops you so nothing is overwritten. Reload and try again.", "Si otra persona guardó el pedido mientras usted editaba, el portal lo detiene para no sobrescribir nada. Recargue e intente otra vez.", "Se qualcun altro ha salvato l'ordine mentre lo modificavi, il portale ti ferma per non sovrascrivere nulla. Ricarica e riprova."),
+  },
+  {
+    id: "remove-parts-order", area: "parts-orders", needs: ["partsorders.view", "partsorders.remove"],
+    title: T("Remove a parts order", "Quitar un pedido de repuestos", "Rimuovere un ordine ricambi"),
+    summary: T("Take an order typed by mistake off the list. It stays in the record.", "Quite de la lista un pedido escrito por error. Queda en el registro.", "Togli dall'elenco un ordine inserito per errore. Resta nell'archivio."),
+    steps: [
+      T("Open the order and press Remove, then Yes, remove.", "Abra el pedido y pulse Eliminar, luego Sí, eliminar.", "Apri l'ordine e premi Rimuovi, poi Sì, rimuovi."),
+      T("For a sale that didn't happen, set the status to Lost and say why instead, so it counts in the win rate.", "Para una venta que no se dio, ponga el estado en Perdido y diga por qué, así cuenta en la tasa de éxito.", "Per una vendita non andata a buon fine, metti lo stato Perso e indica il motivo, così conta nella percentuale di successo."),
+    ],
+  },
+  {
+    id: "parts-prices", area: "parts-orders", needs: ["partsorders.view", "partsorders.prices"],
+    title: T("Prices, discounts and margin", "Precios, descuentos y margen", "Prezzi, sconti e margine"),
+    summary: T("Only people allowed to see parts prices see any dollar amounts.", "Solo quienes pueden ver precios de repuestos ven montos en dólares.", "Solo chi può vedere i prezzi dei ricambi vede importi in dollari."),
+    steps: [
+      T("In Edit, type each line's price and our cost, plus any discount and freight for the order.", "En Editar, escriba el precio de cada línea y nuestro costo, más el descuento y el flete del pedido.", "In Modifica, scrivi il prezzo di ogni riga e il nostro costo, più eventuale sconto e trasporto dell'ordine."),
+      T("The order shows its total and margin. A margin under 20% shows in red.", "El pedido muestra su total y margen. Un margen menor al 20% se ve en rojo.", "L'ordine mostra totale e margine. Un margine sotto il 20% appare in rosso."),
+    ],
+  },
+  {
+    id: "export-parts-orders", area: "parts-orders", needs: ["partsorders.view", "partsorders.export"],
+    title: T("Download parts orders as a spreadsheet", "Descargar los pedidos de repuestos como hoja de cálculo", "Scaricare gli ordini ricambi come foglio di calcolo"),
+    summary: T("Get the parts orders you're looking at in Excel.", "Obtenga en Excel los pedidos de repuestos que está viendo.", "Porta in Excel gli ordini ricambi che stai guardando."),
+    steps: [
+      T("Open Parts orders and search to the orders you want.", "Abra Pedidos de repuestos y busque los pedidos que quiere.", "Apri Ordini ricambi e cerca gli ordini che vuoi."),
+      T("Press Export CSV. The file opens in Excel. Totals are in it only if you can see parts prices.", "Pulse Exportar CSV. El archivo se abre en Excel. Los totales solo aparecen si puede ver los precios de repuestos.", "Premi Esporta CSV. Il file si apre in Excel. I totali ci sono solo se puoi vedere i prezzi dei ricambi."),
+    ],
+  },
+  {
+    id: "parts-reports", area: "parts-orders", needs: ["partsorders.view", "partsorders.prices", "partsorders.reports"],
+    title: T("Parts sales reports", "Informes de ventas de repuestos", "Report vendite ricambi"),
+    summary: T("Sales by month, top customers and parts, win rate and how fast orders ship.", "Ventas por mes, mejores clientes y repuestos, tasa de éxito y rapidez de envío.", "Vendite per mese, clienti e ricambi principali, percentuale di successo e rapidità di spedizione."),
+    steps: [
+      T("Open Parts orders, then Sales reports. Pick the dates at the top.", "Abra Pedidos de repuestos y luego Informes de ventas. Elija las fechas arriba.", "Apri Ordini ricambi, poi Report vendite. Scegli le date in alto."),
+      T("Sales count from the day the customer's PO came in. Lost and cancelled orders are left out.", "Las ventas cuentan desde el día en que llegó la OC del cliente. Los pedidos perdidos y cancelados no cuentan.", "Le vendite contano dal giorno in cui è arrivato l'ordine del cliente. Ordini persi e annullati sono esclusi."),
     ],
   },
 
@@ -640,7 +772,7 @@ export const GUIDES: Guide[] = [
   {
     id: "workbook-switch", area: "people", needs: ["settings.manage"], open: "/settings",
     title: T("Switch the Ronchi workbook on or off", "Encender o apagar el cuaderno de trabajo Ronchi", "Accendere o spegnere il quaderno di lavoro Ronchi"),
-    summary: T("If the team keeps its Excel sheets, hide Work orders for everyone.", "Si el equipo sigue con sus hojas de Excel, oculte Órdenes de trabajo para todos.", "Se il team continua con i fogli Excel, nascondi Ordini di lavoro a tutti."),
+    summary: T("If the team keeps its Excel sheets, hide the Work order tab on jobs for everyone.", "Si el equipo sigue con sus hojas de Excel, oculte la pestaña Orden de trabajo de los trabajos para todos.", "Se il team continua con i fogli Excel, nascondi a tutti la scheda Ordine di lavoro dei lavori."),
     steps: [
       T("Open Settings, press Command center and find Use the Ronchi workbook under Sections of the portal.", "Abra Configuración, pulse Centro de mando y busque Usar el cuaderno de trabajo Ronchi en Secciones del portal.", "Apri Impostazioni, premi Centro di comando e cerca Usa il quaderno di lavoro Ronchi in Sezioni del portale."),
       T("Untick it and confirm. Jobs, job emails and job files keep working, and nothing is deleted.", "Desmárquelo y confirme. Los trabajos, sus correos y archivos siguen funcionando y no se borra nada.", "Togli la spunta e conferma. Lavori, email e file dei lavori continuano a funzionare e non si cancella nulla."),
@@ -665,6 +797,43 @@ export const GUIDES: Guide[] = [
       T("Open People and scroll to Recent activity (audit log).", "Abra Personas y baje hasta Actividad reciente (registro de auditoría).", "Apri Persone e scorri fino ad Attività recente (registro di controllo)."),
       T("Each line shows when, who, what and from where.", "Cada línea muestra cuándo, quién, qué y desde dónde.", "Ogni riga mostra quando, chi, cosa e da dove."),
     ],
+  },
+  // ---------- Shipping and receiving ----------
+  {
+    id: "track-shipments", area: "shipping", needs: ["shipping.view"],
+    title: T("See what's shipping and track it", "Ver qué se envía y seguirlo", "Vedere cosa parte e seguirlo"),
+    summary: T("Everything going out and coming in, with tracking links to the carrier's own page.", "Todo lo que sale y entra, con enlaces de seguimiento a la página del transportista.", "Tutto ciò che esce ed entra, con link di tracciamento alla pagina del vettore."),
+    steps: [
+      T("Open Shipping. The counters at the top show what's waiting to be packed, on the way, expected in and any problems.", "Abra Envíos. Los contadores de arriba muestran lo que falta empacar, lo que va en camino, lo que se espera y los problemas.", "Apri Spedizioni. I contatori in alto mostrano cosa è da imballare, in viaggio, in arrivo e gli eventuali problemi."),
+      T("Search by shipment number, customer, supplier, machine, PO, tracking number or part number.", "Busque por número de envío, cliente, proveedor, máquina, PO, número de seguimiento o de pieza.", "Cerca per numero di spedizione, cliente, fornitore, macchina, PO, numero di tracciamento o codice ricambio."),
+      T("Press a tracking number to open the carrier's tracking page. For LTL freight the number is copied: paste it on the carrier's page.", "Pulse un número de seguimiento para abrir la página del transportista. Para carga LTL el número se copia: péguelo en la página del transportista.", "Premi un numero di tracciamento per aprire la pagina del vettore. Per il groupage LTL il numero viene copiato: incollalo nella pagina del vettore."),
+      T("Add photos and papers to any shipment, like proof of delivery or damage photos.", "Añada fotos y documentos a cualquier envío, como el comprobante de entrega o fotos de daños.", "Aggiungi foto e documenti a qualsiasi spedizione, come la prova di consegna o le foto dei danni."),
+    ],
+    tip: T("Change-part orders, jobs and machines show their shipments at the bottom of their page.", "Los pedidos de cambio de formato, los trabajos y las máquinas muestran sus envíos al final de su página.", "Ordini cambio formato, lavori e macchine mostrano le loro spedizioni in fondo alla pagina."),
+  },
+  {
+    id: "ship-out", area: "shipping", needs: ["shipping.view", "shipping.edit"],
+    title: T("Ship something out", "Enviar algo", "Spedire qualcosa"),
+    summary: T("Make a shipment, print the packing slip and bill of lading, and mark it shipped.", "Cree un envío, imprima el albarán y el conocimiento de embarque, y márquelo como enviado.", "Crea una spedizione, stampa la distinta di imballo e la lettera di vettura, e segnala come spedita."),
+    steps: [
+      T("On a change-part order or job, press Ship this. Or open Shipping and press New shipment.", "En un pedido de cambio de formato o trabajo, pulse Enviar esto. O abra Envíos y pulse Nuevo envío.", "In un ordine cambio formato o un lavoro, premi Spedisci. Oppure apri Spedizioni e premi Nuova spedizione."),
+      T("Check the customer and address, add the packages (crates, pallets, boxes with weight and size) and what's in it.", "Revise el cliente y la dirección, añada los bultos (cajas, pallets, con peso y medidas) y su contenido.", "Controlla cliente e indirizzo, aggiungi i colli (casse, pallet, scatole con peso e misure) e il contenuto."),
+      T("Press Packing slip or Bill of lading to print them or save them as PDF.", "Pulse Albarán o Conocimiento de embarque para imprimirlos o guardarlos como PDF.", "Premi Distinta di imballo o Lettera di vettura per stamparle o salvarle in PDF."),
+      T("When it leaves, press Mark shipped and type the tracking or PRO numbers. Then Email the customer sends them the tracking.", "Cuando salga, pulse Marcar enviado y escriba los números de seguimiento o PRO. Luego Enviar correo al cliente le manda el seguimiento.", "Quando parte, premi Segna come spedita e scrivi i numeri di tracciamento o PRO. Poi Scrivi al cliente gli manda il tracciamento."),
+    ],
+    tip: T("Shipping a change-part order fills in the order's ship date and moves it to Shipped.", "Enviar un pedido de cambio de formato completa su fecha de envío y lo pasa a Enviado.", "Spedire un ordine cambio formato compila la data di spedizione e lo porta a Spedito."),
+  },
+  {
+    id: "receive", area: "shipping", needs: ["shipping.view", "shipping.edit"],
+    title: T("Check a delivery in", "Recibir una entrega", "Registrare una consegna"),
+    summary: T("Expect a delivery, count what came in (a bit at a time if needed), note where it went and anything wrong.", "Espere una entrega, cuente lo que llegó (por partes si hace falta), anote dónde se guardó y cualquier problema.", "Prevedi una consegna, conta cosa è arrivato (anche a più riprese), annota dove è stato messo e ogni problema."),
+    steps: [
+      T("Open Shipping and press Expect a delivery. Add the supplier or customer, the PO or RMA number and what's coming.", "Abra Envíos y pulse Esperar una entrega. Añada el proveedor o cliente, el número de PO o RMA y lo que viene.", "Apri Spedizioni e premi Prevedi una consegna. Aggiungi fornitore o cliente, numero di PO o RMA e cosa arriva."),
+      T("For shipments from Italy, add how it travels, the vessel or flight, the container and the customs broker.", "Para envíos de Italia, añada cómo viaja, el barco o vuelo, el contenedor y el agente de aduanas.", "Per le spedizioni dall'Italia, aggiungi il mezzo, la nave o il volo, il container e lo spedizioniere doganale."),
+      T("When it arrives, type how many of each item came in and the shelf or bin, then press Check in what I counted. Or press Everything arrived.", "Cuando llegue, escriba cuántas unidades de cada artículo llegaron y el estante o casillero, y pulse Registrar lo que conté. O pulse Llegó todo.", "Quando arriva, scrivi quanti pezzi di ogni articolo sono arrivati e lo scaffale o il contenitore, poi premi Registra quello che ho contato. Oppure premi È arrivato tutto."),
+      T("If something is wrong, pick it under Anything wrong? and add photos. Tick Hold to keep a doubtful part from being used.", "Si algo está mal, elíjalo en ¿Algún problema? y añada fotos. Marque Retener para que una pieza dudosa no se use.", "Se qualcosa non va, sceglilo in Qualche problema? e aggiungi foto. Spunta Blocca per non far usare un pezzo dubbio."),
+    ],
+    tip: T("Receiving a customer's sample bottles for a change-part order fills in its samples received date.", "Recibir las botellas de muestra de un cliente para un pedido de cambio de formato completa su fecha de muestras recibidas.", "Ricevere i flaconi campione di un cliente per un ordine cambio formato compila la data di campioni ricevuti."),
   },
 ];
 

@@ -9,6 +9,7 @@
 // English, Spanish and Italian side by side; test/unit/learn.test.ts checks none is missing.
 import { useEffect, useState } from "react";
 import { ES, IT } from "./i18n-dict";
+import { ERROR_PATTERNS } from "./i18n-errors";
 
 export type Lang = "en" | "es" | "it";
 export const LANGS: { id: Lang; name: string }[] = [
@@ -62,7 +63,18 @@ export function useLang(): Lang {
 
 /** Text in the chosen language. {name} style blanks are filled from `vars`. */
 export function t(text: string, vars?: Record<string, string | number>): string {
-  let out = DICTS[current]?.[text] ?? text;
+  const dict = DICTS[current];
+  let out = dict?.[text] ?? (dict && !vars ? filledIn(text, dict, current as "es" | "it") : null) ?? text;
   if (vars) for (const [k, v] of Object.entries(vars)) out = out.split(`{${k}}`).join(String(v));
   return out;
+}
+
+/** A server message with a name or number in it ("Line 3 is empty."): translate its shape, and the
+ *  filled-in parts too when the dictionary knows them. */
+function filledIn(text: string, dict: Record<string, string>, lang: "es" | "it"): string | null {
+  for (const p of ERROR_PATTERNS) {
+    const m = p.re.exec(text);
+    if (m) return p[lang].replace(/\$(\d)/g, (_, n: string) => { const v = m[Number(n)] ?? ""; return dict[v] ?? v; });
+  }
+  return null;
 }
