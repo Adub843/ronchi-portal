@@ -90,7 +90,7 @@ describe("Settings > Admin controls", () => {
   it("chat limits: who starts boards, people per chat, and files", async () => {
     const admin = await person("admin");
     const tech = await person("tech");
-    await admin.json("/api/settings", { method: "PUT", body: { chats: { boardsBy: "moderators", maxPeople: 2, files: false } } });
+    await admin.json("/api/settings", { method: "PUT", body: { chats: { maxPeople: 2, files: false }, roles: { tech: ["boards.use", "chats.start", "files.send"] } } });
     expect((await tech.fetch("/api/boards", { body: { name: "Tech board" } })).status).toBe(403);
     expect((await admin.fetch("/api/boards", { body: { name: "Admin board" } })).status).toBe(200);
     const a = await person("tech");
@@ -148,6 +148,29 @@ describe("Settings > Admin controls", () => {
     expect(r.data.sessions).toBeGreaterThan(0);
     expect((await tech.json("/api/auth/me")).data.user).toBeNull();
     expect((await admin.json("/api/auth/me")).data.user).not.toBeNull();
+  });
+
+  it("a permission added after the role table was saved follows the built-in table", async () => {
+    const admin = await person("admin");
+    await admin.json("/api/settings", { method: "PUT", body: { roles: { tech: ["boards.use"] } } });
+    const row = await env.DB.prepare("SELECT data FROM settings WHERE id = 1").first<{ data: string }>();
+    const data = JSON.parse(row!.data);
+    data.rolesKnown = data.rolesKnown.filter((p: string) => p !== "kb.view"); // as if kb.view came later
+    await env.DB.prepare("UPDATE settings SET data = ? WHERE id = 1").bind(JSON.stringify(data)).run();
+    forgetSettings();
+    const tech = await person("tech");
+    const perms = (await tech.json("/api/auth/me")).data.user.permissions;
+    expect(perms).toContain("kb.view");
+    expect(perms).not.toContain("machines.view");
+  });
+
+  it("a section turned off stays off even for someone given that permission personally", async () => {
+    const admin = await person("admin");
+    const tech = await person("tech");
+    expect((await admin.fetch(`/api/users/${tech.id}/access`, { method: "PUT", body: { changes: { "orders.view": true } } })).status).toBe(200);
+    expect((await tech.fetch("/api/change-parts")).status).toBe(200);
+    await admin.json("/api/settings", { method: "PUT", body: { sections: { changeParts: false } } });
+    expect((await tech.fetch("/api/change-parts")).status).toBe(403);
   });
 
   it("usage numbers for growing the portal, with no money amounts", async () => {

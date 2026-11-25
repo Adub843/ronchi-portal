@@ -115,7 +115,7 @@ const dupKey = (o: CpOrderInput | Record<string, unknown>) =>
  * the orders. Orders already here (same customer, machine, part and customer PO) are skipped.
  */
 changeParts.post("/import", async (c) => {
-  const u = requirePerm(c, "orders.edit");
+  const u = requirePerm(c, "orders.import");
   const b = await body(c);
   if (typeof b.csv !== "string" || !b.csv.trim()) fail(400, "Choose a CSV file to import.");
   if (b.csv.length > 3_000_000) fail(400, "That file is too big (limit 3 MB).");

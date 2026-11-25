@@ -16,8 +16,9 @@
     "check": "npm run typecheck && npm test",
     "db:migrate:local": "wrangler d1 migrations apply portal-db --local -c wrangler.portal.jsonc && wrangler d1 migrations apply help-db --local -c wrangler.help.jsonc && wrangler d1 migrations apply parts-db --local -c wrangler.parts.jsonc",
     "db:migrate:remote": "wrangler d1 migrations apply portal-db --remote --env production -c wrangler.portal.jsonc && wrangler d1 migrations apply help-db --remote --env production -c wrangler.help.jsonc && wrangler d1 migrations apply parts-db --remote --env production -c wrangler.parts.jsonc",
-    "deploy": "npm run check && npm run build:web && npm run build:parts && wrangler deploy --env production -c wrangler.parts.jsonc && wrangler deploy --env production -c wrangler.portal.jsonc && wrangler deploy --env production -c wrangler.help.jsonc",
+    "deploy": "npm run check && npm run build:web && npm run build:parts && wrangler deploy --env production -c wrangler.parts.jsonc && wrangler deploy --env production -c wrangler.help.jsonc && wrangler deploy --env production -c wrangler.portal.jsonc",
     "invite:first-admin": "node scripts/first-admin.mjs",
+    "set:help-key": "node scripts/set-help-key.mjs",
     "build:demo": "vite build --config web/vite.demo.config.ts && node scripts/inline-demo.mjs"
   },
   "dependencies": {

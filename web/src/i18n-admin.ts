@@ -2,6 +2,9 @@
 // Settings and People). Kept apart from i18n-dict.ts so it merges cleanly; i18n-dict.ts adds these in.
 
 export const ADMIN_ES: Record<string, string> = {
+  "Import orders from a spreadsheet": "Importar pedidos desde una hoja de cálculo",
+  "Publish articles to customers": "Publicar artículos para clientes",
+  "Tick what each role is allowed. A change applies on each person's next click. Admins always have everything. To change one person only, use Access on the People page.": "Marque lo que cada rol puede hacer. El cambio se aplica en el siguiente clic de cada persona. Los administradores siempre lo tienen todo. Para cambiar a una sola persona, use Acceso en la página Personas.",
   "1 to 10.": "De 1 a 10.",
   "1 to 25. 25 MB is the most the portal allows.": "De 1 a 25. 25 MB es lo máximo que permite el portal.",
   "2 to 50, counting the person who starts it.": "De 2 a 50, contando a quien lo inicia.",
@@ -29,7 +32,6 @@ export const ADMIN_ES: Record<string, string> = {
   "Edit the parts catalog and publish it to customers": "Editar el catálogo de piezas y publicarlo para clientes",
   "Emergency": "Emergencia",
   "Every phone and computer except this one is signed out. People sign back in with their passkey.": "Se cierra la sesión en todos los teléfonos y computadoras excepto este. Las personas vuelven a entrar con su llave de acceso.",
-  "Everyone on staff": "Todo el personal",
   "Everything you can adjust to manage people and grow the portal.": "Todo lo que puede ajustar para gestionar personas y hacer crecer el portal.",
   "Files already sent stay where they are.": "Los archivos ya enviados se quedan donde están.",
   "Files in one message": "Archivos por mensaje",
@@ -68,7 +70,6 @@ export const ADMIN_ES: Record<string, string> = {
   "Notice for everyone": "Aviso para todos",
   "Off: only admins see it": "Desactivado: solo lo ven los administradores",
   "On for everyone whose role allows it": "Activado para todos cuyo rol lo permite",
-  "Only admins and board moderators": "Solo administradores y moderadores de tableros",
   "Only admins see this. Every change is checked on the server and recorded in the activity log.": "Solo los administradores ven esto. Cada cambio se verifica en el servidor y queda en el registro de actividad.",
   "Open People": "Abrir Personas",
   "Pause new invites": "Pausar invitaciones nuevas",
@@ -99,7 +100,6 @@ export const ADMIN_ES: Record<string, string> = {
   "The customer side always uses the Ronchi look.": "El lado de clientes siempre usa el aspecto Ronchi.",
   "The small line under the name.": "La línea pequeña bajo el nombre.",
   "These are built into the portal on purpose and can't be switched off here.": "Están integradas en el portal a propósito y no se pueden desactivar aquí.",
-  "Tick what each role is allowed. A change applies on each person's next click. Admins always have everything.": "Marque lo que cada rol puede hacer. El cambio se aplica en el siguiente clic de cada persona. Los administradores siempre lo tienen todo.",
   "Turn a section off to hide it from everyone except admins, for example while it's being set up.": "Desactive una sección para ocultarla a todos excepto a los administradores, por ejemplo mientras se prepara.",
   "Type SIGN OUT to confirm.": "Escriba SIGN OUT para confirmar.",
   "Unsaved changes": "Cambios sin guardar",
@@ -107,7 +107,6 @@ export const ADMIN_ES: Record<string, string> = {
   "Used it this week": "Lo usaron esta semana",
   "What each role can do": "Lo que puede hacer cada rol",
   "When each person last used the portal": "Cuándo usó cada persona el portal por última vez",
-  "Who can start a new board": "Quién puede crear un tablero nuevo",
   "You have changes that aren't saved.": "Tiene cambios sin guardar.",
   "{n} day(s)": "{n} día(s)",
   "{n} hour(s)": "{n} hora(s)",
@@ -115,6 +114,9 @@ export const ADMIN_ES: Record<string, string> = {
 };
 
 export const ADMIN_IT: Record<string, string> = {
+  "Import orders from a spreadsheet": "Importare ordini da un foglio di calcolo",
+  "Publish articles to customers": "Pubblicare articoli per i clienti",
+  "Tick what each role is allowed. A change applies on each person's next click. Admins always have everything. To change one person only, use Access on the People page.": "Spunta ciò che ogni ruolo può fare. La modifica vale dal clic successivo di ciascuno. Gli amministratori hanno sempre tutto. Per cambiare una sola persona, usa Accesso nella pagina Persone.",
   "1 to 10.": "Da 1 a 10.",
   "1 to 25. 25 MB is the most the portal allows.": "Da 1 a 25. 25 MB è il massimo consentito dal portale.",
   "2 to 50, counting the person who starts it.": "Da 2 a 50, contando chi la avvia.",
@@ -142,7 +144,6 @@ export const ADMIN_IT: Record<string, string> = {
   "Edit the parts catalog and publish it to customers": "Modificare il catalogo ricambi e pubblicarlo per i clienti",
   "Emergency": "Emergenza",
   "Every phone and computer except this one is signed out. People sign back in with their passkey.": "Tutti i telefoni e computer tranne questo vengono disconnessi. Si rientra con la propria passkey.",
-  "Everyone on staff": "Tutto il personale",
   "Everything you can adjust to manage people and grow the portal.": "Tutto ciò che puoi regolare per gestire le persone e far crescere il portale.",
   "Files already sent stay where they are.": "I file già inviati restano dove sono.",
   "Files in one message": "File per messaggio",
@@ -181,7 +182,6 @@ export const ADMIN_IT: Record<string, string> = {
   "Notice for everyone": "Avviso per tutti",
   "Off: only admins see it": "Disattivato: lo vedono solo gli amministratori",
   "On for everyone whose role allows it": "Attivo per chi ha un ruolo che lo consente",
-  "Only admins and board moderators": "Solo amministratori e moderatori delle bacheche",
   "Only admins see this. Every change is checked on the server and recorded in the activity log.": "Solo gli amministratori vedono questa pagina. Ogni modifica è verificata sul server e registrata nel registro attività.",
   "Open People": "Apri Persone",
   "Pause new invites": "Sospendi nuovi inviti",
@@ -212,7 +212,6 @@ export const ADMIN_IT: Record<string, string> = {
   "The customer side always uses the Ronchi look.": "La parte clienti usa sempre l'aspetto Ronchi.",
   "The small line under the name.": "La riga piccola sotto il nome.",
   "These are built into the portal on purpose and can't be switched off here.": "Sono integrate nel portale di proposito e non si possono disattivare qui.",
-  "Tick what each role is allowed. A change applies on each person's next click. Admins always have everything.": "Spunta ciò che ogni ruolo può fare. La modifica vale dal clic successivo di ciascuno. Gli amministratori hanno sempre tutto.",
   "Turn a section off to hide it from everyone except admins, for example while it's being set up.": "Disattiva una sezione per nasconderla a tutti tranne agli amministratori, ad esempio mentre la prepari.",
   "Type SIGN OUT to confirm.": "Scrivi SIGN OUT per confermare.",
   "Unsaved changes": "Modifiche non salvate",
@@ -220,7 +219,6 @@ export const ADMIN_IT: Record<string, string> = {
   "Used it this week": "Usato questa settimana",
   "What each role can do": "Cosa può fare ogni ruolo",
   "When each person last used the portal": "Quando ognuno ha usato il portale l'ultima volta",
-  "Who can start a new board": "Chi può creare una nuova bacheca",
   "You have changes that aren't saved.": "Hai modifiche non salvate.",
   "{n} day(s)": "{n} giorno/i",
   "{n} hour(s)": "{n} ora/e",

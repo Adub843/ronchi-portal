@@ -4,7 +4,7 @@
 // kept in memory for 10 seconds so most requests don't read it again; an admin's save applies at
 // once on the server that saved it, and on every other server within 10 seconds.
 import { audit, now } from "./db";
-import { ALL, builtInRoleTable, effectiveTable, setActiveTable, type Permission } from "./roles";
+import { ALL, builtInRoleTable, setActiveTable, type Permission } from "./roles";
 import { clean, defaults, SECTIONS, SECTION_IDS, type PortalSettings } from "./settings";
 
 const TTL_MS = 10_000;
@@ -14,7 +14,7 @@ export const DEFAULTS = (): PortalSettings => defaults(builtInRoleTable());
 
 function apply(s: PortalSettings) {
   const off = new Set<Permission>(SECTION_IDS.filter((k) => !s.sections[k]).flatMap((k) => [...SECTIONS[k].perms]));
-  setActiveTable(effectiveTable(s.roles, off));
+  setActiveTable(s.roles, off);
   cached = { at: Date.now(), settings: s };
 }
 
@@ -28,7 +28,7 @@ export async function loadSettings(db: D1Database, force = false): Promise<Porta
   let data: unknown = null;
   try {
     const row = await db.prepare("SELECT data FROM settings WHERE id = 1").first<{ data: string }>();
-    data = row ? JSON.parse(row.data) : null;
+    data = row ? withNewPermissions(JSON.parse(row.data)) : null;
   } catch {
     // No settings table yet (migration 0007 not applied) or a damaged record: run on defaults.
     data = null;
@@ -36,6 +36,25 @@ export async function loadSettings(db: D1Database, force = false): Promise<Porta
   const { settings } = clean(data, DEFAULTS(), ALL);
   apply(settings);
   return settings;
+}
+
+/**
+ * A role table saved before a permission existed doesn't mention it. Such a permission follows the
+ * built-in table, so adding a feature later doesn't quietly take it away from every role.
+ */
+function withNewPermissions(data: unknown): unknown {
+  if (!data || typeof data !== "object") return data;
+  const d = data as { roles?: Record<string, unknown>; rolesKnown?: unknown };
+  if (!d.roles || !Array.isArray(d.rolesKnown)) return data;
+  const known = new Set(d.rolesKnown as string[]);
+  const fresh = ALL.filter((p) => !known.has(p));
+  if (!fresh.length) return data;
+  const base = builtInRoleTable() as Record<string, Permission[]>;
+  const roles: Record<string, unknown> = { ...d.roles };
+  for (const [r, list] of Object.entries(roles)) {
+    if (Array.isArray(list) && base[r]) roles[r] = [...list, ...fresh.filter((p) => base[r]!.includes(p))];
+  }
+  return { ...d, roles };
 }
 
 /** Save an admin's changes. Returns an error message instead when something is out of range. */
@@ -57,7 +76,7 @@ export async function saveSettings(
   if (error) return { settings: before, error };
   await db.prepare(
     "INSERT INTO settings (id, data, updated_at, updated_by) VALUES (1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at, updated_by = excluded.updated_by",
-  ).bind(JSON.stringify(settings), now(), who.id).run();
+  ).bind(JSON.stringify({ ...settings, rolesKnown: ALL }), now(), who.id).run();
   await audit(db, { userId: who.id, action: "settings.update", detail: changes(before, settings), ip: who.ip });
   apply(settings);
   return { settings, error: null };
@@ -79,5 +98,5 @@ function changes(a: PortalSettings, b: PortalSettings): Record<string, [unknown,
 /** Tests only: forget the in-memory copy. */
 export function forgetSettings() {
   cached = null;
-  setActiveTable(effectiveTable(builtInRoleTable()));
+  setActiveTable(builtInRoleTable());
 }

@@ -16,6 +16,9 @@ const roleName = (r: string) =>
 const permName = (p: string) =>
   ({
     "boards.use": t("Use chats and boards"),
+    "boards.create": t("Start new boards"),
+    "chats.start": t("Start private chats"),
+    "files.send": t("Send photos and files"),
     "boards.moderate": t("Moderate boards (pin, archive, remove posts)"),
     "machines.view": t("See machines"),
     "machines.edit": t("Add and change machines"),
@@ -25,9 +28,13 @@ const permName = (p: string) =>
     "quotes.manage": t("Handle customer quote requests"),
     "orders.view": t("See change-part orders"),
     "orders.edit": t("Add and change change-part orders"),
+    "orders.import": t("Import orders from a spreadsheet"),
+    "kb.view": t("Search the knowledge base"),
+    "kb.write": t("Write notes and articles"),
+    "kb.publish": t("Publish articles to customers"),
   })[p] ?? p;
 const sectionName = (s: Section) =>
-  ({ chats: t("Chats and boards"), machines: t("Machines"), catalog: t("Parts catalog"), customers: t("Customers and quote requests"), changeParts: t("Change parts") })[s];
+  ({ chats: t("Chats and boards"), machines: t("Machines"), catalog: t("Parts catalog"), customers: t("Customers and quote requests"), changeParts: t("Change parts"), knowledge: t("Knowledge base") })[s];
 const LOCKED = () => [
   t("Admins always have every permission, and only admins can manage people, settings and the activity log."),
   t("Nobody can remove their own admin access."),
@@ -172,7 +179,7 @@ export function AdminSettings({ onSaved }: { onSaved: (s: PortalSettings) => voi
         </div>
       </Group>
 
-      <Group title={t("What each role can do")} sub={t("Tick what each role is allowed. A change applies on each person's next click. Admins always have everything.")} onReset={() => reset("roles")}>
+      <Group title={t("What each role can do")} sub={t("Tick what each role is allowed. A change applies on each person's next click. Admins always have everything. To change one person only, use Access on the People page.")} onReset={() => reset("roles")}>
         <div className="tbl admin-perms">
           <table>
             <thead>
@@ -210,12 +217,6 @@ export function AdminSettings({ onSaved }: { onSaved: (s: PortalSettings) => voi
 
       <Group title={t("Chats and boards")} onReset={() => reset("chats")}>
         <div className="grid g2">
-          <Field id="as-boards" label={t("Who can start a new board")}>
-            <select id="as-boards" value={draft.chats.boardsBy} onChange={(e) => set("chats", { boardsBy: e.target.value as "everyone" | "moderators" })}>
-              <option value="everyone">{t("Everyone on staff")}</option>
-              <option value="moderators">{t("Only admins and board moderators")}</option>
-            </select>
-          </Field>
           <Field id="as-people" label={t("Most people in one chat")} hint={t("2 to 50, counting the person who starts it.")}>
             <input id="as-people" type="number" min={2} max={50} value={draft.chats.maxPeople} onChange={(e) => set("chats", { maxPeople: Number(e.target.value) })} />
           </Field>

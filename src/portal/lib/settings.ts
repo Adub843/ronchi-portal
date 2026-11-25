@@ -16,11 +16,12 @@ export const LANG_IDS: Lang[] = ["en", "es", "it"];
 
 /** Parts of the portal an admin can turn off for everyone else, and the permissions each one covers. */
 export const SECTIONS = {
-  chats: { label: "Chats and boards", perms: ["boards.use", "boards.moderate"] },
+  chats: { label: "Chats and boards", perms: ["boards.use", "boards.create", "chats.start", "files.send", "boards.moderate"] },
   machines: { label: "Machines", perms: ["machines.view", "machines.edit"] },
   catalog: { label: "Parts catalog", perms: ["catalog.view", "catalog.edit"] },
   customers: { label: "Customers and quote requests", perms: ["customers.manage", "quotes.manage"] },
-  changeParts: { label: "Change parts", perms: ["orders.view", "orders.edit"] },
+  changeParts: { label: "Change parts", perms: ["orders.view", "orders.edit", "orders.import"] },
+  knowledge: { label: "Knowledge base", perms: ["kb.view", "kb.write", "kb.publish"] },
 } as const satisfies Record<string, { label: string; perms: Permission[] }>;
 export type Section = keyof typeof SECTIONS;
 export const SECTION_IDS = Object.keys(SECTIONS) as Section[];
@@ -43,7 +44,7 @@ export interface PortalSettings {
   sections: Record<Section, boolean>;
   /** What each role can do. Admin is not listed: admins always have everything. */
   roles: Record<Exclude<Role, "admin">, Permission[]>;
-  chats: { boardsBy: "everyone" | "moderators"; maxPeople: number; files: boolean; maxFileMb: number; maxFiles: number };
+  chats: { maxPeople: number; files: boolean; maxFileMb: number; maxFiles: number };
   languages: { allowed: Lang[]; default: Lang };
   look: { defaultTheme: string; allowedThemes: string[]; popupsDefault: boolean };
 }
@@ -55,9 +56,9 @@ export function defaults(builtInRoles: PortalSettings["roles"], themeIds: string
   return {
     brand: { name: "Ronchi Portal", company: "Ronchi America", notice: "" },
     people: { inviteHours: 72, sessionDays: 30, idleDays: 14, invitesPaused: false, defaultRole: "tech" },
-    sections: { chats: true, machines: true, catalog: true, customers: true, changeParts: true },
+    sections: { chats: true, machines: true, catalog: true, customers: true, changeParts: true, knowledge: true },
     roles: builtInRoles,
-    chats: { boardsBy: "everyone", maxPeople: 30, files: true, maxFileMb: 25, maxFiles: 10 },
+    chats: { maxPeople: 30, files: true, maxFileMb: 25, maxFiles: 10 },
     languages: { allowed: [...LANG_IDS], default: "en" },
     look: { defaultTheme: DEFAULT_THEME, allowedThemes: themeIds, popupsDefault: true },
   };
@@ -149,7 +150,6 @@ export function clean(
 
   const ch = part("chats");
   const chats = {
-    boardsBy: ch.boardsBy === "everyone" || ch.boardsBy === "moderators" ? ch.boardsBy : (ch.boardsBy !== undefined && bad("Pick who can start boards."), base.chats.boardsBy),
     maxPeople: num(ch.maxPeople, base.chats.maxPeople, LIMITS.chatPeople, "People in one chat"),
     files: bool(ch.files, base.chats.files),
     maxFileMb: num(ch.maxFileMb, base.chats.maxFileMb, LIMITS.fileMb, "Largest file"),

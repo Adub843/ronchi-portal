@@ -4,7 +4,7 @@ import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
 import { body, fail, mustStr, requirePerm, requireUser } from "../lib/http";
 import { createInvite } from "../lib/invites";
-import { isRole, ROLES } from "../lib/roles";
+import { adjustable, effective, isPermission, isRole, PERMISSION_GROUPS, readChanges, roleTable, ROLES, type AccessChanges, type Role } from "../lib/roles";
 import { endAllSessions } from "../lib/session";
 import { getSettings } from "../lib/settings-store";
 import { loginId } from "../../shared/login";
@@ -16,6 +16,57 @@ users.get("/roles", (c) => {
   return c.json({ roles: ROLES });
 });
 
+/** The access screen's list: every permission in plain English, and what each role gives. */
+users.get("/permissions", (c) => {
+  requirePerm(c, "users.manage");
+  const byRole = Object.fromEntries(Object.entries(roleTable()).map(([r, set]) => [r, [...set]]));
+  return c.json({ groups: PERMISSION_GROUPS.map((g) => ({ ...g, perms: g.perms.map((p) => ({ ...p, adjustable: adjustable(p.id) })) })), byRole });
+});
+
+async function changesFor(db: D1Database, userId: string): Promise<AccessChanges> {
+  const r = await db.prepare("SELECT group_concat(perm || '=' || allow) AS list FROM user_access WHERE user_id = ?").bind(userId).first<{ list: string | null }>();
+  return readChanges(r?.list);
+}
+
+/**
+ * Switch single permissions on or off for one person, on top of their role.
+ * Body: { changes: { "files.send": false, "orders.view": true, "kb.publish": null } }
+ * true = on, false = off, null = back to what the role gives. { reset: true } clears them all.
+ * It applies on their next click, so they aren't signed out.
+ */
+users.put("/:id/access", async (c) => {
+  const admin = requirePerm(c, "users.manage");
+  const id = c.req.param("id");
+  const b = await body(c);
+  const target = await c.env.DB.prepare("SELECT id, name, role FROM users WHERE id = ?").bind(id).first<{ id: string; name: string; role: Role }>();
+  if (!target) fail(404, "Not found.");
+  if (id === admin.id) fail(400, "You can't change your own access. Ask another admin.");
+  if (target.role === "admin") fail(400, "Admins always have everything. Change their role first.");
+  const before = await changesFor(c.env.DB, id);
+  const at = now();
+  const stmts: D1PreparedStatement[] = [];
+  if (b.reset === true) {
+    stmts.push(c.env.DB.prepare("DELETE FROM user_access WHERE user_id = ?").bind(id));
+  } else {
+    const changes = b.changes;
+    if (!changes || typeof changes !== "object" || Array.isArray(changes) || !Object.keys(changes).length) fail(400, "Nothing to change.");
+    for (const [perm, on] of Object.entries(changes as Record<string, unknown>)) {
+      if (!isPermission(perm)) fail(400, `Unknown permission: ${perm}`);
+      if (!adjustable(perm)) fail(400, "Managing people and the audit log stay with admins. Make them an admin instead.");
+      if (on === null) stmts.push(c.env.DB.prepare("DELETE FROM user_access WHERE user_id = ? AND perm = ?").bind(id, perm));
+      else if (typeof on === "boolean") {
+        stmts.push(c.env.DB.prepare(
+          "INSERT INTO user_access (user_id, perm, allow, set_by, set_at) VALUES (?,?,?,?,?) ON CONFLICT (user_id, perm) DO UPDATE SET allow = excluded.allow, set_by = excluded.set_by, set_at = excluded.set_at",
+        ).bind(id, perm, on ? 1 : 0, admin.id, at));
+      } else fail(400, "Use on, off, or back to the role.");
+    }
+  }
+  await c.env.DB.batch(stmts);
+  const after = await changesFor(c.env.DB, id);
+  await audit(c.env.DB, { userId: admin.id, action: "user.access", targetType: "user", targetId: id, detail: { before, after }, ip: c.get("ip") });
+  return c.json({ changes: after, permissions: [...effective(target.role, after)] });
+});
+
 /** Everyone (admin only). */
 users.get("/", async (c) => {
   requirePerm(c, "users.manage");
@@ -25,10 +76,16 @@ users.get("/", async (c) => {
             (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id) AS sessions
        FROM users u ORDER BY u.name`,
   ).all();
+  const access = await c.env.DB.prepare("SELECT user_id, group_concat(perm || '=' || allow) AS list FROM user_access GROUP BY user_id").all<{ user_id: string; list: string }>();
+  const changes = new Map(access.results.map((r) => [r.user_id, readChanges(r.list)]));
+  const people = (results as { id: string; role: Role }[]).map((u) => {
+    const own = u.role === "admin" ? {} : (changes.get(u.id) ?? {});
+    return { ...u, access: own, permissions: [...effective(u.role, own)] };
+  });
   const pending = await c.env.DB.prepare(
     "SELECT id, email, name, role, expires_at FROM invites WHERE used_at IS NULL AND user_id IS NULL AND expires_at > ? ORDER BY created_at DESC",
   ).bind(now()).all();
-  return c.json({ users: results, invites: pending.results });
+  return c.json({ users: people, invites: pending.results });
 });
 
 /** Invite a new person. Returns the link once; it is never shown again. */

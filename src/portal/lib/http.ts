@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { AppEnv, SessionUser } from "../env";
-import { can, type Permission } from "./roles";
+import type { Permission } from "./roles";
 
 /** Stop with a plain error the app can show. */
 export function fail(status: 400 | 401 | 403 | 404 | 409 | 410 | 413 | 429 | 502 | 503, message: string): never {
@@ -15,10 +15,15 @@ export function requireUser(c: Context<AppEnv>): SessionUser {
   return user;
 }
 
-/** The signed-in person, and only if their role allows `perm`. */
+/** Does this person have `perm` (their role plus any per-person changes)? */
+export function has(user: SessionUser | null | undefined, perm: Permission): boolean {
+  return !!user?.perms.has(perm);
+}
+
+/** The signed-in person, and only if their access allows `perm`. */
 export function requirePerm(c: Context<AppEnv>, perm: Permission): SessionUser {
   const user = requireUser(c);
-  if (!can(user.role, perm)) fail(403, "Your role doesn't allow this.");
+  if (!has(user, perm)) fail(403, "Your role doesn't allow this.");
   return user;
 }
 

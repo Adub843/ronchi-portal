@@ -308,3 +308,83 @@ body:has(.chat-compose) .alerts{bottom:calc(96px + env(safe-area-inset-bottom,0p
 .cp-history{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px}
 .cp-history ul{margin:4px 0 0;padding-left:18px;font-size:14px}
 @media (max-width:720px){.cp-tiles,.cp-tiles.five{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Knowledge base */
+.kbhero{margin-bottom:14px}
+.kbhero h1{margin:0}
+.kb-sub{margin:4px 0 0;opacity:.82;max-width:70ch}
+.kbhero .search input{background:var(--solid)}
+.kb-actions{flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.kb-found{margin:0 0 12px}
+.kb .facet{align-self:start;padding:14px 16px}
+.facet .facet-name{display:flex;gap:7px;align-items:center;color:var(--ink)}
+.facet input{margin:0;accent-color:var(--accent)}
+.kb-results{min-width:0;padding:6px 18px}
+.kb-results .small-note{margin:10px 0 2px}
+.kb-snip{margin:2px 0 0;color:var(--muted);font-size:13.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.kb-article{display:flex;flex-direction:column;gap:14px;max-width:980px}
+.kb-article h1{margin:6px 0 4px;text-wrap:balance}
+.kb-article h2{font-size:15px;margin:0 0 8px}
+.kb-article .pagehead{align-items:flex-start;flex-wrap:wrap;gap:12px;margin:0}
+.kb-head{flex:1 1 320px;min-width:0}
+.kb-tags{gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.kb-summary{margin:0;color:var(--muted);max-width:75ch}
+.kb-buttons{flex-wrap:wrap;gap:8px}
+.kb-issuefix{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.kb-issuefix .panel{padding:14px 18px;border-top:3px solid var(--warn)}
+.kb-issuefix .kb-fix{border-top-color:var(--ok)}
+.kb-text{white-space:pre-wrap;overflow-wrap:anywhere}
+.kb-meta{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px 18px;margin:0;padding:14px 18px}
+.kb-meta dt{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.kb-meta dd{margin:2px 0 0;font-weight:500}
+.kb-safety{border-left:4px solid var(--accent)}
+.kb-block,.kb-safety,.kb-article section.panel{padding:14px 18px}
+.kb-block p{margin:0 0 8px;max-width:80ch}
+.kb-block ul,.kb-safety ul,.kb-article section ul{margin:0;padding-left:20px}
+.kb-steps{margin:0;padding:0;list-style:none;counter-reset:step}
+.kb-steps>li{counter-increment:step;position:relative;padding:10px 0 10px 40px;border-top:1px solid var(--line)}
+.kb-steps>li:first-child{border-top:0}
+.kb-steps>li::before{content:counter(step);position:absolute;left:0;top:10px;width:26px;height:26px;border-radius:50%;background:var(--steel);color:var(--steel-ink);font:600 13px/26px var(--mono);text-align:center}
+.kb-steps h3{margin:2px 0 4px;font-size:14.5px}
+.kb-steps p{margin:0 0 6px}
+.kb-callout{background:var(--info-soft);border-radius:6px;padding:8px 12px;margin:6px 0;font-size:14px}
+.kb-callout.warn{background:var(--warn-soft)}
+.kb-table{overflow-x:auto;margin-top:4px}
+.kb-table td{vertical-align:top}
+.kb-hits{border:1px solid var(--accent);padding:14px 18px}
+.kb-hits ul{margin:8px 0 0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.kb-form fieldset{border:0;padding:0;margin:0}
+.kb-aud label{display:inline-flex;gap:6px;align-items:center;margin-right:14px;font-weight:500}
+.touch-filters{display:none}
+@media (max-width:720px){.kb-issuefix{grid-template-columns:1fr}.touch-filters{display:inline-flex;margin-bottom:10px}.kb .facet{display:none}.kb .facet.open{display:flex}.kb-results{padding:4px 14px}}
+
+/* People > Access: switch single permissions per person */
+.access-note{font-size:11.5px;color:var(--accent);margin-top:4px;font-weight:600}
+.btn.small.on{border-color:var(--accent);color:var(--accent)}
+.tbl tr.access-row>td{padding:0 0 14px;border-bottom:1px solid var(--line)}
+.access{background:var(--solid);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.access-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.access-head .muted{font-size:12.5px;max-width:62ch;margin-top:2px}
+.access-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:12px}
+.access-group{border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.access-group h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:4px 0 6px;font-weight:600}
+.access-perm{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.access-perm:first-of-type{border-top:0}
+.access-dot{width:8px;height:8px;border-radius:99px;background:var(--line);flex:none}
+.access-dot.on{background:var(--ok)}
+.access-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.access-text span{font-size:13.5px;font-weight:500}
+.access-text small{font-size:11.5px;line-height:1.35}
+.access-perm.changed .access-text span::after{content:"";display:inline-block;width:6px;height:6px;border-radius:99px;background:var(--accent);margin-left:6px;vertical-align:middle}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:none}
+.seg button{font:inherit;font-size:12px;padding:5px 9px;background:transparent;color:var(--muted);border:0;border-left:1px solid var(--line);cursor:pointer;white-space:nowrap}
+.seg button:first-child{border-left:0}
+.seg button.on{background:var(--steel);color:var(--steel-ink);font-weight:600}
+.seg button:disabled{cursor:wait}
+.access-lock{font-size:11.5px;color:var(--muted);white-space:nowrap}
+@media (max-width:560px){.access-perm{flex-wrap:wrap}.seg{margin-left:18px}}
+/* On phones the people table scrolls sideways, so the access switches open as a full-screen sheet
+   (put on <body>, because the see-through panels would otherwise trap a fixed layer). */
+.access.sheet{position:fixed;inset:0;z-index:200;overflow-y:auto;border:0;border-radius:0;
+  padding:0 max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.access.sheet .access-head{position:sticky;top:0;background:var(--solid);padding:calc(14px + env(safe-area-inset-top,0px)) 0 10px;z-index:1;border-bottom:1px solid var(--line)}

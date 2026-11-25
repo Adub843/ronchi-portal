@@ -16,6 +16,7 @@ import { Home } from "./pages/Home";
 import { Boards, BoardPage, Chats } from "./pages/Boards";
 import { ChangePartPage, ChangeParts } from "./pages/ChangeParts";
 import { Machines, MachinePage } from "./pages/Machines";
+import { KbArticle, KnowledgeBase } from "./pages/Knowledge";
 import { People } from "./pages/People";
 import { Catalog } from "./pages/Catalog";
 import { Customers, Quotes } from "./pages/Customers";
@@ -25,6 +26,7 @@ const NAV: { to: string; label: string; perm?: string; count?: keyof Unread; pho
   { to: "/", label: "Home" },
   { to: "/chats", label: "Chats", perm: "boards.use", count: "chats" },
   { to: "/boards", label: "Boards", perm: "boards.use", count: "boards" },
+  { to: "/kb", label: "Knowledge base", perm: "kb.view" },
   { to: "/machines", label: "Machines", perm: "machines.view" },
   { to: "/catalog", label: "Parts catalog", perm: "catalog.view" },
   { to: "/customers", label: "Customers", perm: "customers.manage" },
@@ -93,6 +95,8 @@ export function App() {
   const m = /^\/(boards|machines|chats|change-parts)\/([A-Za-z0-9_-]+)$/.exec(path);
   if (m?.[1] === "boards" || m?.[1] === "chats") page = <BoardPage key={m[2]} id={m[2]!} me={me} />;
   else if (m?.[1] === "machines") page = <MachinePage id={m[2]!} me={me} />;
+  else if (/^\/kb\/[A-Za-z0-9_-]+$/.test(path)) page = <KbArticle key={path} id={path.slice(4)} me={me} />;
+  else if (section === "/kb") page = <KnowledgeBase me={me} />;
   else if (section === "/catalog") page = <Catalog me={me} path={path} />;
   else if (section === "/customers") page = <Customers me={me} />;
   else if (section === "/quotes") page = <Quotes key={path} id={/^\/quotes\/([A-Za-z0-9_-]+)$/.exec(path)?.[1]} />;

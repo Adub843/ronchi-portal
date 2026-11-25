@@ -3,9 +3,10 @@
 // can be clicked through without a server. Signed in as Aaron Lewis, admin.
 import logoUrl from "../assets/ronchi-logo.png";
 import { cleanName, fileInfo, fileProblem } from "../../../src/shared/files";
-import { ALL, ASSIGNABLE, builtInRoleTable, PERMISSIONS, ROLES } from "../../../src/portal/lib/roles";
+import { adjustable, ALL, ASSIGNABLE, builtInRoleTable, effective, isPermission, PERMISSION_GROUPS, PERMISSIONS, ROLES, type AccessChanges } from "../../../src/portal/lib/roles";
 import { clean, defaults, LOCKED_RULES, publicPart, SECTIONS, type PortalSettings } from "../../../src/portal/lib/settings";
 import { CP_FIELDS, isOpen, readOrdersCsv } from "../../../src/shared/change-parts";
+import { KbFail, kbRoute, resetKb } from "./kb-mock";
 type Role = keyof typeof ROLES;
 
 // Ids for example records. Uses the browser's secure random source like the real server does.
@@ -18,7 +19,7 @@ const daysAgo = (n: number, h: number, m = 0) => {
   return d;
 };
 
-interface User { id: string; email: string; name: string; role: Role; status: string; created_at: string }
+interface User { id: string; email: string; name: string; role: Role; status: string; created_at: string; access?: AccessChanges }
 interface DB {
   users: User[];
   invites: any[];
@@ -63,9 +64,20 @@ function seed(): DB {
     u("Paolo Ferla", "admin", "paolo@ronchiamerica.com"),
     u("Lola Parker", "billing", "lola@ronchiamerica.com"),
     u("Meagan Hooper", "scheduling", "meagan@ronchiamerica.com"),
+    u("Patrick Morgan", "tech", "PatrickM"),
     u("Steve Williams", "service", "steve@ronchiamerica.com"),
     u("Andrew Yang", "sales", "andrew@ronchiamerica.com"),
     u("Michele Falsini", "sales", "michele@ronchiamerica.com"),
+    u("Morad Rabah", "engineering", "morad@ronchiamerica.com"),
+    // The rest of the field team (Aaron, 2026-11-24), and the visiting techs from Erre Enne in Italy.
+    u("Elim Ramirez", "tech", "ElimR"),
+    u("Andrew Jackson", "tech", "AndrewJ"),
+    u("Andres", "tech", "Andres"),
+    u("Elias", "tech", "Elias"),
+    u("Carlos", "tech", "Carlos"),
+    u("Josue", "tech", "Josue"),
+    u("William (Erre Enne)", "tech", "William"),
+    u("Gabriele (Erre Enne)", "tech", "Gabriele"),
   ];
   const [aaron, paolo, lola, meagan, steve, andrew, michele] = users as [User, User, User, User, User, User, User];
   const m = (serial: string, model: string, customer: string, site: string, notes = "") => ({ id: id(), serial, model, customer, site, notes, sharepoint_url: null, created_at: t0, updated_at: t0 });
@@ -125,7 +137,7 @@ function seed(): DB {
   const c2 = p(withSteve, aaron, "Thanks. I'll get it to Lola for the invoice.", ago(170));
   const c3 = p(withSteve, steve, "Fill weights from this morning's test batch, all 12 heads.", ago(26));
   const c4 = p(withLola, lola, "Is the 4222TP changeover ready to bill? I need the signed service report.", ago(160));
-  const c5 = p(withLola, aaron, "Yes. Steve sent it this morning, forwarding it now.", ago(150));
+  const c5 = p(withLola, aaron, "Yes. Patrick sent it this morning, forwarding it now.", ago(150));
   const g1 = p(crew, meagan, "Flights are booked for Thursday 6:10 AM out of Columbus. Hotel is the Hampton by the plant.", daysAgo(1, 16, 20));
   const g2 = p(crew, steve, "I'll bring the torque wrench and the spare O-ring kit.", daysAgo(1, 16, 45));
   const g3 = p(crew, aaron, "Sounds good. Plant contact wants us on site by 8.", daysAgo(1, 17, 2), g1.id);
@@ -239,8 +251,25 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   }
   // --- people ---
   if (path === "/users/roles") return { roles: ROLES };
+  if (path === "/users/permissions")
+    return { groups: PERMISSION_GROUPS.map((g) => ({ ...g, perms: g.perms.map((p) => ({ ...p, adjustable: adjustable(p.id) })) })), byRole: Object.fromEntries(Object.entries(PERMISSIONS).map(([r, s]) => [r, [...s]])) };
+  if (seg[0] === "users" && seg[2] === "access" && method === "PUT") {
+    const t = db.users.find((x) => x.id === seg[1]);
+    if (!t) throw new Fail(404, "Not found.");
+    if (t.id === u.id) throw new Fail(400, "You can't change your own access. Ask another admin.");
+    if (t.role === "admin") throw new Fail(400, "Admins always have everything. Change their role first.");
+    const next: AccessChanges = body.reset ? {} : { ...(t.access ?? {}) };
+    for (const [perm, on] of Object.entries(body.changes ?? {})) {
+      if (!isPermission(perm) || !adjustable(perm)) throw new Fail(400, "Managing people and the audit log stay with admins. Make them an admin instead.");
+      if (on === null) delete next[perm];
+      else next[perm] = !!on;
+    }
+    t.access = next;
+    log("user.access");
+    return { changes: next, permissions: [...effective(t.role, next)] };
+  }
   if (path === "/users" && method === "GET")
-    return { users: db.users.map((x) => ({ ...x, passkeys: 1 + (x.id === u.id ? 1 : 0), sessions: x.status === "active" ? 1 : 0 })), invites: db.invites };
+    return { users: db.users.map((x) => ({ ...x, access: x.role === "admin" ? {} : (x.access ?? {}), permissions: [...effective(x.role, x.access)], passkeys: 1 + (x.id === u.id ? 1 : 0), sessions: x.status === "active" ? 1 : 0 })), invites: db.invites };
   if (path === "/users/invite") {
     if (db.settings.people.invitesPaused) throw new Fail(403, "New invites are paused. Turn them back on in Settings > Admin controls.");
     if (!body.name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email ?? "")) throw new Fail(400, "Enter a name and a valid email.");
@@ -270,6 +299,14 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     return { ok: true };
   }
   // --- parts catalog (the preview has no manuals or customer parts site, so it starts empty) ---
+  if (seg[0] === "kb") {
+    try {
+      return kbRoute(method, seg, q, body, { me: u, perms: PERMISSIONS[u.role] as Set<string>, machines: db.machines, nameOf: (x) => (x ? name(x) || null : null), newId: id }, db.users);
+    } catch (e) {
+      if (e instanceof KbFail) throw new Fail(e.status, e.message);
+      throw e;
+    }
+  }
   if (path === "/catalog/machines") return { machines: db.machines.map((m) => ({ id: m.id, serial: m.serial, model: m.model, sheets: 0, models: 0, catalog_published_at: null })), partsSite: false };
   if (path === "/catalog/search") return { results: [] };
   if (seg[0] === "catalog" && seg[1] === "machines" && seg[2] && method === "GET") {
@@ -548,8 +585,8 @@ export function installDemo() {
       const u = db.users.find((x) => x.name === who);
       if (b && u) db.posts.push({ id: id(), board_id: b.id, parent_id: null, user_id: u.id, body: text, pinned: 0, created_at: iso(new Date()), edited_at: null, deleted_at: null });
     }, afterMs);
-  arrive(12000, "Steve Williams", (b) => b.kind === "chat" && !b.name && (db.members[b.id] ?? []).includes(db.users[4]!.id), "Line 2 is signed off. Heading back to the hotel, I'll call you in the morning.");
-  arrive(45000, "Meagan Hooper", (b) => b.name === "Atlanta install crew", "Rental car is confirmed at the airport, under Steve's name.");
+  arrive(12000, "Patrick Morgan", (b) => b.kind === "chat" && !b.name && (db.members[b.id] ?? []).includes(db.users[4]!.id), "Line 2 is signed off. Heading back to the hotel, I'll call you in the morning.");
+  arrive(45000, "Meagan Hooper", (b) => b.name === "Atlanta install crew", "Rental car is confirmed at the airport, under Patrick's name.");
   const realFetch = window.fetch.bind(window);
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, location.href);
@@ -584,5 +621,6 @@ export function installDemo() {
 /** Put the example data back the way it started. */
 export function resetDemo() {
   db = seed();
+  resetKb();
   save();
 }
