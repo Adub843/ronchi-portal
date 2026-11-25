@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, type Me } from "../api";
 import { t } from "../i18n";
 import { navigate } from "../router";
+import { NEW_POSTS_EVENT, pollDelay } from "../poll";
 import { Clip, Close } from "./icons";
 
 export interface Unread { boards: number; chats: number }
@@ -60,6 +61,12 @@ const READ_EVENT = "ronchi:read";
 /** Tell the alerts that something was read, so the unread counts update straight away. */
 export const countsChanged = () => window.dispatchEvent(new Event(READ_EVENT));
 
+// The last mouse, key or touch on the page, so checks slow down when the portal is left open untouched.
+let lastActivity = Date.now();
+const markActive = () => (lastActivity = Date.now());
+for (const e of ["pointerdown", "keydown", "wheel", "touchstart"]) window.addEventListener(e, markActive, { passive: true });
+const nextDelay = () => pollDelay({ visible: document.visibilityState === "visible", idleMs: Date.now() - lastActivity });
+
 export function Alerts({ me, path, popups, onUnread }: { me: Me; path: string; popups: boolean; onUnread: (u: Unread) => void }) {
   const [shown, setShown] = useState<Update[]>([]);
   const since = useRef<string | null>(null);
@@ -78,6 +85,8 @@ export function Alerts({ me, path, popups, onUnread }: { me: Me; path: string; p
         if (stop) return;
         since.current = r.now;
         onUnread(r.unread);
+        // Let an open chat list or chat reload once, instead of each one checking on its own.
+        if (r.posts.length) window.dispatchEvent(new CustomEvent(NEW_POSTS_EVENT, { detail: r.posts.map((p) => p.board_id) }));
         const total = r.unread.boards + r.unread.chats;
         document.title = total ? `(${total}) ${BASE_TITLE}` : BASE_TITLE;
         const here = pathRef.current;
@@ -90,20 +99,24 @@ export function Alerts({ me, path, popups, onUnread }: { me: Me; path: string; p
       } catch {
         /* offline or signed out: try again next time */
       }
-      // Every 8 seconds while the page is in front, every 30 seconds in the background.
-      if (!stop) timer = window.setTimeout(tick, document.visibilityState === "visible" ? 8000 : 30000);
+      // Every 15 seconds while in use, slower when left open untouched or in the background (see poll.ts).
+      if (!stop) timer = window.setTimeout(tick, nextDelay());
     }
     tick();
+    // Coming back to the tab: check straight away rather than waiting out the background delay.
+    const onShow = () => document.visibilityState === "visible" && now();
     // A chat was just read (or everything marked read): update the counts now, not in 8 seconds.
     const now = () => {
       window.clearTimeout(timer);
       tick();
     };
     window.addEventListener(READ_EVENT, now);
+    document.addEventListener("visibilitychange", onShow);
     return () => {
       stop = true;
       window.clearTimeout(timer);
       window.removeEventListener(READ_EVENT, now);
+      document.removeEventListener("visibilitychange", onShow);
       document.title = BASE_TITLE;
     };
   }, [me.id]);
