@@ -5,7 +5,7 @@ import logoUrl from "../assets/ronchi-logo.png";
 import { cleanName, fileInfo, fileProblem } from "../../../src/shared/files";
 import { adjustable, effective, isPermission, PERMISSION_GROUPS, PERMISSIONS, rolePermissions, ROLES, VIEW_PERMS, type AccessChanges } from "../../../src/portal/lib/roles";
 import { clean, defaults, LOCKED_RULES, publicPart, SECTIONS, type PortalSettings } from "../../../src/portal/lib/settings";
-import { CP_FIELDS, isOpen, readOrdersCsv } from "../../../src/shared/change-parts";
+import { CP_FIELDS, CP_SALE_FIELDS, isOpen, isSaleOpen, readOrdersCsv } from "../../../src/shared/change-parts";
 import { KbFail, kbRoute, resetKb } from "./kb-mock";
 import { JobsFail, jobsRoute, resetJobs } from "./jobs-mock";
 import { resetSoftware, SoftwareFail, softwareRoute } from "./software-mock";
@@ -92,7 +92,7 @@ function seed(): DB {
   ];
   // A role made in People > Roles: Olivia helps with shipping, receiving and the shop.
   const roles: RoleRow[] = [{ id: "r-shipping", name: "Shipping, receiving and shop", perms: JSON.stringify(["boards.use", "catalog.view", "chats.start", "files.send", "kb.view", "machines.view", "orders.view"]) }];
-  const [aaron, paolo, lola, meagan, steve, andrew, michele] = users as [User, User, User, User, User, User, User];
+  const [aaron, paolo, lola, meagan, , steve, andrew, michele] = users as [User, User, User, User, User, User, User, User];
   const m = (serial: string, model: string, customer: string, site: string, notes = "") => ({ id: id(), serial, model, customer, site, notes, sharepoint_url: null, created_at: t0, updated_at: t0 });
   const machines = [
     m("3069MB", "Monoblock filler and capper", "Example Pharma Co.", "Columbus, OH", "Example record. Capper clutch serviced Oct 2026."),
@@ -166,7 +166,7 @@ function seed(): DB {
   const dayIso = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
   const o = (customer: string, machine: string, part: string, status: string, more: Record<string, string | null> = {}, by: User = andrew, n = 3) => {
     const at = iso(daysAgo(n, 10));
-    const row: any = { id: id(), customer, machine, part, status, customer_po: null, ra_po: null, aa: null, samples_received: null, samples_shipped: null, fill_test: null, ship_date: null, folder_url: null, notes: null, ...more, revision: 1, created_by: by.id, updated_by: by.id, created_at: at, updated_at: at };
+    const row: any = { id: id(), customer, machine, part, status, customer_po: null, ra_po: null, aa: null, samples_received: null, samples_shipped: null, fill_test: null, ship_date: null, folder_url: null, notes: null, phase: "order", ...more, revision: 1, created_by: by.id, updated_by: by.id, created_at: at, updated_at: at };
     row._h = [{ at, action: "cp_order.create", who: by.name, changes: null }];
     return row;
   };
@@ -175,7 +175,7 @@ function seed(): DB {
   const real = (globalThis as { __CP_SEED?: Record<string, string>[] }).__CP_SEED;
   const orders = real ? real.map((x, i) => {
     const at = iso(daysAgo(0, 8, 0));
-    const row: any = { id: id(), ...Object.fromEntries(Object.entries(x).map(([k, v]) => [k, v || null])), revision: 1, created_by: aaron.id, updated_by: aaron.id, created_at: at, updated_at: new Date(Date.parse(at) - i * 1000).toISOString() };
+    const row: any = { id: id(), phase: "order", ...Object.fromEntries(Object.entries(x).map(([k, v]) => [k, v || null])), revision: 1, created_by: aaron.id, updated_by: aaron.id, created_at: at, updated_at: new Date(Date.parse(at) - i * 1000).toISOString() };
     row._h = [{ at, action: "cp_order.create", who: "Imported from SharePoint", changes: null }];
     return row;
   }) : [
@@ -186,6 +186,19 @@ function seed(): DB {
     o("Example Pharma Co.", "3811CP", "38 mm cap chucks", "Shipped", { customer_po: "EPC-43002", ra_po: "RA-2560", aa: "AA-1040", samples_received: dayIso(-120), samples_shipped: dayIso(-115), fill_test: "Passed", ship_date: dayIso(-30) }, andrew, 29),
     o("Example Beverage LLC", "", "Neck guides for 2 L PET", "In design", { customer_po: "EB-7781", samples_received: dayIso(-9), samples_shipped: dayIso(-7) }, andrew, 4),
   ];
+  // Example sales Andrew and Michele are working (made up). They become orders when marked sold.
+  const sale = (customer: string, machine: string, part: string, status: string, more: Record<string, string | null>, by: User, n: number) => {
+    const row = o(customer, machine, part, status, { phase: "sale", salesperson: by.name, ...more }, by, n);
+    row._h = [{ at: row.created_at, action: "cp_sale.create", who: by.name, changes: null }];
+    return row;
+  };
+  orders.push(
+    sale("Example Pharma Co.", "3069MB", "100 ml square bottle set", "Quote sent", { contact: "Purchasing, Dana R.", quote: "AY-0412", follow_up: dayIso(-1), notes: "Example. Wants parts before the spring line trial." }, andrew, 6),
+    sale("Example Foods Inc.", "4222TP", "Second piston size, 750 ml", "Waiting on samples", { contact: "Plant engineer", follow_up: dayIso(4) }, michele, 3),
+    sale("Example Beverage LLC", "", "Neck guides for 500 ml PET", "New request", { contact: "Maintenance lead" , notes: "Example. Called in Monday, needs a machine number." }, andrew, 1),
+    sale("Example Home Care", "4212MB", "Pump cap chucks", "Quoting", { quote: "MF-2207", follow_up: dayIso(9) }, michele, 2),
+    sale("Example Personal Care", "3535MB", "30 ml vial set", "Lost", { quote: "AY-0388", notes: "Example. Went with a local machine shop." }, andrew, 20),
+  );
   if (!real) orders[0]._h.unshift({ at: iso(daysAgo(1, 15, 20)), action: "cp_order.update", who: andrew.name, changes: { status: ["Fill test", "In production"], ship_date: [dayIso(5), dayIso(12)] } });
   return {
     // Quick links on Home (Aaron adds these himself in the live portal).
@@ -236,10 +249,14 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   const seg = path.split("/").filter(Boolean);
   const u = me();
   // --- auth & me ---
-  if (path === "/auth/me") return { user: { id: u.id, name: u.name, email: u.email, role: u.role, permissions: [...effective(u.role, u.access, savedPerms(u.role))] }, settings: publicPart(db.settings) };
+  if (path === "/auth/me") return { user: { id: u.id, name: u.name, email: u.email, role: u.role, permissions: [...effective(u.role, u.access, savedPerms(u.role))], owner: u.role === "admin" }, settings: publicPart(db.settings) };
   // --- admin controls ---
   if (path === "/settings" && method === "GET")
-    return { settings: db.settings, defaults: defaults(), sections: SECTIONS, locked: LOCKED_RULES, updatedAt: db.settingsAt, updatedBy: db.settingsAt ? u.name : null };
+    return {
+      settings: db.settings, defaults: defaults(), sections: SECTIONS, locked: LOCKED_RULES, updatedAt: db.settingsAt, updatedBy: db.settingsAt ? u.name : null,
+      owner: { id: u.id, name: u.name }, admins: db.users.filter((x) => x.role === "admin" && x.status === "active").map((x) => ({ id: x.id, name: x.name })),
+    };
+  if (path === "/settings/owner") throw new Fail(400, "The preview has only one admin, so there's nobody to hand it to.");
   if (path === "/settings" || path === "/settings/reset") {
     const d = defaults();
     const input = path === "/settings" ? body : body.group ? { [body.group]: (d as any)[body.group] } : d;
@@ -391,7 +408,7 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   if (path === "/users" && method === "GET")
     return { users: db.users.map((x) => ({ ...x, access: x.role === "admin" ? {} : (x.access ?? {}), permissions: [...effective(x.role, x.access, savedPerms(x.role))], passkeys: 1 + (x.id === u.id ? 1 : 0), sessions: x.status === "active" ? 1 : 0 })), invites: db.invites };
   if (path === "/users/invite") {
-    if (db.settings.people.invitesPaused) throw new Fail(403, "New invites are paused. Turn them back on in Settings > Admin controls.");
+    if (db.settings.people.invitesPaused) throw new Fail(403, "New invites are paused. The portal owner can turn them back on in Settings > Command center.");
     if (!body.name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email ?? "")) throw new Fail(400, "Enter a name and a valid email.");
     db.invites.unshift({ id: id(), email: body.email, name: body.name, role: body.role, expires_at: iso(new Date(Date.now() + 72 * 3600000)) });
     log("invite.create");
@@ -474,13 +491,13 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       log("machine.update");
       return { ok: true };
     }
-    return { machine: m, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at), orders: db.orders.filter((x) => x.machine === m.serial && !x.removed_at).map(({ _h, ...x }) => x) };
+    return { machine: m, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at), orders: db.orders.filter((x) => x.machine === m.serial && !x.removed_at && x.phase !== "sale").map(({ _h, ...x }) => x) };
   }
   // --- change-part orders ---
   if (seg[0] === "change-parts") {
     const view = (x: any) => {
       const { _h, ...rest } = x;
-      return { ...rest, open: isOpen(x.status), machine_id: db.machines.find((m) => m.serial === x.machine)?.id ?? null };
+      return { ...rest, open: x.phase === "sale" ? isSaleOpen(x.status) : isOpen(x.status), machine_id: db.machines.find((m) => m.serial === x.machine)?.id ?? null };
     };
     const tidy = (b: any) => {
       const out: any = {};
@@ -492,13 +509,23 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       }
       return out;
     };
-    const live = db.orders.filter((x) => !x.removed_at);
+    const all = db.orders.filter((x) => !x.removed_at);
+    const live = all.filter((x) => x.phase !== "sale");
+    if (seg[1] === "sales" && seg.length === 2 && method === "GET") return { sales: all.filter((x) => x.phase === "sale").sort((a, b) => b.updated_at.localeCompare(a.updated_at)).map(view) };
+    if (seg[1] === "sales" && seg.length === 2 && method === "POST") {
+      const f = tidy(Object.fromEntries(Object.entries(body).filter(([k]) => (CP_SALE_FIELDS as readonly string[]).includes(k))));
+      if (!f.customer) throw new Fail(400, "Customer is required.");
+      const at = iso(new Date());
+      const row = { id: id(), ...Object.fromEntries(CP_FIELDS.map((k) => [k, null])), status: "New request", salesperson: u.name, ...Object.fromEntries(Object.entries(f).filter(([, v]) => v !== null)), phase: "sale", revision: 1, created_by: u.id, created_at: at, updated_at: at, _h: [{ at, action: "cp_sale.create", who: u.name, changes: null }] };
+      db.orders.push(row);
+      return { id: row.id };
+    }
     if (seg.length === 1 && method === "GET") return { orders: live.sort((a, b) => b.updated_at.localeCompare(a.updated_at)).map(view) };
     if (seg.length === 1 && method === "POST") {
       const f = tidy(body);
       if (!f.customer) throw new Fail(400, "Customer is required.");
       const at = iso(new Date());
-      const row = { id: id(), ...Object.fromEntries(CP_FIELDS.map((k) => [k, null])), ...f, revision: 1, created_at: at, updated_at: at, _h: [{ at, action: "cp_order.create", who: u.name, changes: null }] };
+      const row = { id: id(), ...Object.fromEntries(CP_FIELDS.map((k) => [k, null])), ...f, phase: "order", revision: 1, created_at: at, updated_at: at, _h: [{ at, action: "cp_order.create", who: u.name, changes: null }] };
       db.orders.push(row);
       return { id: row.id };
     }
@@ -510,13 +537,26 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       const summary = { found: read.orders.length, adding: fresh.length, duplicates: read.orders.length - fresh.length, skipped: read.skipped, matched: read.matched, extra: read.extra, problems: read.problems, sample: fresh.slice(0, 5) };
       if (body.confirm !== true) return summary;
       const at = iso(new Date());
-      for (const x of fresh) db.orders.push({ id: id(), ...Object.fromEntries(CP_FIELDS.map((f) => [f, null])), ...x, revision: 1, created_at: at, updated_at: at, _h: [{ at, action: "cp_order.create", who: u.name, changes: null }] });
+      for (const x of fresh) db.orders.push({ id: id(), ...Object.fromEntries(CP_FIELDS.map((f) => [f, null])), ...x, phase: "order", revision: 1, created_at: at, updated_at: at, _h: [{ at, action: "cp_order.create", who: u.name, changes: null }] });
       return { ...summary, imported: fresh.length };
     }
-    const row = live.find((x) => x.id === seg[1]);
+    const row = all.find((x) => x.id === seg[1]);
     if (!row) throw new Fail(404, "Not found.");
     if (method === "DELETE") {
       row.removed_at = iso(new Date());
+      return { ok: true };
+    }
+    if (seg[2] === "sold" && method === "POST") {
+      if (row.phase !== "sale") throw new Fail(409, "This is already an order.");
+      if (body.revision !== row.revision) throw new Fail(409, "Someone else changed this sale while you were working on it. Reload to see their changes.");
+      const f = tidy({ customer_po: body.customer_po, status: body.status || "Open", aa: body.aa, ra_po: body.ra_po, ship_date: body.ship_date });
+      if (!f.customer_po) throw new Fail(400, "Add the customer's PO to mark it sold.");
+      for (const k of ["aa", "ra_po", "ship_date"]) if (!f[k]) delete f[k];
+      const changes: any = {};
+      for (const [key, v] of Object.entries(f)) if ((row[key] ?? null) !== v) changes[key] = [row[key] ?? null, v];
+      const at = iso(new Date());
+      Object.assign(row, f, { phase: "order", sold_at: at, follow_up: null, revision: row.revision + 1, updated_at: at });
+      row._h.unshift({ at, action: "cp_sale.sold", who: u.name, changes });
       return { ok: true };
     }
     if (method === "PATCH") {
@@ -526,7 +566,7 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       for (const [key, v] of Object.entries(f)) if ((row[key] ?? null) !== v) changes[key] = [row[key] ?? null, v];
       if (!Object.keys(changes).length) return { ok: true, revision: row.revision };
       Object.assign(row, f, { revision: row.revision + 1, updated_at: iso(new Date()) });
-      row._h.unshift({ at: row.updated_at, action: "cp_order.update", who: u.name, changes });
+      row._h.unshift({ at: row.updated_at, action: row.phase === "sale" ? "cp_sale.update" : "cp_order.update", who: u.name, changes });
       return { ok: true, revision: row.revision };
     }
     const creator = db.users.find((x) => x.id === row.created_by);

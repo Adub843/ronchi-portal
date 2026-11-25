@@ -19,7 +19,8 @@
     "deploy": "npm run check && npm run build:web && npm run build:parts && wrangler deploy --env production -c wrangler.parts.jsonc && wrangler deploy --env production -c wrangler.help.jsonc && wrangler deploy --env production -c wrangler.portal.jsonc",
     "invite:first-admin": "node scripts/first-admin.mjs",
     "set:help-key": "node scripts/set-help-key.mjs",
-    "build:demo": "vite build --config web/vite.demo.config.ts && node scripts/inline-demo.mjs"
+    "build:demo": "vite build --config web/vite.demo.config.ts && node scripts/inline-demo.mjs",
+    "owner": "node scripts/set-owner.mjs"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "5.3.0",

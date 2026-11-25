@@ -30,7 +30,7 @@ machines.get("/:id", async (c) => {
   const boards = await c.env.DB.prepare("SELECT id, name FROM boards WHERE machine_id = ? AND archived_at IS NULL").bind(c.req.param("id")).all();
   // Change-part orders for this machine, only for people who may see orders.
   const orders = has(c.get("user"), "orders.view")
-    ? (await c.env.DB.prepare("SELECT id, part, status, ship_date, updated_at FROM cp_orders WHERE instr(upper(machine), ?) > 0 AND removed_at IS NULL ORDER BY updated_at DESC").bind(m.serial).all()).results
+    ? (await c.env.DB.prepare("SELECT id, part, status, ship_date, updated_at FROM cp_orders WHERE instr(upper(machine), ?) > 0 AND phase = 'order' AND removed_at IS NULL ORDER BY updated_at DESC").bind(m.serial).all()).results
     : null;
   // The rest of the portal's record for this machine, each part only for people allowed to see it:
   // its jobs (the workbook's work orders), knowledge-base notes and the parts catalog.

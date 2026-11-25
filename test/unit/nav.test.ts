@@ -42,5 +42,7 @@ describe("opening a page by its address", () => {
     expect(ok("/", [])).toBe(true);
     expect(ok("/learn", [])).toBe(true);
     expect(ok("/settings/admin", [])).toBe(true);
+    expect(ok("/change-parts/sales", ["cpsales.view"])).toBe(true);
+    expect(ok("/change-parts", ["orders.view"])).toBe(true);
   });
 });

@@ -88,8 +88,8 @@ export const AREAS: Area[] = [
   },
   {
     id: "change-parts", paths: ["/change-parts"],
-    title: T("Change-part orders", "Pedidos de cambio de formato", "Ordini cambio formato"),
-    blurb: T("Every change-part job, from quote to shipped.", "Cada trabajo de cambio de formato, de la cotización al envío.", "Ogni lavoro di cambio formato, dall'offerta alla spedizione."),
+    title: T("Change parts", "Cambio de formato", "Cambio formato"),
+    blurb: T("Every change-part job, from the first request to shipped: the sale, then the order.", "Cada trabajo de cambio de formato, de la primera solicitud al envío: la venta y luego el pedido.", "Ogni lavoro di cambio formato, dalla prima richiesta alla spedizione: la vendita, poi l'ordine."),
   },
   {
     id: "people", paths: ["/people"],
@@ -512,11 +512,42 @@ export const GUIDES: Guide[] = [
     ],
   },
 
-  // ---------- Change-part orders ----------
+  // ---------- Change parts: sales, then orders ----------
+  {
+    id: "view-cp-sales", area: "change-parts", needs: ["cpsales.view"],
+    title: T("Follow change-part sales", "Seguir las ventas de cambio de formato", "Seguire le vendite cambio formato"),
+    summary: T("Requests that aren't sold yet: who is working each one, its stage and when to follow up.", "Solicitudes aún no vendidas: quién lleva cada una, su etapa y cuándo dar seguimiento.", "Richieste non ancora vendute: chi segue ognuna, la fase e quando richiamare."),
+    steps: [
+      T("Open Change parts and press Sales.", "Abra Cambio de formato y pulse Ventas.", "Apri Cambio formato e premi Vendite."),
+      T("The counts at the top show open sales, follow-ups that are due, quotes sent and lost sales. Pick a salesperson to see only theirs.", "Los totales de arriba muestran ventas abiertas, seguimientos pendientes, cotizaciones enviadas y ventas perdidas. Elija un vendedor para ver solo las suyas.", "I conteggi in alto mostrano vendite aperte, richiami da fare, offerte inviate e vendite perse. Scegli un venditore per vedere solo le sue."),
+      T("Open a sale to see its details and its History.", "Abra una venta para ver sus datos y su Historial.", "Apri una vendita per vederne i dati e la Cronologia."),
+    ],
+  },
+  {
+    id: "start-cp-sale", area: "change-parts", needs: ["cpsales.view", "cpsales.edit"],
+    title: T("Start and work a change-part sale", "Iniciar y llevar una venta de cambio de formato", "Avviare e seguire una vendita cambio formato"),
+    summary: T("Log a customer's request for change parts and keep its stage current until the PO comes in.", "Registre la solicitud de un cliente y mantenga su etapa al día hasta que llegue la orden de compra.", "Registra la richiesta di un cliente e tieni aggiornata la fase finché arriva l'ordine d'acquisto."),
+    steps: [
+      T("In Change parts, Sales, press New sale.", "En Cambio de formato, Ventas, pulse Nueva venta.", "In Cambio formato, Vendite, premi Nuova vendita."),
+      T("Fill in the customer, their contact, the machine and the part. You are the salesperson unless you change it.", "Complete el cliente, su contacto, la máquina y la pieza. Usted queda como vendedor salvo que lo cambie.", "Compila cliente, contatto, macchina e ricambio. Il venditore sei tu, a meno che non lo cambi."),
+      T("As it moves, open it, press Edit and change the stage, quote number or follow-up date.", "A medida que avanza, ábrala, pulse Editar y cambie la etapa, el número de cotización o la fecha de seguimiento.", "Man mano che procede, aprila, premi Modifica e cambia fase, numero d'offerta o data di richiamo."),
+      T("If the customer says no, set the stage to Lost.", "Si el cliente dice que no, ponga la etapa en Perdida.", "Se il cliente dice di no, imposta la fase su Persa."),
+    ],
+  },
+  {
+    id: "sell-cp-sale", area: "change-parts", needs: ["cpsales.edit", "orders.add"],
+    title: T("Mark a sale sold", "Marcar una venta como vendida", "Segnare una vendita come venduta"),
+    summary: T("When the customer's PO comes in, the sale becomes a change-part order.", "Cuando llega la orden de compra del cliente, la venta pasa a ser un pedido.", "Quando arriva l'ordine d'acquisto del cliente, la vendita diventa un ordine."),
+    steps: [
+      T("Open the sale and press Mark sold.", "Abra la venta y pulse Marcar vendida.", "Apri la vendita e premi Segna venduta."),
+      T("Type the customer's PO. Add the AA number, RA PO and ship date if you have them.", "Escriba la orden de compra del cliente. Agregue el número AA, la orden RA y la fecha de envío si los tiene.", "Scrivi l'ordine d'acquisto del cliente. Aggiungi numero AA, ordine RA e data di spedizione se li hai."),
+      T("Press Mark sold. It moves to Orders with its history.", "Pulse Marcar vendida. Pasa a Pedidos con su historial.", "Premi Segna venduta. Passa a Ordini con la sua cronologia."),
+    ],
+  },
   {
     id: "view-orders", area: "change-parts", needs: ["orders.view"],
     title: T("Follow change-part orders", "Seguir los pedidos de cambio de formato", "Seguire gli ordini cambio formato"),
-    summary: T("See every job, from quote to shipped. No dollar amounts are kept here.", "Vea cada trabajo, de la cotización al envío. Aquí no se guardan importes.", "Vedi ogni lavoro, dall'offerta alla spedizione. Qui non si tengono importi."),
+    summary: T("See every sold job, through to shipped. No dollar amounts are kept here.", "Vea cada trabajo vendido, hasta el envío. Aquí no se guardan importes.", "Vedi ogni lavoro venduto, fino alla spedizione. Qui non si tengono importi."),
     steps: [
       T("Open Change parts. The counts at the top show open jobs, ones shipping soon and ones past their ship date.", "Abra Cambio de formato. Los totales de arriba muestran trabajos abiertos, próximos a enviar y atrasados.", "Apri Cambio formato. I conteggi in alto mostrano lavori aperti, in spedizione a breve e in ritardo."),
       T("Search by customer, machine, part, PO or notes, and filter by status.", "Busque por cliente, máquina, pieza, orden de compra o notas, y filtre por estado.", "Cerca per cliente, macchina, ricambio, ordine d'acquisto o note, e filtra per stato."),
@@ -618,20 +649,20 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
-    id: "workbook-switch", area: "people", needs: ["users.manage"], open: "/settings",
+    id: "workbook-switch", area: "people", needs: ["settings.manage"], open: "/settings",
     title: T("Switch the Ronchi workbook on or off", "Encender o apagar el cuaderno de trabajo Ronchi", "Accendere o spegnere il quaderno di lavoro Ronchi"),
     summary: T("If the team keeps its Excel sheets, hide Work orders for everyone.", "Si el equipo sigue con sus hojas de Excel, oculte Órdenes de trabajo para todos.", "Se il team continua con i fogli Excel, nascondi Ordini di lavoro a tutti."),
     steps: [
-      T("Open Settings and find Ronchi workbook.", "Abra Configuración y busque Cuaderno de trabajo Ronchi.", "Apri Impostazioni e cerca Quaderno di lavoro Ronchi."),
+      T("Open Settings, press Command center and find Use the Ronchi workbook under Sections of the portal.", "Abra Configuración, pulse Centro de mando y busque Usar el cuaderno de trabajo Ronchi en Secciones del portal.", "Apri Impostazioni, premi Centro di comando e cerca Usa il quaderno di lavoro Ronchi in Sezioni del portale."),
       T("Untick it and confirm. Jobs, job emails and job files keep working, and nothing is deleted.", "Desmárquelo y confirme. Los trabajos, sus correos y archivos siguen funcionando y no se borra nada.", "Togli la spunta e conferma. Lavori, email e file dei lavori continuano a funzionare e non si cancella nulla."),
     ],
   },
   {
     id: "admin-controls", area: "people", needs: ["settings.manage"], open: "/settings",
-    title: T("Use the admin controls", "Usar los controles de administrador", "Usare i controlli amministratore"),
-    summary: T("Portal-wide settings: usage, a notice for everyone, sign-in, sections, chat limits, languages, looks and emergency sign-out.", "Ajustes de todo el portal: uso, un aviso para todos, inicio de sesión, secciones, límites de chat, idiomas, aspectos y cierre de sesión de emergencia.", "Impostazioni di tutto il portale: utilizzo, un avviso per tutti, accesso, sezioni, limiti delle chat, lingue, aspetti e disconnessione di emergenza."),
+    title: T("Use the command center", "Usar el centro de mando", "Usare il centro di comando"),
+    summary: T("Only the portal owner sees it: every section's on/off switch, usage, a notice for everyone, sign-in, chat limits, languages, looks and emergency sign-out.", "Solo el dueño del portal lo ve: el interruptor de cada sección, uso, un aviso para todos, inicio de sesión, límites de chat, idiomas, aspectos y cierre de sesión de emergencia.", "Lo vede solo il proprietario del portale: l'interruttore di ogni sezione, utilizzo, un avviso per tutti, accesso, limiti delle chat, lingue, aspetti e disconnessione di emergenza."),
     steps: [
-      T("Open Settings and press Admin controls.", "Abra Configuración y pulse Controles de administrador.", "Apri Impostazioni e premi Controlli amministratore."),
+      T("Open Settings and press Command center.", "Abra Configuración y pulse Centro de mando.", "Apri Impostazioni e premi Centro di comando."),
       T("Change what you need. A bar appears at the bottom; press Save changes, or Discard to undo.", "Cambie lo que necesite. Aparece una barra abajo; pulse Guardar cambios, o Descartar para deshacer.", "Modifica ciò che ti serve. In basso compare una barra; premi Salva modifiche, oppure Scarta per annullare."),
       T("Reset this group puts one group back to how the portal started. Roles and one person's access are changed on People.", "Restablecer este grupo devuelve un grupo a como empezó el portal. Los roles y el acceso de una persona se cambian en Personas.", "Ripristina questo gruppo riporta un gruppo come all'inizio. Ruoli e accesso di una persona si cambiano in Persone."),
     ],

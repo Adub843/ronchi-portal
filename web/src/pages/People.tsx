@@ -105,7 +105,7 @@ export function People({ me }: { me: Me }) {
           </select>
         </div>
         <ErrorNote error={err} />
-        {people?.invitesPaused && <p className="note-inline">{t("New invites are paused. Turn them back on in Settings > Admin controls.")}</p>}
+        {people?.invitesPaused && <p className="note-inline">{t("New invites are paused. The portal owner can turn them back on in Settings > Command center.")}</p>}
         <div><button className="btn primary" type="submit" disabled={people?.invitesPaused}>{t("Create invite link")}</button></div>
       </form>
       {link && (
