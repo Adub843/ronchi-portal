@@ -3,7 +3,7 @@
 // can be clicked through without a server. Signed in as Aaron Lewis, admin.
 import logoUrl from "../assets/ronchi-logo.png";
 import { cleanName, fileInfo, fileProblem } from "../../../src/shared/files";
-import { adjustable, ALL, ASSIGNABLE, builtInRoleTable, effective, isPermission, PERMISSION_GROUPS, PERMISSIONS, ROLES, type AccessChanges } from "../../../src/portal/lib/roles";
+import { adjustable, effective, isPermission, PERMISSION_GROUPS, PERMISSIONS, ROLES, VIEW_PERMS, type AccessChanges } from "../../../src/portal/lib/roles";
 import { clean, defaults, LOCKED_RULES, publicPart, SECTIONS, type PortalSettings } from "../../../src/portal/lib/settings";
 import { CP_FIELDS, isOpen, readOrdersCsv } from "../../../src/shared/change-parts";
 import { KbFail, kbRoute, resetKb } from "./kb-mock";
@@ -61,14 +61,14 @@ function seed(): DB {
   const u = (name: string, role: Role, email: string): User => ({ id: id(), name, role, email, status: "active", created_at: t0 });
   const users = [
     u("Aaron Lewis", "admin", "a_lewis@ronchiamerica.com"),
-    u("Paolo Ferla", "admin", "paolo@ronchiamerica.com"),
+    u("Paolo Ferla", "manager", "paolo@ronchiamerica.com"),
     u("Lola Parker", "billing", "lola@ronchiamerica.com"),
     u("Meagan Hooper", "scheduling", "meagan@ronchiamerica.com"),
     u("Patrick Morgan", "tech", "PatrickM"),
-    u("Steve Williams", "service", "steve@ronchiamerica.com"),
+    u("Steve Williams", "manager", "steve@ronchiamerica.com"),
     u("Andrew Yang", "sales", "andrew@ronchiamerica.com"),
-    u("Michele Falsini", "sales", "michele@ronchiamerica.com"),
-    u("Morad Rabah", "engineering", "morad@ronchiamerica.com"),
+    u("Michele Falsini", "manager", "michele@ronchiamerica.com"),
+    u("Morad Rabah", "manager", "morad@ronchiamerica.com"),
     // The rest of the field team (Aaron, 2026-11-24), and the visiting techs from Erre Enne in Italy.
     u("Elim Ramirez", "tech", "ElimR"),
     u("Andrew Jackson", "tech", "AndrewJ"),
@@ -178,7 +178,7 @@ function seed(): DB {
     users, invites: [], machines, boards: [service, torque, sales, eng, ...chats.map(({ people: _p, ...c }) => c)], posts, audit, prefs: null,
     reads: { [torque.id]: iso(new Date()), [withLola.id]: iso(new Date()), [crew.id]: iso(new Date()), [withSteve.id]: iso(ago(100)) },
     muted: {}, members, files, orders,
-    settings: defaults(builtInRoleTable()), settingsAt: null,
+    settings: defaults(), settingsAt: null,
   };
 }
 
@@ -208,13 +208,13 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   if (path === "/auth/me") return { user: { id: u.id, name: u.name, email: u.email, role: u.role, permissions: [...PERMISSIONS[u.role]] }, settings: publicPart(db.settings) };
   // --- admin controls ---
   if (path === "/settings" && method === "GET")
-    return { settings: db.settings, defaults: defaults(builtInRoleTable()), permissions: ASSIGNABLE, roles: ROLES, sections: SECTIONS, locked: LOCKED_RULES, updatedAt: db.settingsAt, updatedBy: db.settingsAt ? u.name : null };
+    return { settings: db.settings, defaults: defaults(), sections: SECTIONS, locked: LOCKED_RULES, updatedAt: db.settingsAt, updatedBy: db.settingsAt ? u.name : null };
   if (path === "/settings" || path === "/settings/reset") {
-    const d = defaults(builtInRoleTable());
+    const d = defaults();
     const input = path === "/settings" ? body : body.group ? { [body.group]: (d as any)[body.group] } : d;
     const merged: any = { ...db.settings };
     for (const [k, v] of Object.entries(input ?? {})) merged[k] = v && typeof v === "object" && !Array.isArray(v) ? { ...(merged[k] ?? {}), ...(v as object) } : v;
-    const r = clean(merged, d, ALL, true);
+    const r = clean(merged, d, true);
     if (r.error) throw new Fail(400, r.error);
     db.settings = r.settings;
     db.settingsAt = iso(new Date());
@@ -252,7 +252,7 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   // --- people ---
   if (path === "/users/roles") return { roles: ROLES };
   if (path === "/users/permissions")
-    return { groups: PERMISSION_GROUPS.map((g) => ({ ...g, perms: g.perms.map((p) => ({ ...p, adjustable: adjustable(p.id) })) })), byRole: Object.fromEntries(Object.entries(PERMISSIONS).map(([r, s]) => [r, [...s]])) };
+    return { groups: PERMISSION_GROUPS.map((g) => ({ ...g, perms: g.perms.map((p) => ({ ...p, adjustable: adjustable(p.id), view: VIEW_PERMS.has(p.id) })) })), byRole: Object.fromEntries(Object.entries(PERMISSIONS).map(([r, s]) => [r, [...s]])) };
   if (seg[0] === "users" && seg[2] === "access" && method === "PUT") {
     const t = db.users.find((x) => x.id === seg[1]);
     if (!t) throw new Fail(404, "Not found.");

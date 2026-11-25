@@ -141,7 +141,7 @@ export function People({ me }: { me: Me }) {
   );
 }
 
-type PermList = { groups: { group: string; perms: { id: string; label: string; hint: string; adjustable: boolean }[] }[]; byRole: Record<string, string[]> };
+type PermList = { groups: { group: string; perms: { id: string; label: string; hint: string; adjustable: boolean; view: boolean }[] }[]; byRole: Record<string, string[]> };
 
 /** Switch single permissions on or off for one person, on top of their role. */
 function Access({ person, roleName, list, onSaved, onClose }: { person: any; roleName: string; list: PermList; onSaved: () => void; onClose: () => void }) {
@@ -163,6 +163,16 @@ function Access({ person, roleName, list, onSaved, onClose }: { person: any; rol
   }
   const set = (perm: string, value: boolean | null) => save({ changes: { [perm]: value } });
   const count = Object.keys(changes).length;
+  // View only: switch off everything that adds, changes or removes; keep the pages they can see.
+  const viewOnly = () => {
+    const off: Record<string, boolean | null> = {};
+    for (const g of list.groups) for (const p of g.perms) {
+      if (!p.adjustable) continue;
+      const on = changes[p.id] ?? fromRole.has(p.id);
+      if (!p.view && on) off[p.id] = fromRole.has(p.id) ? false : null;
+    }
+    if (Object.keys(off).length) save({ changes: off });
+  };
   const phone = usePhone();
   useEffect(() => {
     if (!phone) return;
@@ -181,6 +191,7 @@ function Access({ person, roleName, list, onSaved, onClose }: { person: any; rol
           <div className="muted">{t("Starts from the role {role}. Switch anything on or off for this person only. It applies on their next click.", { role: roleName })}</div>
         </div>
         <div className="row" style={{ gap: 6 }}>
+          <button className="btn small" disabled={busy} onClick={viewOnly}>{t("View only")}</button>
           {count > 0 && <button className="btn small" disabled={busy} onClick={() => save({ reset: true })}>{t("Back to the role")}</button>}
           <button className="btn small" onClick={onClose}>{t("Done")}</button>
         </div>

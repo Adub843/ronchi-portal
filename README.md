@@ -45,7 +45,7 @@ All mainstream, nothing homemade:
 src/portal/          staff portal Worker
   index.ts           start here: security headers, request checks, routes
   env.ts             what Cloudflare gives the Worker
-  lib/roles.ts       who can do what (starting table; admins change it in Settings)
+  lib/roles.ts       who can do what (sections switched off in Settings are removed for everyone but admins)
   lib/settings.ts    the admin controls in Settings: defaults, limits, checks (stored by lib/settings-store.ts)
   lib/session.ts     sign-in cookies
   routes/            one file per feature: auth, users, machines, boards, prefs, catalog, customers
@@ -130,13 +130,17 @@ peer list. All peers the project needs are listed directly in `package.json`.)
   and can be ended from Settings (own devices) or People (anyone, by an admin).
   Changing someone's role or disabling them signs them out everywhere at once.
 - **Deny by default.** Every API route asks `requirePerm(...)`; the role table is in
-  `src/portal/lib/roles.ts`, and admins can change it in Settings > Admin controls. Hard rules
-  stay in code: admins keep every permission, and managing people, settings and the audit log
-  is admin-only whatever Settings says. Boards limited to some roles return "not found" to others.
+  `src/portal/lib/roles.ts`. An admin can turn a whole section off in Settings > Admin controls;
+  its permissions are then removed from everyone but admins, even from someone given one personally.
+  Managing people, the admin controls and the audit log stay admin-only. Boards limited to some roles return "not found" to others.
 - **Per-person access.** On People, the Access button switches any single permission on or off
   for one person, on top of their role (table `user_access`, migration 0009). It applies on
   their next click. Admins always keep everything, nobody can change their own access, and
   managing people and the audit log stay admin-only. Every change goes in the audit log.
+- **Roles.** Admin (Aaron only) can do everything. Manager (Paolo, Steve, Michele, Morad) can do
+  everything except manage people and read the audit log. Each page's add, change and remove
+  actions are separate switches (for example orders.add, orders.edit, orders.remove), and the
+  Access panel's "View only" button switches off everything that adds, changes or removes.
 - **Changes must come from the portal's own pages**: `Origin` must match and the
   `X-Ronchi: 1` header must be present, on top of the SameSite cookie.
 - **Headers**: strict Content Security Policy (only our own files), HSTS, no framing,

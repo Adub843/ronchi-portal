@@ -156,7 +156,25 @@ export const DYNAMIC: string[] = [
  "Manage people",
  "Invites, roles, access and sign-outs. Admins only.",
  "Read the audit log",
- "Who did what, and when. Admins only."
+ "Who did what, and when. Admins only.",
+ "Add machines",
+ "Put a new machine on the list.",
+ "Change machines",
+ "Change a machine's model, customer, site, notes and SharePoint link.",
+ "Customer companies",
+ "Add, rename or turn off companies, and choose which machines each one sees.",
+ "Make sign-up links, and turn a customer's login on or off.",
+ "Add orders",
+ "Start a new change-part order.",
+ "Change orders",
+ "Change an order's details and status.",
+ "Remove orders",
+ "Take an order off the list.",
+ "Change anyone's articles",
+ "Change or archive articles other people wrote.",
+ "Import documents",
+ "Bring in documents from the import file.",
+ "Put articles on the customer help center, or take them down."
 ];
 
 export const ES: Record<string, string> = {
@@ -806,7 +824,26 @@ export const ES: Record<string, string> = {
   "Manage people": "Gestionar personas",
   "Invites, roles, access and sign-outs. Admins only.": "Invitaciones, roles, acceso y cierres de sesión. Solo administradores.",
   "Read the audit log": "Leer el registro de auditoría",
-  "Who did what, and when. Admins only.": "Quién hizo qué y cuándo. Solo administradores."
+  "Who did what, and when. Admins only.": "Quién hizo qué y cuándo. Solo administradores.",
+  "Add machines": "Agregar máquinas",
+  "Put a new machine on the list.": "Poner una máquina nueva en la lista.",
+  "Change machines": "Cambiar máquinas",
+  "Change a machine's model, customer, site, notes and SharePoint link.": "Cambiar el modelo, cliente, planta, notas y enlace de SharePoint de una máquina.",
+  "Customer companies": "Empresas cliente",
+  "Add, rename or turn off companies, and choose which machines each one sees.": "Agregar, renombrar o desactivar empresas, y elegir qué máquinas ve cada una.",
+  "Make sign-up links, and turn a customer's login on or off.": "Crear enlaces de registro y activar o desactivar el acceso de un cliente.",
+  "Add orders": "Agregar pedidos",
+  "Start a new change-part order.": "Iniciar un pedido nuevo de piezas de cambio.",
+  "Change orders": "Cambiar pedidos",
+  "Change an order's details and status.": "Cambiar los datos y el estado de un pedido.",
+  "Remove orders": "Quitar pedidos",
+  "Take an order off the list.": "Quitar un pedido de la lista.",
+  "Change anyone's articles": "Cambiar artículos de cualquiera",
+  "Change or archive articles other people wrote.": "Cambiar o archivar artículos escritos por otros.",
+  "Import documents": "Importar documentos",
+  "Bring in documents from the import file.": "Traer documentos desde el archivo de importación.",
+  "Put articles on the customer help center, or take them down.": "Publicar artículos en el centro de ayuda para clientes, o quitarlos.",
+  "View only": "Solo ver"
 };
 
 export const IT: Record<string, string> = {
@@ -1456,9 +1493,30 @@ export const IT: Record<string, string> = {
   "Manage people": "Gestire le persone",
   "Invites, roles, access and sign-outs. Admins only.": "Inviti, ruoli, accessi e disconnessioni. Solo amministratori.",
   "Read the audit log": "Leggere il registro attività",
-  "Who did what, and when. Admins only.": "Chi ha fatto cosa, e quando. Solo amministratori."
+  "Who did what, and when. Admins only.": "Chi ha fatto cosa, e quando. Solo amministratori.",
+  "Add machines": "Aggiungere macchine",
+  "Put a new machine on the list.": "Inserire una nuova macchina nell'elenco.",
+  "Change machines": "Modificare le macchine",
+  "Change a machine's model, customer, site, notes and SharePoint link.": "Modificare modello, cliente, stabilimento, note e link SharePoint di una macchina.",
+  "Customer companies": "Aziende clienti",
+  "Add, rename or turn off companies, and choose which machines each one sees.": "Aggiungere, rinominare o disattivare aziende, e scegliere quali macchine vede ciascuna.",
+  "Make sign-up links, and turn a customer's login on or off.": "Creare link di registrazione e attivare o disattivare l'accesso di un cliente.",
+  "Add orders": "Aggiungere ordini",
+  "Start a new change-part order.": "Aprire un nuovo ordine di parti di cambio formato.",
+  "Change orders": "Modificare ordini",
+  "Change an order's details and status.": "Modificare i dati e lo stato di un ordine.",
+  "Remove orders": "Rimuovere ordini",
+  "Take an order off the list.": "Togliere un ordine dall'elenco.",
+  "Change anyone's articles": "Modificare gli articoli di chiunque",
+  "Change or archive articles other people wrote.": "Modificare o archiviare articoli scritti da altri.",
+  "Import documents": "Importare documenti",
+  "Bring in documents from the import file.": "Importare documenti dal file di importazione.",
+  "Put articles on the customer help center, or take them down.": "Pubblicare articoli nel centro assistenza clienti, o toglierli.",
+  "View only": "Solo visualizzazione"
 };
 
 // Settings > Admin controls (i18n-admin.ts).
 Object.assign(ES, ADMIN_ES);
 Object.assign(IT, ADMIN_IT);
+// The access screen lists the admin-controls permission by name (src/portal/lib/roles.ts).
+DYNAMIC.push("Admin controls", "Portal-wide settings. Admins only.");

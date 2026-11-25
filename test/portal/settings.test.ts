@@ -22,7 +22,6 @@ describe("Settings > Admin controls", () => {
     const r = await admin.json("/api/settings");
     expect(r.status).toBe(200);
     expect(r.data.settings.chats.maxPeople).toBe(30);
-    expect(r.data.permissions).not.toContain("users.manage");
   });
 
   it("saves, records who changed what, and shows the name and notice to everyone signed in", async () => {
@@ -44,7 +43,6 @@ describe("Settings > Admin controls", () => {
       { chats: { maxPeople: 1 } },
       { people: { sessionDays: 5, idleDays: 10 } },
       { people: { defaultRole: "admin" } },
-      { roles: { tech: ["boards.use", "made.up"] } },
       { languages: { allowed: ["en"], default: "es" } },
       { brand: { name: "" } },
     ]) {
@@ -53,27 +51,15 @@ describe("Settings > Admin controls", () => {
     expect((await admin.json("/api/settings")).data.settings.chats.maxFileMb).toBe(25);
   });
 
-  it("an admin can change what a role can do, and it applies at once on the server", async () => {
+  it("hard rule: managers and other roles never get the admin controls, and admins keep everything", async () => {
     const admin = await person("admin");
-    const tech = await person("tech");
-    expect((await tech.fetch("/api/change-parts")).status).toBe(403);
-    await admin.json("/api/settings", { method: "PUT", body: { roles: { tech: ["boards.use", "machines.view", "catalog.view", "orders.view"] } } });
-    expect((await tech.fetch("/api/change-parts")).status).toBe(200);
-    expect((await tech.json("/api/auth/me")).data.user.permissions).toContain("orders.view");
-    await admin.json("/api/settings", { method: "PUT", body: { roles: { tech: ["boards.use"] } } });
-    expect((await tech.fetch("/api/machines")).status).toBe(403);
-  });
-
-  it("hard rule: admin-only permissions can't be given to another role, and admins keep everything", async () => {
-    const admin = await person("admin");
-    const r = await admin.fetch("/api/settings", { method: "PUT", body: { roles: { tech: ["users.manage", "settings.manage", "audit.view"] } } });
-    expect(r.status).toBe(200); // saved, but the admin-only ones are ignored
-    const tech = await person("tech");
-    expect((await tech.fetch("/api/users")).status).toBe(403);
-    expect((await tech.fetch("/api/settings")).status).toBe(403);
-    await admin.json("/api/settings", { method: "PUT", body: { sections: { chats: false, machines: false, catalog: false, customers: false, changeParts: false } } });
+    const manager = await person("manager");
+    expect((await manager.fetch("/api/settings")).status).toBe(403);
+    expect((await admin.fetch("/api/settings", { method: "PUT", body: { roles: { tech: ["settings.manage"] } } })).status).toBe(200); // roles aren't set here; ignored
+    await admin.json("/api/settings", { method: "PUT", body: { sections: { chats: false, machines: false, catalog: false, customers: false, changeParts: false, knowledge: false } } });
     expect((await admin.fetch("/api/machines")).status).toBe(200);
     expect((await admin.fetch("/api/settings")).status).toBe(200);
+    expect((await manager.fetch("/api/machines")).status).toBe(403);
   });
 
   it("turning a section off hides it from everyone but admins", async () => {
@@ -87,12 +73,10 @@ describe("Settings > Admin controls", () => {
     expect((await sales.fetch("/api/change-parts")).status).toBe(200);
   });
 
-  it("chat limits: who starts boards, people per chat, and files", async () => {
+  it("chat limits: people per chat, and the switch for files", async () => {
     const admin = await person("admin");
     const tech = await person("tech");
-    await admin.json("/api/settings", { method: "PUT", body: { chats: { maxPeople: 2, files: false }, roles: { tech: ["boards.use", "chats.start", "files.send"] } } });
-    expect((await tech.fetch("/api/boards", { body: { name: "Tech board" } })).status).toBe(403);
-    expect((await admin.fetch("/api/boards", { body: { name: "Admin board" } })).status).toBe(200);
+    await admin.json("/api/settings", { method: "PUT", body: { chats: { maxPeople: 2, files: false } } });
     const a = await person("tech");
     const b = await person("tech");
     expect((await tech.fetch("/api/boards/chats", { body: { userIds: [a.id, b.id] } })).status).toBe(400);
@@ -148,20 +132,6 @@ describe("Settings > Admin controls", () => {
     expect(r.data.sessions).toBeGreaterThan(0);
     expect((await tech.json("/api/auth/me")).data.user).toBeNull();
     expect((await admin.json("/api/auth/me")).data.user).not.toBeNull();
-  });
-
-  it("a permission added after the role table was saved follows the built-in table", async () => {
-    const admin = await person("admin");
-    await admin.json("/api/settings", { method: "PUT", body: { roles: { tech: ["boards.use"] } } });
-    const row = await env.DB.prepare("SELECT data FROM settings WHERE id = 1").first<{ data: string }>();
-    const data = JSON.parse(row!.data);
-    data.rolesKnown = data.rolesKnown.filter((p: string) => p !== "kb.view"); // as if kb.view came later
-    await env.DB.prepare("UPDATE settings SET data = ? WHERE id = 1").bind(JSON.stringify(data)).run();
-    forgetSettings();
-    const tech = await person("tech");
-    const perms = (await tech.json("/api/auth/me")).data.user.permissions;
-    expect(perms).toContain("kb.view");
-    expect(perms).not.toContain("machines.view");
   });
 
   it("a section turned off stays off even for someone given that permission personally", async () => {

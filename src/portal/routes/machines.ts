@@ -50,7 +50,7 @@ function fields(b: Record<string, unknown>) {
 }
 
 machines.post("/", async (c) => {
-  const u = requirePerm(c, "machines.edit");
+  const u = requirePerm(c, "machines.add");
   const b = await body(c);
   const serial = mustStr(b.serial, 20, "Machine number").toUpperCase();
   if (!SERIAL_ONLY.test(serial)) fail(400, "Machine numbers look like 3069MB (four digits, then letters).");

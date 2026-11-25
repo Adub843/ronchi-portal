@@ -17,11 +17,11 @@ export const LANG_IDS: Lang[] = ["en", "es", "it"];
 /** Parts of the portal an admin can turn off for everyone else, and the permissions each one covers. */
 export const SECTIONS = {
   chats: { label: "Chats and boards", perms: ["boards.use", "boards.create", "chats.start", "files.send", "boards.moderate"] },
-  machines: { label: "Machines", perms: ["machines.view", "machines.edit"] },
+  machines: { label: "Machines", perms: ["machines.view", "machines.add", "machines.edit"] },
   catalog: { label: "Parts catalog", perms: ["catalog.view", "catalog.edit"] },
-  customers: { label: "Customers and quote requests", perms: ["customers.manage", "quotes.manage"] },
-  changeParts: { label: "Change parts", perms: ["orders.view", "orders.edit", "orders.import"] },
-  knowledge: { label: "Knowledge base", perms: ["kb.view", "kb.write", "kb.publish"] },
+  customers: { label: "Customers and quote requests", perms: ["customers.manage", "customers.invite", "quotes.manage"] },
+  changeParts: { label: "Change parts", perms: ["orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import"] },
+  knowledge: { label: "Knowledge base", perms: ["kb.view", "kb.write", "kb.edit_all", "kb.import", "kb.publish"] },
 } as const satisfies Record<string, { label: string; perms: Permission[] }>;
 export type Section = keyof typeof SECTIONS;
 export const SECTION_IDS = Object.keys(SECTIONS) as Section[];
@@ -38,12 +38,13 @@ export const LIMITS = {
   name: 60,
 } as const;
 
+/** Roles a new invite can start with (never admin or manager). Roles themselves are edited on the People page. */
+export const STARTING_ROLES: Role[] = ["billing", "scheduling", "service", "sales", "engineering", "tech"];
+
 export interface PortalSettings {
   brand: { name: string; company: string; notice: string };
   people: { inviteHours: number; sessionDays: number; idleDays: number; invitesPaused: boolean; defaultRole: Role };
   sections: Record<Section, boolean>;
-  /** What each role can do. Admin is not listed: admins always have everything. */
-  roles: Record<Exclude<Role, "admin">, Permission[]>;
   chats: { maxPeople: number; files: boolean; maxFileMb: number; maxFiles: number };
   languages: { allowed: Lang[]; default: Lang };
   look: { defaultTheme: string; allowedThemes: string[]; popupsDefault: boolean };
@@ -52,12 +53,11 @@ export interface PortalSettings {
 /** The settings anyone signed in may read (to show the right name, notice, languages and limits). */
 export type PublicSettings = Pick<PortalSettings, "brand" | "people" | "chats" | "languages" | "look">;
 
-export function defaults(builtInRoles: PortalSettings["roles"], themeIds: string[] = [...THEME_IDS]): PortalSettings {
+export function defaults(themeIds: string[] = [...THEME_IDS]): PortalSettings {
   return {
     brand: { name: "Ronchi Portal", company: "Ronchi America", notice: "" },
     people: { inviteHours: 72, sessionDays: 30, idleDays: 14, invitesPaused: false, defaultRole: "tech" },
     sections: { chats: true, machines: true, catalog: true, customers: true, changeParts: true, knowledge: true },
-    roles: builtInRoles,
     chats: { maxPeople: 30, files: true, maxFileMb: 25, maxFiles: 10 },
     languages: { allowed: [...LANG_IDS], default: "en" },
     look: { defaultTheme: DEFAULT_THEME, allowedThemes: themeIds, popupsDefault: true },
@@ -85,7 +85,6 @@ const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 
 export function clean(
   input: unknown,
   base: PortalSettings,
-  allPerms: readonly Permission[],
   strict = false,
 ): { settings: PortalSettings; error: string | null } {
   let error: string | null = null;
@@ -124,7 +123,7 @@ export function clean(
     sessionDays: num(p.sessionDays, base.people.sessionDays, LIMITS.sessionDays, "Stay signed in for"),
     idleDays: num(p.idleDays, base.people.idleDays, LIMITS.idleDays, "Sign out after days unused"),
     invitesPaused: bool(p.invitesPaused, base.people.invitesPaused),
-    defaultRole: (typeof p.defaultRole === "string" && p.defaultRole in base.roles ? p.defaultRole : (p.defaultRole !== undefined && bad("Pick a starting role that isn't admin."), base.people.defaultRole)) as Role,
+    defaultRole: (typeof p.defaultRole === "string" && STARTING_ROLES.includes(p.defaultRole as Role) ? p.defaultRole : (p.defaultRole !== undefined && bad("Pick a starting role that isn't admin or manager."), base.people.defaultRole)) as Role,
   };
   if (people.idleDays > people.sessionDays) {
     bad("Sign out after days unused can't be longer than stay signed in for.");
@@ -133,20 +132,6 @@ export function clean(
 
   const s = part("sections");
   const sections = Object.fromEntries(SECTION_IDS.map((k) => [k, bool(s[k], base.sections[k])])) as PortalSettings["sections"];
-
-  const r = part("roles");
-  const known = new Set<string>(allPerms);
-  const roles = Object.fromEntries(
-    (Object.keys(base.roles) as (keyof PortalSettings["roles"])[]).map((role) => {
-      const v = r[role];
-      if (v === undefined) return [role, base.roles[role]];
-      if (!Array.isArray(v) || !v.every((x) => typeof x === "string" && known.has(x))) {
-        bad(`Unknown permission for ${role}.`);
-        return [role, base.roles[role]];
-      }
-      return [role, [...new Set(v as Permission[])]];
-    }),
-  ) as PortalSettings["roles"];
 
   const ch = part("chats");
   const chats = {
@@ -183,7 +168,7 @@ export function clean(
   }
   const look = { defaultTheme, allowedThemes: themes, popupsDefault: bool(lk.popupsDefault, base.look.popupsDefault) };
 
-  return { settings: { brand, people, sections, roles, chats, languages: { allowed, default: lang }, look }, error };
+  return { settings: { brand, people, sections, chats, languages: { allowed, default: lang }, look }, error };
 }
 
 export function publicPart(s: PortalSettings): PublicSettings {

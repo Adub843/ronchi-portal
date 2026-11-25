@@ -38,13 +38,13 @@ export function Customers({ me }: { me: Me }) {
       <ErrorNote error={error} />
       {data && !data.companies.length && <Empty>{t("No customer companies yet.")}</Empty>}
       {data?.companies.map((co: any) => (
-        <Company key={co.id} co={co} open={open === co.id} onToggle={() => setOpen(open === co.id ? null : co.id)} onChange={reload} />
+        <Company key={co.id} co={co} open={open === co.id} onToggle={() => setOpen(open === co.id ? null : co.id)} invite={can(me, "customers.invite")} onChange={reload} />
       ))}
     </>
   );
 }
 
-function Company({ co, open, onToggle, onChange }: { co: any; open: boolean; onToggle: () => void; onChange: () => void }) {
+function Company({ co, open, invite, onToggle, onChange }: { co: any; open: boolean; invite: boolean; onToggle: () => void; onChange: () => void }) {
   const [serials, setSerials] = useState<string>(() => co.machines.map((m: any) => m.serial).join(", "));
   const [inv, setInv] = useState({ name: "", email: "", role: "standard" });
   const [link, setLink] = useState<string | null>(null);
@@ -94,9 +94,10 @@ function Company({ co, open, onToggle, onChange }: { co: any; open: boolean; onT
                   <tr key={u.id}>
                     <td>{u.name}{u.status === "disabled" && <span className="cv-tag">{t("Turned off")}</span>}</td>
                     <td>{u.email}</td>
-                    <td><input type="checkbox" checked={u.role === "buyer"} aria-label={t("Can send quote requests")} onChange={(e) => call(() => api(`/customers/users/${enc(u.id)}`, { method: "PATCH", body: { role: e.target.checked ? "buyer" : "standard" } }))} /></td>
+                    <td><input type="checkbox" disabled={!invite} checked={u.role === "buyer"} aria-label={t("Can send quote requests")} onChange={(e) => call(() => api(`/customers/users/${enc(u.id)}`, { method: "PATCH", body: { role: e.target.checked ? "buyer" : "standard" } }))} /></td>
                     <td>{u.last_sign_in ? fmtTime(u.last_sign_in) : "–"}</td>
                     <td className="row" style={{ gap: 6 }}>
+                      {invite && <>
                       <button className="btn small" onClick={() => call(async () => {
                         const r = await api(`/customers/${enc(co.id)}/invites`, { body: { name: u.name, email: u.email, role: u.role } });
                         setLink(r.link);
@@ -104,6 +105,7 @@ function Company({ co, open, onToggle, onChange }: { co: any; open: boolean; onT
                       <button className="btn small danger" onClick={() => call(() => api(`/customers/users/${enc(u.id)}`, { method: "PATCH", body: { status: u.status === "disabled" ? "active" : "disabled" } }))}>
                         {u.status === "disabled" ? t("Turn on") : t("Turn off")}
                       </button>
+                      </>}
                     </td>
                   </tr>
                 ))}
@@ -111,13 +113,13 @@ function Company({ co, open, onToggle, onChange }: { co: any; open: boolean; onT
                   <tr key={i.id} className="muted">
                     <td>{i.name}</td><td>{i.email}</td><td>{i.role === "buyer" ? "✓" : ""}</td>
                     <td>{t("Invited, link expires {when}", { when: fmtTime(i.expires_at) })}</td>
-                    <td><button className="btn small" onClick={() => call(() => api(`/customers/invites/${enc(i.id)}`, { method: "DELETE" }), t("Link cancelled"))}>{t("Cancel link")}</button></td>
+                    <td>{invite && <button className="btn small" onClick={() => call(() => api(`/customers/invites/${enc(i.id)}`, { method: "DELETE" }), t("Link cancelled"))}>{t("Cancel link")}</button>}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <form className="grid g2" onSubmit={(e) => {
+          {invite && <form className="grid g2" onSubmit={(e) => {
             e.preventDefault();
             call(async () => {
               const r = await api(`/customers/${enc(co.id)}/invites`, { body: inv });
@@ -129,7 +131,7 @@ function Company({ co, open, onToggle, onChange }: { co: any; open: boolean; onT
             <div className="field"><label htmlFor={`ie-${co.id}`}>{t("Email")}</label><input id={`ie-${co.id}`} type="email" required value={inv.email} onChange={(e) => setInv({ ...inv, email: e.target.value })} /></div>
             <label className="row" style={{ gap: 6 }}><input type="checkbox" checked={inv.role === "buyer"} onChange={(e) => setInv({ ...inv, role: e.target.checked ? "buyer" : "standard" })} /> {t("Can send quote requests (buyer)")}</label>
             <div><button className="btn primary" type="submit">{t("Make sign-up link")}</button></div>
-          </form>
+          </form>}
           {link && (
             <div className="note-inline stack">
               <p>{t("Send this link to them yourself (email or text). It works once, for 7 days. Anyone with it can sign up as this person, so send it only to them.")}</p>

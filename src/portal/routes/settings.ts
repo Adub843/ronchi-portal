@@ -4,7 +4,6 @@ import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
 import { body, fail, requirePerm } from "../lib/http";
-import { ASSIGNABLE, ROLES } from "../lib/roles";
 import { LOCKED_RULES, SECTIONS } from "../lib/settings";
 import { DEFAULTS, loadSettings, saveSettings } from "../lib/settings-store";
 
@@ -19,8 +18,6 @@ settings.get("/", async (c) => {
   return c.json({
     settings: current,
     defaults: DEFAULTS(),
-    permissions: ASSIGNABLE,
-    roles: ROLES,
     sections: SECTIONS,
     locked: LOCKED_RULES,
     updatedAt: row?.updated_at ?? null,

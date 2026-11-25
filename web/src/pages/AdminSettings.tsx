@@ -5,34 +5,14 @@ import { api, fmtTime } from "../api";
 import { ErrorNote, Link, toast, useLoad } from "../components/ui";
 import { LANGS, t } from "../i18n";
 import { THEMES } from "../theme";
-import type { PortalSettings, Section } from "../../../src/portal/lib/settings";
+import { STARTING_ROLES, type PortalSettings, type Section } from "../../../src/portal/lib/settings";
 import "../styles/admin.css";
 
-type Role = keyof PortalSettings["roles"];
+type Role = PortalSettings["people"]["defaultRole"];
 
 // Plain names for the screen. Kept here (not from the server) so each one is translated.
 const roleName = (r: string) =>
-  ({ billing: t("Billing"), scheduling: t("Scheduling"), service: t("Service"), sales: t("Sales"), engineering: t("Engineering"), tech: t("Field technician") })[r] ?? r;
-const permName = (p: string) =>
-  ({
-    "boards.use": t("Use chats and boards"),
-    "boards.create": t("Start new boards"),
-    "chats.start": t("Start private chats"),
-    "files.send": t("Send photos and files"),
-    "boards.moderate": t("Moderate boards (pin, archive, remove posts)"),
-    "machines.view": t("See machines"),
-    "machines.edit": t("Add and change machines"),
-    "catalog.view": t("See the parts catalog"),
-    "catalog.edit": t("Edit the parts catalog and publish it to customers"),
-    "customers.manage": t("Manage customer logins and their machines"),
-    "quotes.manage": t("Handle customer quote requests"),
-    "orders.view": t("See change-part orders"),
-    "orders.edit": t("Add and change change-part orders"),
-    "orders.import": t("Import orders from a spreadsheet"),
-    "kb.view": t("Search the knowledge base"),
-    "kb.write": t("Write notes and articles"),
-    "kb.publish": t("Publish articles to customers"),
-  })[p] ?? p;
+  ({ manager: t("Manager"), billing: t("Billing"), scheduling: t("Scheduling"), service: t("Service"), sales: t("Sales"), engineering: t("Engineering"), tech: t("Field technician") })[r] ?? r;
 const sectionName = (s: Section) =>
   ({ chats: t("Chats and boards"), machines: t("Machines"), catalog: t("Parts catalog"), customers: t("Customers and quote requests"), changeParts: t("Change parts"), knowledge: t("Knowledge base") })[s];
 const LOCKED = () => [
@@ -46,7 +26,7 @@ const LOCKED = () => [
   t("The activity log can't be edited or deleted."),
 ];
 
-interface Loaded { settings: PortalSettings; defaults: PortalSettings; permissions: string[]; updatedAt: string | null; updatedBy: string | null }
+interface Loaded { settings: PortalSettings; defaults: PortalSettings; updatedAt: string | null; updatedBy: string | null }
 
 export function AdminSettings({ onSaved }: { onSaved: (s: PortalSettings) => void }) {
   const loaded = useLoad<Loaded>(() => api("/settings"));
@@ -97,7 +77,7 @@ export function AdminSettings({ onSaved }: { onSaved: (s: PortalSettings) => voi
     }
   }
 
-  const roles = Object.keys(draft.roles) as Role[];
+  const roles = STARTING_ROLES;
   const s = stats.data;
 
   return (
@@ -179,40 +159,8 @@ export function AdminSettings({ onSaved }: { onSaved: (s: PortalSettings) => voi
         </div>
       </Group>
 
-      <Group title={t("What each role can do")} sub={t("Tick what each role is allowed. A change applies on each person's next click. Admins always have everything. To change one person only, use Access on the People page.")} onReset={() => reset("roles")}>
-        <div className="tbl admin-perms">
-          <table>
-            <thead>
-              <tr><th>{t("Permission")}</th>{roles.map((r) => <th key={r} className="c">{roleName(r)}</th>)}<th className="c">{t("Admin")}</th></tr>
-            </thead>
-            <tbody>
-              {loaded.data.permissions.map((p) => (
-                <tr key={p}>
-                  <td>{permName(p)}</td>
-                  {roles.map((r) => {
-                    const on = draft.roles[r].includes(p as never);
-                    return (
-                      <td key={r} className="c">
-                        <input
-                          type="checkbox"
-                          checked={on}
-                          aria-label={t("{role}: {perm}", { role: roleName(r), perm: permName(p) })}
-                          onChange={() => set("roles", { [r]: on ? draft.roles[r].filter((x) => x !== p) : [...draft.roles[r], p] } as never)}
-                        />
-                      </td>
-                    );
-                  })}
-                  <td className="c"><input type="checkbox" checked disabled aria-label={t("Admin always has this")} /></td>
-                </tr>
-              ))}
-              <tr className="locked-row">
-                <td>{t("Manage people, settings and the activity log")}</td>
-                {roles.map((r) => <td key={r} className="c">–</td>)}
-                <td className="c"><input type="checkbox" checked disabled aria-label={t("Admin always has this")} /></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <Group title={t("Roles and permissions")} sub={t("What each role can do, and changes for one person, are set on the People page so there's only one place to edit them.")}>
+        <div><Link to="/people" className="btn">{t("Open People")}</Link></div>
       </Group>
 
       <Group title={t("Chats and boards")} onReset={() => reset("chats")}>

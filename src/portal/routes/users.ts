@@ -4,7 +4,7 @@ import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
 import { body, fail, mustStr, requirePerm, requireUser } from "../lib/http";
 import { createInvite } from "../lib/invites";
-import { adjustable, effective, isPermission, isRole, PERMISSION_GROUPS, readChanges, roleTable, ROLES, type AccessChanges, type Role } from "../lib/roles";
+import { adjustable, effective, isPermission, isRole, PERMISSION_GROUPS, PERMISSIONS, readChanges, ROLES, VIEW_PERMS, type AccessChanges, type Role } from "../lib/roles";
 import { endAllSessions } from "../lib/session";
 import { getSettings } from "../lib/settings-store";
 import { loginId } from "../../shared/login";
@@ -19,8 +19,8 @@ users.get("/roles", (c) => {
 /** The access screen's list: every permission in plain English, and what each role gives. */
 users.get("/permissions", (c) => {
   requirePerm(c, "users.manage");
-  const byRole = Object.fromEntries(Object.entries(roleTable()).map(([r, set]) => [r, [...set]]));
-  return c.json({ groups: PERMISSION_GROUPS.map((g) => ({ ...g, perms: g.perms.map((p) => ({ ...p, adjustable: adjustable(p.id) })) })), byRole });
+  const byRole = Object.fromEntries(Object.entries(PERMISSIONS).map(([r, set]) => [r, [...set]]));
+  return c.json({ groups: PERMISSION_GROUPS.map((g) => ({ ...g, perms: g.perms.map((p) => ({ ...p, adjustable: adjustable(p.id), view: VIEW_PERMS.has(p.id) })) })), byRole });
 });
 
 async function changesFor(db: D1Database, userId: string): Promise<AccessChanges> {

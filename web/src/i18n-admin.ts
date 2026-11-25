@@ -2,6 +2,10 @@
 // Settings and People). Kept apart from i18n-dict.ts so it merges cleanly; i18n-dict.ts adds these in.
 
 export const ADMIN_ES: Record<string, string> = {
+  "Manager": "Gerente",
+  "Roles and permissions": "Roles y permisos",
+  "What each role can do, and changes for one person, are set on the People page so there's only one place to edit them.": "Lo que puede hacer cada rol, y los cambios para una sola persona, se configuran en la página Personas para que haya un solo lugar donde editarlos.",
+  "Portal-wide settings. Admins only.": "Ajustes de todo el portal. Solo administradores.",
   "Import orders from a spreadsheet": "Importar pedidos desde una hoja de cálculo",
   "Publish articles to customers": "Publicar artículos para clientes",
   "Tick what each role is allowed. A change applies on each person's next click. Admins always have everything. To change one person only, use Access on the People page.": "Marque lo que cada rol puede hacer. El cambio se aplica en el siguiente clic de cada persona. Los administradores siempre lo tienen todo. Para cambiar a una sola persona, use Acceso en la página Personas.",
@@ -114,6 +118,10 @@ export const ADMIN_ES: Record<string, string> = {
 };
 
 export const ADMIN_IT: Record<string, string> = {
+  "Manager": "Responsabile",
+  "Roles and permissions": "Ruoli e permessi",
+  "What each role can do, and changes for one person, are set on the People page so there's only one place to edit them.": "Cosa può fare ogni ruolo, e le modifiche per una sola persona, si impostano nella pagina Persone, così c'è un solo posto dove modificarli.",
+  "Portal-wide settings. Admins only.": "Impostazioni di tutto il portale. Solo amministratori.",
   "Import orders from a spreadsheet": "Importare ordini da un foglio di calcolo",
   "Publish articles to customers": "Pubblicare articoli per i clienti",
   "Tick what each role is allowed. A change applies on each person's next click. Admins always have everything. To change one person only, use Access on the People page.": "Spunta ciò che ogni ruolo può fare. La modifica vale dal clic successivo di ciascuno. Gli amministratori hanno sempre tutto. Per cambiare una sola persona, usa Accesso nella pagina Persone.",
