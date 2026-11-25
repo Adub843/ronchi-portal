@@ -64,3 +64,72 @@ describe("Portal command center", () => {
     expect((await aaron.fetch("/api/jobs")).status).toBe(200);
   });
 });
+
+describe("Command center: each person's access", () => {
+  it("a change can last until a date, then the person goes back to what their role gives", async () => {
+    const aaron = await owner();
+    const tech = await person("tech");
+    const soon = new Date(Date.now() + 3600_000).toISOString();
+    expect((await aaron.fetch(`/api/users/${tech.id}/access`, { method: "PUT", body: { changes: { "orders.view": true }, until: soon, reason: "Covering for Andrew this week" } })).status).toBe(200);
+    const log = await aaron.json("/api/users/audit/recent");
+    expect(JSON.parse(log.data.entries.find((e: any) => e.action === "user.access").detail).reason).toBe("Covering for Andrew this week");
+    expect((await tech.fetch("/api/change-parts")).status).toBe(200);
+    const list = await aaron.json("/api/users");
+    expect(list.data.users.find((u: any) => u.id === tech.id).until).toEqual({ "orders.view": soon });
+    // Time passes: the change has run out.
+    await env.DB.prepare("UPDATE user_access SET expires_at = ? WHERE user_id = ?").bind(new Date(Date.now() - 1000).toISOString(), tech.id).run();
+    expect((await tech.fetch("/api/change-parts")).status).toBe(403);
+    expect((await aaron.fetch(`/api/users/${tech.id}/access`, { method: "PUT", body: { changes: { "orders.view": true }, until: "2000-01-01T00:00:00Z" } })).status).toBe(400);
+  });
+
+  it("copies another person's role and access in one step", async () => {
+    const aaron = await owner();
+    const model = await person("sales");
+    const tech = await person("tech");
+    await aaron.json(`/api/users/${model.id}/access`, { method: "PUT", body: { changes: { "files.send": false } } });
+    const r = await aaron.json(`/api/users/${tech.id}/access`, { method: "PUT", body: { copyFrom: model.id } });
+    expect(r.status).toBe(200);
+    const me = (await tech.json("/api/auth/me")).data.user;
+    expect(me.role).toBe("sales");
+    expect(me.permissions).toContain("orders.view");
+    expect(me.permissions).not.toContain("files.send");
+  });
+});
+
+describe("Command center: risky actions have their own switches", () => {
+  it("exporting a chat, publishing a catalog and exporting orders can be switched off for one person", async () => {
+    const aaron = await owner();
+    const tech = await person("tech");
+    const other = await person("tech");
+    const chat = await tech.json("/api/boards/chats", { body: { userIds: [other.id] } });
+    expect((await tech.fetch(`/api/boards/${chat.data.id}/export`)).status).toBe(200);
+    await aaron.json(`/api/users/${tech.id}/access`, { method: "PUT", body: { changes: { "boards.export": false } } });
+    expect((await tech.fetch(`/api/boards/${chat.data.id}/export`)).status).toBe(403);
+
+    const eng = await person("engineering");
+    expect((await eng.json("/api/auth/me")).data.user.permissions).toEqual(expect.arrayContaining(["catalog.publish", "boards.export"]));
+    await aaron.json(`/api/users/${eng.id}/access`, { method: "PUT", body: { changes: { "catalog.publish": false } } });
+    expect((await eng.fetch("/api/catalog/machines/m1/publish", { body: {} })).status).toBe(403);
+    expect((await (await person("sales")).json("/api/auth/me")).data.user.permissions).toContain("orders.export");
+  });
+});
+
+describe("Command center: owner protection on People", () => {
+  it("Restore only brings back removed people, and never changes the owner", async () => {
+    const aaron = await owner();
+    const other = await person("admin");
+    const tech = await person("tech");
+    expect((await other.fetch(`/api/users/${aaron.id}/restore`, { body: { role: "tech" } })).status).not.toBe(200);
+    expect((await aaron.json("/api/auth/me")).data.user.role).toBe("admin");
+    expect((await other.fetch(`/api/users/${tech.id}/restore`, { body: { role: "sales" } })).status).toBe(409);
+  });
+
+  it("only the owner can invite or promote admins", async () => {
+    const aaron = await owner();
+    const other = await person("admin");
+    const tech = await person("tech");
+    expect((await other.fetch("/api/users/invite", { body: { email: "sneaky", name: "Sneaky", role: "admin" } })).status).toBe(403);
+    expect((await other.fetch(`/api/users/${tech.id}`, { method: "PATCH", body: { role: "admin" } })).status).toBe(403);
+    expect((await aaron.fetch(`/api/users/${tech.id}`, { method: "PATCH", body: { role: "admin" } })).status).toBe(200);
+  });
+});

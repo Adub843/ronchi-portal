@@ -168,8 +168,8 @@ function CatalogMachine({ id, me }: { id: string; me: Me }) {
         <span className="row" style={{ gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
           {editor && <button className="btn small" onClick={() => setImporting(!importing)}>{importing ? t("Close import") : t("Import from manual")}</button>}
           {editor && <button className="btn small" onClick={() => setAdding(!adding)}>{t("Add a drawing")}</button>}
-          {editor && data.sheets.length > 0 && <button className="btn small primary" disabled={!!busy} onClick={publish}>{t("Publish to customers")}</button>}
-          {editor && m.catalog_published_at && <button className="btn small danger" disabled={!!busy} onClick={unpublish}>{t("Unpublish")}</button>}
+          {can(me, "catalog.publish") && data.sheets.length > 0 && <button className="btn small primary" disabled={!!busy} onClick={publish}>{t("Publish to customers")}</button>}
+          {can(me, "catalog.publish") && m.catalog_published_at && <button className="btn small danger" disabled={!!busy} onClick={unpublish}>{t("Unpublish")}</button>}
         </span>
       }>
         <Tile to={`/catalog/m/${m.id}/catalog`} L={L} pic={TILE.catalogue} label={t("Spare parts catalogue")} sub={data.sheets.length ? t("{n} parts lists", { n: data.sheets.length }) : t("No catalog yet")} />

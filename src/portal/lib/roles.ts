@@ -25,8 +25,10 @@ export type Permission =
   | "chats.start"         // start a private chat (they can still answer chats others add them to)
   | "files.send"          // attach photos and files in chats and boards
   | "boards.moderate"     // pin, archive, remove anyone's post
+  | "boards.export"       // download a chat or board as a text file
   | "catalog.view"        // the parts catalog: drawings, 3D, parts lists, where-used, staff notes
-  | "catalog.edit"        // import manuals, fix tables, upload drawings and 3D, publish to customers
+  | "catalog.edit"        // import manuals, fix tables, upload drawings and 3D
+  | "catalog.publish"     // publish a machine's catalog to the customer parts site, or take it down
   | "customers.manage"    // customer companies and which machines each one sees
   | "customers.invite"    // customer sign-up links, and turning a customer person on or off
   | "quotes.manage"       // read customer quote requests and set their status
@@ -37,6 +39,7 @@ export type Permission =
   | "orders.edit"         // change an order's details and status
   | "orders.remove"       // remove an order
   | "orders.import"       // bring in orders from a CSV spreadsheet
+  | "orders.export"       // download the order list as a spreadsheet
   | "kb.view"             // search and read the knowledge base
   | "kb.write"            // add quick notes and articles, change your own
   | "kb.edit_all"         // change or archive anyone's article
@@ -51,16 +54,16 @@ export type Permission =
 
 const ALL: Permission[] = [
   "settings.manage", "users.manage", "audit.view", "machines.view", "machines.add", "machines.edit",
-  "boards.use", "boards.create", "chats.start", "files.send", "boards.moderate",
-  "catalog.view", "catalog.edit", "customers.manage", "customers.invite", "quotes.manage",
-  "cpsales.view", "cpsales.edit", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import",
+  "boards.use", "boards.create", "chats.start", "files.send", "boards.moderate", "boards.export",
+  "catalog.view", "catalog.edit", "catalog.publish", "customers.manage", "customers.invite", "quotes.manage",
+  "cpsales.view", "cpsales.edit", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import", "orders.export",
   "kb.view", "kb.write", "kb.edit_all", "kb.import", "kb.publish",
   "software.view", "software.manage",
   "jobs.view", "jobs.schedule",
   "shipping.view", "shipping.edit",
 ];
 
-const STAFF_BASE: Permission[] = ["boards.use", "boards.create", "chats.start", "files.send", "machines.view", "catalog.view", "kb.view", "kb.write", "software.view", "jobs.view", "shipping.view"];
+const STAFF_BASE: Permission[] = ["boards.use", "boards.create", "chats.start", "files.send", "boards.export", "machines.view", "catalog.view", "kb.view", "kb.write", "software.view", "jobs.view", "shipping.view"];
 
 // Managers (Aaron, 2026-11-24: "paolo, steve, michele, and morad should all be manager level log
 // ins i am the only admin") get everything except managing people and reading the audit log.
@@ -71,9 +74,9 @@ export const PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
   manager: new Set(MANAGER),
   billing: new Set([...STAFF_BASE, "quotes.manage"]),
   scheduling: new Set([...STAFF_BASE, "jobs.schedule", "shipping.edit"]),
-  service: new Set([...STAFF_BASE, "machines.add", "machines.edit", "boards.moderate", "catalog.edit", "customers.manage", "customers.invite", "quotes.manage", "kb.edit_all", "kb.import", "kb.publish", "jobs.schedule", "shipping.edit"]),
-  sales: new Set([...STAFF_BASE, "customers.manage", "customers.invite", "quotes.manage", "cpsales.view", "cpsales.edit", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import", "shipping.edit"]),
-  engineering: new Set([...STAFF_BASE, "machines.add", "machines.edit", "catalog.edit", "kb.edit_all", "kb.import", "kb.publish", "software.manage"]),
+  service: new Set([...STAFF_BASE, "machines.add", "machines.edit", "boards.moderate", "catalog.edit", "catalog.publish", "customers.manage", "customers.invite", "quotes.manage", "kb.edit_all", "kb.import", "kb.publish", "jobs.schedule", "shipping.edit"]),
+  sales: new Set([...STAFF_BASE, "customers.manage", "customers.invite", "quotes.manage", "cpsales.view", "cpsales.edit", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import", "orders.export", "shipping.edit"]),
+  engineering: new Set([...STAFF_BASE, "machines.add", "machines.edit", "catalog.edit", "catalog.publish", "kb.edit_all", "kb.import", "kb.publish", "software.manage"]),
   tech: new Set([...STAFF_BASE]),
 };
 
@@ -156,6 +159,9 @@ export function readChanges(list: string | null | undefined): AccessChanges {
   return out;
 }
 
+/** SQL that keeps only access changes that haven't run out (alias a = user_access). Same text format as toISOString(). */
+export const ACCESS_LIVE = "(a.expires_at IS NULL OR a.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))";
+
 /** Seeing, without changing anything: what "View only" on the access screen keeps on. */
 export const VIEW_PERMS: ReadonlySet<Permission> = new Set(["boards.use", "machines.view", "catalog.view", "kb.view", "software.view", "cpsales.view", "orders.view", "jobs.view", "shipping.view"]);
 
@@ -167,6 +173,7 @@ export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label:
     { id: "chats.start", label: "Start private chats", hint: "Open a new chat with other staff." },
     { id: "files.send", label: "Send photos and files", hint: "Attach photos and files to messages." },
     { id: "boards.moderate", label: "Moderate boards", hint: "Pin, lock, archive and remove anyone's post." },
+    { id: "boards.export", label: "Export chats and boards", hint: "Download a whole chat, or a board they run, as a text file." },
   ] },
   { group: "Machines", perms: [
     { id: "machines.view", label: "See machines", hint: "The machine list and each machine's page." },
@@ -175,7 +182,8 @@ export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label:
   ] },
   { group: "Parts catalog", perms: [
     { id: "catalog.view", label: "See the parts catalog", hint: "Drawings, 3D, parts lists and staff notes." },
-    { id: "catalog.edit", label: "Build the parts catalog", hint: "Import manuals, fix tables, upload drawings and 3D, publish to customers." },
+    { id: "catalog.edit", label: "Build the parts catalog", hint: "Import manuals, fix tables, upload drawings and 3D." },
+    { id: "catalog.publish", label: "Publish catalogs to customers", hint: "Put a machine's catalog on the customer parts site, or take it down." },
   ] },
   { group: "Customers", perms: [
     { id: "customers.manage", label: "Customer companies", hint: "Add, rename or turn off companies, and choose which machines each one sees." },
@@ -190,6 +198,7 @@ export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label:
     { id: "orders.edit", label: "Change orders", hint: "Change an order's details and status." },
     { id: "orders.remove", label: "Remove orders", hint: "Take an order off the list." },
     { id: "orders.import", label: "Import orders", hint: "Bring in orders from a CSV spreadsheet." },
+    { id: "orders.export", label: "Export orders", hint: "Download the order list as a spreadsheet." },
   ] },
   { group: "Knowledge base", perms: [
     { id: "kb.view", label: "Search the knowledge base", hint: "Read articles and quick notes." },
@@ -213,7 +222,7 @@ export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label:
   { group: "Admin only", perms: [
     { id: "users.manage", label: "Manage people", hint: "Invites, roles, access and sign-outs. Admins only." },
     { id: "audit.view", label: "Read the audit log", hint: "Who did what, and when. Admins only." },
-    { id: "settings.manage", label: "Admin controls", hint: "Portal-wide settings. Admins only." },
+    { id: "settings.manage", label: "Command center", hint: "Every switch and control for the portal. The portal owner only." },
   ] },
 ];
 

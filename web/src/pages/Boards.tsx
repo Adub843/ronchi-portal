@@ -436,7 +436,7 @@ export function BoardPage({ id, me }: { id: string; me: Me }) {
   const s = search?.trim().toLowerCase() ?? "";
   const visible = s ? posts.filter((p) => p.kind !== "event" && p.body.toLowerCase().includes(s) || p.files.some((f: any) => f.name.toLowerCase().includes(s))) : posts;
   const canPin = kind === "chat" || data.canModerate;
-  const canExport = kind === "chat" || data.canModerate;
+  const canExport = can(me, "boards.export") && (kind === "chat" || data.canModerate);
 
   const menu: MenuItem[] = [
     { heading: title, sub: kind === "chat" ? t("Private chat") : t("Board") },
