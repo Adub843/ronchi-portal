@@ -1,0 +1,48 @@
+// Spanish and Italian for the look descriptions in Settings (src/shared/themes.ts). The look names
+// stay as they are, like product names. i18n-dict.ts adds these in.
+
+export const THEME_ES: Record<string, string> = {
+  "The Field Service Workbook look: light grey, white panels, Ronchi red. Follows light or dark mode.": "El aspecto del Field Service Workbook: gris claro, paneles blancos, rojo Ronchi. Sigue el modo claro u oscuro.",
+  "Dark control-room look that's easy on the eyes on site.": "Aspecto oscuro de sala de control, cómodo para la vista en planta.",
+  "Bright white with one blue accent. Very calm and clinical.": "Blanco brillante con un toque azul. Muy tranquilo y clínico.",
+  "Deep green, cream and brass, a nod to Ronchi's Italian roots.": "Verde intenso, crema y latón, un guiño a las raíces italianas de Ronchi.",
+  "Charcoal with machine-guard yellow. Loud and very readable.": "Carbón con amarillo de guarda de máquina. Llamativo y muy legible.",
+  "Brushed metal greys with a cool teal accent, like the machines.": "Grises de metal cepillado con un toque verde azulado, como las máquinas.",
+  "Engineering blue with white lines, like a drawing sheet.": "Azul de ingeniería con líneas blancas, como un plano.",
+  "Navy and soft gold. Polished, good for showing customers.": "Azul marino y dorado suave. Pulido, bueno para mostrar a clientes.",
+  "Graphite with a bright orange accent for alerts and actions.": "Grafito con un naranja vivo para alertas y acciones.",
+  "Muted blue-grey everywhere. Quiet and easy for long days.": "Gris azulado suave en todo. Tranquilo y cómodo para jornadas largas.",
+  "Looks like a machine HMI: dark grey, status green and amber.": "Parece la HMI de una máquina: gris oscuro, verde y ámbar de estado.",
+  "Black, white and grey only, with red used just for alerts.": "Solo negro, blanco y gris, con rojo únicamente para alertas.",
+  "Fresh teal and white. Friendly for customers and field service engineers.": "Verde azulado fresco y blanco. Agradable para clientes e ingenieros de servicio de campo.",
+  "Near-black with electric blue. Modern and techy.": "Casi negro con azul eléctrico. Moderno y tecnológico.",
+  "Warm grey, walnut and copper. Feels like a well-kept shop.": "Gris cálido, nogal y cobre. Como un taller bien cuidado.",
+  "White and mint with navy text, like the cleanrooms your customers run.": "Blanco y menta con texto azul marino, como las salas limpias de tus clientes.",
+  "Maximum readability in bright plants and for older eyes.": "Máxima legibilidad en plantas muy iluminadas y para la vista cansada.",
+  "Wine red and warm grey. Rich and traditional.": "Rojo vino y gris cálido. Elegante y tradicional.",
+  "Light grey with sky blue and soft shadows. Very modern SaaS.": "Gris claro con azul cielo y sombras suaves. Muy moderno, estilo SaaS.",
+  "Olive drab and sand, rugged like field gear.": "Verde oliva y arena, resistente como el equipo de campo.",
+};
+
+export const THEME_IT: Record<string, string> = {
+  "The Field Service Workbook look: light grey, white panels, Ronchi red. Follows light or dark mode.": "L'aspetto del Field Service Workbook: grigio chiaro, pannelli bianchi, rosso Ronchi. Segue la modalità chiara o scura.",
+  "Dark control-room look that's easy on the eyes on site.": "Aspetto scuro da sala controllo, riposante per gli occhi in campo.",
+  "Bright white with one blue accent. Very calm and clinical.": "Bianco brillante con un tocco di blu. Molto calmo e pulito.",
+  "Deep green, cream and brass, a nod to Ronchi's Italian roots.": "Verde intenso, crema e ottone, un omaggio alle radici italiane di Ronchi.",
+  "Charcoal with machine-guard yellow. Loud and very readable.": "Antracite con giallo da protezione macchina. Deciso e molto leggibile.",
+  "Brushed metal greys with a cool teal accent, like the machines.": "Grigi metallo spazzolato con un tocco verde acqua, come le macchine.",
+  "Engineering blue with white lines, like a drawing sheet.": "Blu tecnico con linee bianche, come un disegno.",
+  "Navy and soft gold. Polished, good for showing customers.": "Blu navy e oro tenue. Curato, adatto da mostrare ai clienti.",
+  "Graphite with a bright orange accent for alerts and actions.": "Grafite con un arancione vivo per avvisi e azioni.",
+  "Muted blue-grey everywhere. Quiet and easy for long days.": "Grigio-blu tenue ovunque. Tranquillo e comodo per le giornate lunghe.",
+  "Looks like a machine HMI: dark grey, status green and amber.": "Sembra l'HMI di una macchina: grigio scuro, verde e ambra di stato.",
+  "Black, white and grey only, with red used just for alerts.": "Solo nero, bianco e grigio, con il rosso usato solo per gli avvisi.",
+  "Fresh teal and white. Friendly for customers and field service engineers.": "Verde acqua fresco e bianco. Gradevole per clienti e ingegneri di assistenza sul campo.",
+  "Near-black with electric blue. Modern and techy.": "Quasi nero con blu elettrico. Moderno e tecnologico.",
+  "Warm grey, walnut and copper. Feels like a well-kept shop.": "Grigio caldo, noce e rame. Come un'officina ben tenuta.",
+  "White and mint with navy text, like the cleanrooms your customers run.": "Bianco e menta con testo blu navy, come le camere bianche dei tuoi clienti.",
+  "Maximum readability in bright plants and for older eyes.": "Massima leggibilità negli stabilimenti luminosi e per chi vede meno bene.",
+  "Wine red and warm grey. Rich and traditional.": "Rosso vino e grigio caldo. Ricco e tradizionale.",
+  "Light grey with sky blue and soft shadows. Very modern SaaS.": "Grigio chiaro con azzurro e ombre morbide. Molto moderno, stile SaaS.",
+  "Olive drab and sand, rugged like field gear.": "Verde oliva e sabbia, robusto come l'attrezzatura da campo.",
+};

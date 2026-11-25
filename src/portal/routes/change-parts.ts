@@ -106,13 +106,16 @@ changeParts.delete("/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+// A copy is the same customer, machine, part and every job number (customer PO, RA PO, AA, quote).
+// One machine often has several change-part jobs that differ only by AA or RA PO, so those count too.
+const DUP_FIELDS = ["customer", "machine", "part", "customer_po", "ra_po", "aa", "quote"] as const;
 const dupKey = (o: CpOrderInput | Record<string, unknown>) =>
-  [o.customer, o.machine, o.part, o.customer_po].map((v) => String(v ?? "").trim().toLowerCase()).join("|");
+  DUP_FIELDS.map((k) => String(o[k] ?? "").trim().toLowerCase()).join("|");
 
 /**
  * Bring in a spreadsheet saved as CSV (the old console's export or the SharePoint master sheet).
  * Without `confirm` it only reads the file and says what it found; with `confirm: true` it adds
- * the orders. Orders already here (same customer, machine, part and customer PO) are skipped.
+ * the orders. Orders already here (same customer, machine, part, customer PO, RA PO, AA and quote) are skipped.
  */
 changeParts.post("/import", async (c) => {
   const u = requirePerm(c, "orders.import");
@@ -120,7 +123,7 @@ changeParts.post("/import", async (c) => {
   if (typeof b.csv !== "string" || !b.csv.trim()) fail(400, "Choose a CSV file to import.");
   if (b.csv.length > 3_000_000) fail(400, "That file is too big (limit 3 MB).");
   const read = readOrdersCsv(b.csv);
-  const { results } = await c.env.DB.prepare("SELECT customer, machine, part, customer_po FROM cp_orders WHERE removed_at IS NULL").all<Record<string, unknown>>();
+  const { results } = await c.env.DB.prepare(`SELECT ${DUP_FIELDS.join(", ")} FROM cp_orders WHERE removed_at IS NULL`).all<Record<string, unknown>>();
   const have = new Set(results.map(dupKey));
   const fresh = read.orders.filter((o) => {
     const k = dupKey(o);

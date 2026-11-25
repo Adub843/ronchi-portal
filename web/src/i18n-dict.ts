@@ -2,6 +2,8 @@
 // Add a line here whenever a new t("...") text is added; test/unit/i18n.test.ts checks none is missing.
 // Messages people type are never translated.
 import { ADMIN_ES, ADMIN_IT } from "./i18n-admin";
+import { THEME_ES, THEME_IT } from "./i18n-themes";
+import { THEMES } from "../../src/shared/themes";
 
 /** Texts shown through a variable (role names, menu tabs) or sent by the server, so the test can't find them in t("...") calls. */
 export const DYNAMIC: string[] = [
@@ -1930,3 +1932,8 @@ Object.assign(ES, ADMIN_ES);
 Object.assign(IT, ADMIN_IT);
 // The access screen lists the admin-controls permission by name (src/portal/lib/roles.ts).
 DYNAMIC.push("Admin controls", "Portal-wide settings. Admins only.");
+
+// The look descriptions in Settings (i18n-themes.ts).
+Object.assign(ES, THEME_ES);
+Object.assign(IT, THEME_IT);
+DYNAMIC.push(...THEMES.map((th) => th.blurb));

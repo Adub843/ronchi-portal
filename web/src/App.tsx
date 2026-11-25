@@ -24,7 +24,7 @@ import { Settings } from "./pages/Settings";
 import { JobList, JobPage, NewJob } from "./pages/Jobs";
 import { WorkOrderPage, WorkOrders } from "./pages/WorkOrders";
 import { Learn } from "./pages/Learn";
-import { NAV } from "./nav";
+import { menuFor } from "./nav";
 import { roleLabel, useRoleNames } from "./roles";
 
 export const DEFAULT_PREFS: Prefs = { theme: "ronchi", mode: "auto", layout: "L2", tiles: null, lang: "en", popups: true };
@@ -81,7 +81,7 @@ export function App() {
   if (me === undefined) return <div className="boot" aria-busy="true" />;
   if (me === null) return <SignIn onDone={refresh} />;
 
-  const items = NAV.filter((n) => (!n.perm || can(me, n.perm)) && (!n.workbook || switches.workbook));
+  const items = menuFor(new Set(me.permissions), switches);
   const section = "/" + (path.split("/")[1] ?? "");
   const popups = prefs?.popups !== false;
 

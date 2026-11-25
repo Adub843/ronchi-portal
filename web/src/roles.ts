@@ -42,3 +42,9 @@ export function refreshRoleNames(): Promise<void> {
   loading = null;
   return load();
 }
+
+/** A role's name on the People page: what an admin typed for it, else the built-in name in the person's language, else the server's name. */
+export function roleDisplayName(id: string, serverName: string): string {
+  const label = roleLabel(id);
+  return label !== id ? label : serverName;
+}
