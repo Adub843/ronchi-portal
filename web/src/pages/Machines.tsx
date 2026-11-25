@@ -1,3 +1,4 @@
+import { MachinePartsOrders } from "./PartsOrders";
 import { useState } from "react";
 import { api, can, fmtTime, type Me } from "../api";
 import { t } from "../i18n";
@@ -138,6 +139,7 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
               ) : <Empty>{t("No change-part orders for this machine.")}</Empty>}
             </div>
           )}
+          {data.partsOrders && <div style={{ gridColumn: "1 / -1" }}><MachinePartsOrders orders={data.partsOrders} /></div>}
         </div>
       )}
     </>

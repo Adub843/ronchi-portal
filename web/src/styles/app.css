@@ -308,6 +308,24 @@ body:has(.chat-compose) .alerts{bottom:calc(96px + env(safe-area-inset-bottom,0p
 .cp-history{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px}
 .cp-history ul{margin:4px 0 0;padding-left:18px;font-size:14px}
 @media (max-width:720px){.cp-tiles,.cp-tiles.five{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* Parts orders */
+.po-tabs{margin:0 0 12px}
+.po-tabs button{font-size:13px;padding:7px 12px}
+.po-pills{gap:4px;flex-wrap:wrap}
+.cp-table small.block{display:block}
+.cp-table small.pill{margin-left:6px}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.po-where{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.po-where.late{border-left:3px solid var(--accent)}
+.po-late{color:var(--accent);font-weight:600}
+.po-totals{max-width:360px;margin:12px 0 0 auto}
+.po-totals dd{text-align:right}
+.po-edit td{vertical-align:top}
+.po-edit input{min-width:0}
+.po-bars{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.po-bars li{display:grid;grid-template-columns:80px 1fr auto;gap:10px;align-items:center;font-size:13px}
+.po-bar{height:12px;background:var(--line);border-radius:6px;overflow:hidden}
+.po-bar span{display:block;height:100%;background:var(--accent);border-radius:6px}
 
 /* Knowledge base */
 .kbhero{margin-bottom:14px}

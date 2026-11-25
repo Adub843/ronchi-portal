@@ -35,6 +35,12 @@ export type Permission =
   | "orders.edit"         // change an order's details and status
   | "orders.remove"       // remove an order
   | "orders.import"       // bring in orders from a CSV spreadsheet
+  | "partsorders.view"    // see spare parts orders (sales side)
+  | "partsorders.add"     // start a parts order, by hand, as a repeat, or from a quote request
+  | "partsorders.edit"    // change an order, its lines, status, arrivals and shipments
+  | "partsorders.remove"  // take a parts order off the list
+  | "partsorders.prices"  // see and set prices, costs, discounts and totals
+  | "partsorders.reports" // sales by month, customer and part; how long orders take
   | "kb.view"             // search and read the knowledge base
   | "kb.write"            // add quick notes and articles, change your own
   | "kb.edit_all"         // change or archive anyone's article
@@ -50,6 +56,7 @@ const ALL: Permission[] = [
   "boards.use", "boards.create", "chats.start", "files.send", "boards.moderate",
   "catalog.view", "catalog.edit", "customers.manage", "customers.invite", "quotes.manage",
   "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import",
+  "partsorders.view", "partsorders.add", "partsorders.edit", "partsorders.remove", "partsorders.prices", "partsorders.reports",
   "kb.view", "kb.write", "kb.edit_all", "kb.import", "kb.publish",
   "software.view", "software.manage",
   "jobs.view", "jobs.schedule",
@@ -64,10 +71,13 @@ const MANAGER: Permission[] = ALL.filter((p) => p !== "users.manage" && p !== "a
 export const PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
   admin: new Set(ALL),
   manager: new Set(MANAGER),
-  billing: new Set([...STAFF_BASE, "quotes.manage"]),
-  scheduling: new Set([...STAFF_BASE, "jobs.schedule"]),
+  // Billing (Lola) types the QuickBooks invoice number and needs the prices to bill.
+  billing: new Set([...STAFF_BASE, "quotes.manage", "partsorders.view", "partsorders.edit", "partsorders.prices", "partsorders.reports"]),
+  // Scheduling (Meagan) also handles parts: she can take orders and track arrivals, without prices.
+  scheduling: new Set([...STAFF_BASE, "jobs.schedule", "partsorders.view", "partsorders.add", "partsorders.edit"]),
   service: new Set([...STAFF_BASE, "machines.add", "machines.edit", "boards.moderate", "catalog.edit", "customers.manage", "customers.invite", "quotes.manage", "kb.edit_all", "kb.import", "kb.publish", "jobs.schedule"]),
-  sales: new Set([...STAFF_BASE, "customers.manage", "customers.invite", "quotes.manage", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import"]),
+  sales: new Set([...STAFF_BASE, "customers.manage", "customers.invite", "quotes.manage", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import",
+    "partsorders.view", "partsorders.add", "partsorders.edit", "partsorders.remove", "partsorders.prices", "partsorders.reports"]),
   engineering: new Set([...STAFF_BASE, "machines.add", "machines.edit", "catalog.edit", "kb.edit_all", "kb.import", "kb.publish", "software.manage"]),
   tech: new Set([...STAFF_BASE]),
 };
@@ -152,7 +162,7 @@ export function readChanges(list: string | null | undefined): AccessChanges {
 }
 
 /** Seeing, without changing anything: what "View only" on the access screen keeps on. */
-export const VIEW_PERMS: ReadonlySet<Permission> = new Set(["boards.use", "machines.view", "catalog.view", "kb.view", "software.view", "orders.view", "jobs.view"]);
+export const VIEW_PERMS: ReadonlySet<Permission> = new Set(["boards.use", "machines.view", "catalog.view", "kb.view", "software.view", "orders.view", "partsorders.view", "jobs.view"]);
 
 /** Plain-English names for the access screen, grouped the way the menu is. */
 export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label: string; hint: string }[] }[] = [
@@ -183,6 +193,14 @@ export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label:
     { id: "orders.edit", label: "Change orders", hint: "Change an order's details and status." },
     { id: "orders.remove", label: "Remove orders", hint: "Take an order off the list." },
     { id: "orders.import", label: "Import orders", hint: "Bring in orders from a CSV spreadsheet." },
+  ] },
+  { group: "Parts orders", perms: [
+    { id: "partsorders.view", label: "See parts orders", hint: "Spare parts orders, from the customer's first ask to the invoice." },
+    { id: "partsorders.add", label: "Add parts orders", hint: "Start a parts order by hand, repeat an old one, or make one from a quote request." },
+    { id: "partsorders.edit", label: "Change parts orders", hint: "Change an order's details, lines and status, and mark parts arrived or shipped." },
+    { id: "partsorders.remove", label: "Remove parts orders", hint: "Take a parts order off the list." },
+    { id: "partsorders.prices", label: "See parts prices", hint: "See and set prices, costs, discounts, margins and order totals." },
+    { id: "partsorders.reports", label: "Parts sales reports", hint: "Sales by month, customer and part, and how long orders take." },
   ] },
   { group: "Knowledge base", perms: [
     { id: "kb.view", label: "Search the knowledge base", hint: "Read articles and quick notes." },

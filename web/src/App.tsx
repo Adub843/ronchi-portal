@@ -15,6 +15,7 @@ import { Welcome } from "./pages/Welcome";
 import { Home } from "./pages/Home";
 import { Boards, BoardPage, Chats } from "./pages/Boards";
 import { ChangePartPage, ChangeParts } from "./pages/ChangeParts";
+import { NewPartsOrder, PartsOrderPage, PartsOrders } from "./pages/PartsOrders";
 import { Machines, MachinePage } from "./pages/Machines";
 import { KbArticle, KnowledgeBase } from "./pages/Knowledge";
 import { People } from "./pages/People";
@@ -87,7 +88,11 @@ export function App() {
 
   let page;
   const m = /^\/(boards|machines|chats|change-parts|jobs|work-orders)\/([A-Za-z0-9_-]+)$/.exec(path);
-  if (m?.[1] === "boards" || m?.[1] === "chats") page = <BoardPage key={m[2]} id={m[2]!} me={me} />;
+  const po = /^\/parts-orders(?:\/([A-Za-z0-9_-]+))?$/.exec(path);
+  if (po && (po[1] === "new")) page = <NewPartsOrder me={me} />;
+  else if (po && (!po[1] || po[1] === "to-order" || po[1] === "reports")) page = <PartsOrders key={path} me={me} tab={po[1]} />;
+  else if (po) page = <PartsOrderPage key={po[1]} id={po[1]!} me={me} />;
+  else if (m?.[1] === "boards" || m?.[1] === "chats") page = <BoardPage key={m[2]} id={m[2]!} me={me} />;
   else if (m?.[1] === "machines") page = <MachinePage id={m[2]!} me={me} />;
   else if (path === "/jobs/new") page = <NewJob me={me} />;
   else if (m?.[1] === "jobs") page = <JobPage key={m[2]} id={m[2]!} me={me} />;
@@ -99,7 +104,7 @@ export function App() {
   else if (section === "/kb") page = <KnowledgeBase me={me} />;
   else if (section === "/catalog") page = <Catalog me={me} path={path} />;
   else if (section === "/customers") page = <Customers me={me} />;
-  else if (section === "/quotes") page = <Quotes key={path} id={/^\/quotes\/([A-Za-z0-9_-]+)$/.exec(path)?.[1]} />;
+  else if (section === "/quotes") page = <Quotes key={path} me={me} id={/^\/quotes\/([A-Za-z0-9_-]+)$/.exec(path)?.[1]} />;
   else if (m?.[1] === "change-parts") page = <ChangePartPage key={m[2]} id={m[2]!} me={me} />;
   else if (section === "/chats") page = <Chats me={me} />;
   else if (section === "/boards") page = <Boards me={me} />;

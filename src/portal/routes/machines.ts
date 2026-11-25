@@ -32,7 +32,11 @@ machines.get("/:id", async (c) => {
   const orders = has(c.get("user"), "orders.view")
     ? (await c.env.DB.prepare("SELECT id, part, status, ship_date, updated_at FROM cp_orders WHERE instr(upper(machine), ?) > 0 AND removed_at IS NULL ORDER BY updated_at DESC").bind(m.serial).all()).results
     : null;
-  return c.json({ machine: m, boards: boards.results, orders });
+  // Spare parts orders for this machine, only for people who may see parts orders.
+  const partsOrders = has(c.get("user"), "partsorders.view")
+    ? (await c.env.DB.prepare("SELECT id, 'P-' || seq AS number, customer, status, customer_po, updated_at FROM parts_orders WHERE upper(machine) = ? AND removed_at IS NULL ORDER BY updated_at DESC LIMIT 100").bind(String(m.serial).toUpperCase()).all()).results
+    : undefined;
+  return c.json({ machine: m, boards: boards.results, orders, partsOrders });
 });
 
 function fields(b: Record<string, unknown>) {
