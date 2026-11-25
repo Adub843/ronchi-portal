@@ -31,7 +31,9 @@ export type Permission =
   | "orders.import"       // bring in orders from a CSV spreadsheet
   | "kb.view"             // search and read the knowledge base
   | "kb.write"            // add quick notes and articles, change your own
-  | "kb.publish";         // change anyone's article, import documents, publish to the customer help center
+  | "kb.publish"          // change anyone's article, import documents, publish to the customer help center
+  | "jobs.view"           // see tech jobs and their machine history, and add files to them
+  | "jobs.schedule";      // schedule jobs, choose the techs, send the job emails
 
 const ALL: Permission[] = [
   "users.manage", "audit.view", "machines.view", "machines.edit",
@@ -39,15 +41,16 @@ const ALL: Permission[] = [
   "catalog.view", "catalog.edit", "customers.manage", "quotes.manage",
   "orders.view", "orders.edit", "orders.import",
   "kb.view", "kb.write", "kb.publish",
+  "jobs.view", "jobs.schedule",
 ];
 
-const STAFF_BASE: Permission[] = ["boards.use", "boards.create", "chats.start", "files.send", "machines.view", "catalog.view", "kb.view", "kb.write"];
+const STAFF_BASE: Permission[] = ["boards.use", "boards.create", "chats.start", "files.send", "machines.view", "catalog.view", "kb.view", "kb.write", "jobs.view"];
 
 export const PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
   admin: new Set(ALL),
   billing: new Set([...STAFF_BASE, "quotes.manage"]),
-  scheduling: new Set([...STAFF_BASE]),
-  service: new Set([...STAFF_BASE, "machines.edit", "boards.moderate", "catalog.edit", "customers.manage", "quotes.manage", "kb.publish"]),
+  scheduling: new Set([...STAFF_BASE, "jobs.schedule"]),
+  service: new Set([...STAFF_BASE, "machines.edit", "boards.moderate", "catalog.edit", "customers.manage", "quotes.manage", "kb.publish", "jobs.schedule"]),
   sales: new Set([...STAFF_BASE, "customers.manage", "quotes.manage", "orders.view", "orders.edit", "orders.import"]),
   engineering: new Set([...STAFF_BASE, "machines.edit", "catalog.edit", "kb.publish"]),
   tech: new Set([...STAFF_BASE]),
@@ -131,6 +134,10 @@ export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label:
     { id: "kb.view", label: "Search the knowledge base", hint: "Read articles and quick notes." },
     { id: "kb.write", label: "Write notes and articles", hint: "Add quick notes and articles, and change their own." },
     { id: "kb.publish", label: "Publish to customers", hint: "Change anyone's article, import documents, publish to the help center." },
+  ] },
+  { group: "Field service jobs", perms: [
+    { id: "jobs.view", label: "See jobs", hint: "Field service jobs, each job's machine history, and adding files to a job." },
+    { id: "jobs.schedule", label: "Schedule jobs", hint: "Make and change jobs, choose the field service engineers and send the job emails." },
   ] },
   { group: "Admin only", perms: [
     { id: "users.manage", label: "Manage people", hint: "Invites, roles, access and sign-outs. Admins only." },

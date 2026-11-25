@@ -1,4 +1,5 @@
 // People: invites, roles, disabling, and signing out devices.
+import { isEmail } from "../lib/mail";
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
@@ -70,7 +71,7 @@ users.put("/:id/access", async (c) => {
 users.get("/", async (c) => {
   requirePerm(c, "users.manage");
   const { results } = await c.env.DB.prepare(
-    `SELECT u.id, u.email, u.name, u.role, u.status, u.created_at,
+    `SELECT u.id, u.email, u.name, u.role, u.status, u.notify_email, u.created_at,
             (SELECT COUNT(*) FROM passkeys p WHERE p.user_id = u.id) AS passkeys,
             (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id) AS sessions
        FROM users u ORDER BY u.name`,
@@ -121,6 +122,12 @@ users.patch("/:id", async (c) => {
   if (b.status !== undefined) {
     if (b.status !== "active" && b.status !== "disabled") fail(400, "Unknown status.");
     changes.status = b.status;
+  }
+  // Where job emails go, for people whose login is a username (Aaron, 2026-11-25: techs get job emails).
+  if (b.notify_email !== undefined) {
+    const v = typeof b.notify_email === "string" ? b.notify_email.trim().toLowerCase() : "";
+    if (v && !isEmail(v)) fail(400, "That email doesn't look right.");
+    changes.notify_email = v || null;
   }
   if (!Object.keys(changes).length) fail(400, "Nothing to change.");
   const cols = Object.keys(changes);

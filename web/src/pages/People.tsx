@@ -11,6 +11,7 @@ export function People({ me }: { me: Me }) {
   const audit = useLoad(() => api("/users/audit/recent"));
   const permList = useLoad(() => api("/users/permissions"));
   const [open, setOpen] = useState<string | null>(null);
+  const [mail, setMail] = useState<{ id: string; value: string } | null>(null);
   const [form, setForm] = useState({ name: "", email: "", role: "tech" });
   const [link, setLink] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -30,7 +31,7 @@ export function People({ me }: { me: Me }) {
   async function update(id: string, body: Record<string, unknown>) {
     try {
       await api(`/users/${encodeURIComponent(id)}`, { method: "PATCH", body });
-      toast(t("Saved. They've been signed out so the change applies right away."));
+      toast("notify_email" in body ? t("Saved") : t("Saved. They've been signed out so the change applies right away."));
       reload();
     } catch (x) {
       toast((x as Error).message);
@@ -85,7 +86,20 @@ export function People({ me }: { me: Me }) {
               return (
               <Fragment key={u.id}>
               <tr>
-                <td><b>{u.name}</b><div className="muted">{u.email}</div></td>
+                <td>
+                  <b>{u.name}</b><div className="muted">{u.email}</div>
+                  {mail?.id === u.id ? (
+                    <form className="row" style={{ gap: 6, marginTop: 4 }} onSubmit={(e) => { e.preventDefault(); update(u.id, { notify_email: mail!.value }); setMail(null); }}>
+                      <input type="email" value={mail!.value} onChange={(e) => setMail({ id: u.id, value: e.target.value })} placeholder={t("Email for job notices")} aria-label={t("Email for job notices")} />
+                      <button className="btn small" type="submit">{t("Save")}</button>
+                      <button className="btn small" type="button" onClick={() => setMail(null)}>{t("Cancel")}</button>
+                    </form>
+                  ) : (
+                    <button className="linkish small1" onClick={() => setMail({ id: u.id, value: u.notify_email ?? "" })}>
+                      {u.notify_email ? t("Job emails: {email}", { email: u.notify_email }) : u.email.includes("@") ? t("Job emails go to the login") : t("Add an email for job notices")}
+                    </button>
+                  )}
+                </td>
                 <td>
                   <select value={u.role} onChange={(e) => update(u.id, { role: e.target.value })} disabled={u.id === me.id} aria-label={t("Role for {name}", { name: u.name })}>
                     {Object.entries(roleNames).map(([k, v]) => <option key={k} value={k}>{v}</option>)}

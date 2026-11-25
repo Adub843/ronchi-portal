@@ -21,6 +21,10 @@ export interface Env {
   // knowledge base articles in; the help center can't call back. HELP_ADMIN_KEY is a secret.
   HELP?: Fetcher;
   HELP_ADMIN_KEY?: string;
+  // Job emails to techs (Cloudflare Email Service). Both are optional: without them the portal
+  // says "email isn't set up" and offers to send from the scheduler's own email app.
+  EMAIL?: SendEmail;
+  MAIL_FROM?: string;      // for example jobs@ronchiamerica.com, on a domain set up for Email Sending
 }
 
 export interface SessionUser {

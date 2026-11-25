@@ -388,3 +388,25 @@ body:has(.chat-compose) .alerts{bottom:calc(96px + env(safe-area-inset-bottom,0p
 .access.sheet{position:fixed;inset:0;z-index:200;overflow-y:auto;border:0;border-radius:0;
   padding:0 max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
 .access.sheet .access-head{position:sticky;top:0;background:var(--solid);padding:calc(14px + env(safe-area-inset-top,0px)) 0 10px;z-index:1;border-bottom:1px solid var(--line)}
+/* Tech jobs and the Ronchi workbook's Work orders */
+.addr{font-weight:600;white-space:pre-wrap}
+.small1{font-size:12px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--solid);border:1px solid var(--line);border-radius:99px;padding:3px 10px;font-size:13px}
+.chip button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0}
+.daychips{gap:6px}
+.techpick{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.filelist{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.filelist a{font-weight:600}
+.emailreport{border-left:4px solid var(--info)}
+.wo{position:relative}
+.wo.current{border-top:4px solid var(--accent)}
+.wo-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.wo-tag{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+.wo-num{font-size:15px;font-weight:600}
+.wo-date{font-weight:700}
+.wo-l{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px}
+.wo-grid{margin-top:12px}
+.wo-log{list-style:none;margin:0;padding:0 0 0 18px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:12px}
+.wo-log>li::before{content:"";position:absolute;left:-26px;top:20px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--bg)}
+@media (max-width:640px){.wo-grid{grid-template-columns:1fr}.jobs th:nth-child(4),.jobs td:nth-child(4){display:none}}
+@media print{.top,.side,.back,.pagehead .btn,.btn,.note{display:none!important}.panel{box-shadow:none;backdrop-filter:none}}
