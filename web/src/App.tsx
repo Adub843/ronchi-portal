@@ -24,10 +24,44 @@ import { Customers, Quotes } from "./pages/Customers";
 import { Settings } from "./pages/Settings";
 import { JobList, JobPage, NewJob } from "./pages/Jobs";
 import { WorkOrderPage, WorkOrders } from "./pages/WorkOrders";
+import { BillingWeek } from "./pages/Workbook";
 import { Learn } from "./pages/Learn";
 import { NewShipment, ShipmentPage, Shipping } from "./pages/Shipping";
-import { menuFor } from "./nav";
+import { menuFor, pageAllowed } from "./nav";
 import { roleLabel, useRoleNames } from "./roles";
+
+// Chrome and Edge offer to install the portal as an app (own window, icon on the desktop or home screen).
+// The offer arrives once, early, so it is kept here until someone picks "Install as an app".
+interface InstallOffer extends Event { prompt: () => Promise<void> }
+let installOffer: InstallOffer | null = null;
+const installListeners = new Set<() => void>();
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  installOffer = e as InstallOffer;
+  installListeners.forEach((f) => f());
+});
+window.addEventListener("appinstalled", () => {
+  installOffer = null;
+  installListeners.forEach((f) => f());
+});
+function useInstallPrompt() {
+  const [ready, setReady] = useState(() => !!installOffer);
+  useEffect(() => {
+    const f = () => setReady(!!installOffer);
+    installListeners.add(f);
+    return () => void installListeners.delete(f);
+  }, []);
+  return {
+    ready,
+    run: async () => {
+      const offer = installOffer;
+      if (!offer) return;
+      installOffer = null;
+      setReady(false);
+      await offer.prompt().catch(() => undefined);
+    },
+  };
+}
 
 export const DEFAULT_PREFS: Prefs = { theme: "ronchi", mode: "auto", layout: "L2", tiles: null, lang: "en", popups: true };
 
@@ -40,6 +74,7 @@ export function App() {
   const [unread, setUnread] = useState<Unread>({ boards: 0, chats: 0 });
   const [sound, setSoundState] = useState(soundOn);
   // Whole parts of the portal an admin can switch off (Settings). The Ronchi workbook is on unless switched off.
+  const install = useInstallPrompt();
   const [switches, setSwitches] = useState<{ workbook: boolean }>({ workbook: true });
 
   const refresh = () => api<{ user: Me | null; settings?: Me["settings"] }>("/auth/me").then((r) => setMe(r.user ? { ...r.user, settings: r.settings } : null), () => setMe(null));
@@ -97,6 +132,7 @@ export function App() {
   else if (m?.[1] === "machines") page = <MachinePage id={m[2]!} me={me} />;
   else if (path === "/jobs/new") page = <NewJob me={me} />;
   else if (m?.[1] === "jobs") page = <JobPage key={m[2]} id={m[2]!} me={me} />;
+  else if (path === "/work-orders/billing" && switches.workbook) page = <BillingWeek me={me} />;
   else if (m?.[1] === "work-orders" && switches.workbook) page = <WorkOrderPage key={m[2]} id={m[2]!} me={me} />;
   else if (m?.[1] === "work-orders") page = <JobPage key={m[2]} id={m[2]!} me={me} />;
   else if (section === "/jobs") page = <JobList me={me} base="/jobs" title={t("Jobs")} sub={t("Field service visits: who is going where, and when.")} />;
@@ -119,6 +155,15 @@ export function App() {
   else if (section === "/learn") page = <Learn me={me} />;
   else if (section === "/settings") page = <Settings me={me} admin={path === "/settings/admin"} prefs={prefs} switches={switches} onSwitches={setSwitches} onPrefs={savePrefs} onSignOut={signOut} sound={sound} onSound={(on) => { setSound(on); setSoundState(on); }} onSettings={(s) => setMe({ ...me, settings: s })} />;
   else page = <Home me={me} unread={unread} />;
+  if (!pageAllowed(path, new Set(me.permissions))) {
+    page = (
+      <section>
+        <h1>{t("No access")}</h1>
+        <p className="sub">{t("Your role doesn't allow this.")} {t("Ask an admin if you need it.")}</p>
+        <Link to="/" className="btn">{t("Home")}</Link>
+      </section>
+    );
+  }
 
   const account: MenuItem[] = [
     { heading: me.name, sub: me.email },
@@ -128,6 +173,7 @@ export function App() {
     { label: t("Alert sound"), role: "checkbox", checked: sound, onSelect: () => { setSound(!sound); setSoundState(!sound); } },
     { label: t("Mark all chats and boards read"), onSelect: async () => { await api("/boards/read-all", { body: {} }).catch(() => undefined); setUnread({ boards: 0, chats: 0 }); toast(t("All marked as read")); }, hidden: !can(me, "boards.use") },
     "sep",
+    { label: t("Install as an app"), onSelect: install.run, hidden: !install.ready },
     { label: t("Portal training"), onSelect: () => navigate("/learn") },
     { label: t("Settings"), onSelect: () => navigate("/settings") },
     { label: t("Command center"), hint: t("Owner"), onSelect: () => navigate("/settings/admin"), hidden: !can(me, "settings.manage") },

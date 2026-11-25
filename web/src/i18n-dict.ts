@@ -5,6 +5,7 @@ import { ADMIN_ES, ADMIN_IT } from "./i18n-admin";
 import { SHIPPING_DYNAMIC, SHIPPING_ES, SHIPPING_IT } from "./i18n-shipping";
 import { SOFTWARE_DYNAMIC, SOFTWARE_ES, SOFTWARE_IT } from "./i18n-software";
 import { PARTS_ORDERS_DYNAMIC, PARTS_ORDERS_ES, PARTS_ORDERS_IT } from "./i18n-parts-orders";
+import { WORKBOOK_DYNAMIC, WORKBOOK_ES, WORKBOOK_IT } from "./i18n-workbook";
 import { THEME_ES, THEME_IT } from "./i18n-themes";
 import { THEMES } from "../../src/shared/themes";
 
@@ -553,6 +554,13 @@ export const ES: Record<string, string> = {
   "{n} unread": "{n} sin leer",
   "{p} passkey(s), {s} signed in": "{p} llave(s) de acceso, {s} con sesión iniciada",
   "Home": "Inicio",
+  "No access": "Sin acceso",
+  "No jobs for this machine yet.": "Todavía no hay trabajos para esta máquina.",
+  "Open this machine's parts catalog ({n} sheets)": "Abrir el catálogo de piezas de esta máquina ({n} hojas)",
+  "No parts catalog for this machine yet.": "Todavía no hay catálogo de piezas para esta máquina.",
+  "No notes for this machine yet.": "Todavía no hay notas para esta máquina.",
+  "Install as an app": "Instalar como aplicación",
+  "Ask an admin if you need it.": "Pida acceso a un administrador si lo necesita.",
   "Billing": "Facturación",
   "Scheduling": "Programación",
   "Service": "Servicio",
@@ -1463,6 +1471,13 @@ export const IT: Record<string, string> = {
   "{n} unread": "{n} da leggere",
   "{p} passkey(s), {s} signed in": "{p} passkey, {s} con accesso attivo",
   "Home": "Home",
+  "No access": "Accesso non consentito",
+  "No jobs for this machine yet.": "Ancora nessun lavoro per questa macchina.",
+  "Open this machine's parts catalog ({n} sheets)": "Apri il catalogo ricambi di questa macchina ({n} tavole)",
+  "No parts catalog for this machine yet.": "Ancora nessun catalogo ricambi per questa macchina.",
+  "No notes for this machine yet.": "Ancora nessuna nota per questa macchina.",
+  "Install as an app": "Installa come app",
+  "Ask an admin if you need it.": "Se ti serve, chiedi a un amministratore.",
   "Billing": "Fatturazione",
   "Scheduling": "Pianificazione",
   "Service": "Assistenza",
@@ -2043,6 +2058,9 @@ DYNAMIC.push("Command center", "Every switch and control for the portal. The por
 Object.assign(ES, SOFTWARE_ES);
 Object.assign(IT, SOFTWARE_IT);
 DYNAMIC.push(...SOFTWARE_DYNAMIC);
+Object.assign(ES, WORKBOOK_ES);
+Object.assign(IT, WORKBOOK_IT);
+DYNAMIC.push(...WORKBOOK_DYNAMIC);
 
 // The look descriptions in Settings (i18n-themes.ts).
 Object.assign(ES, THEME_ES);

@@ -32,11 +32,27 @@ machines.get("/:id", async (c) => {
   const orders = has(c.get("user"), "orders.view")
     ? (await c.env.DB.prepare("SELECT id, part, status, ship_date, updated_at FROM cp_orders WHERE instr(upper(machine), ?) > 0 AND phase = 'order' AND removed_at IS NULL ORDER BY updated_at DESC").bind(m.serial).all()).results
     : null;
+  // The rest of the portal's record for this machine, each part only for people allowed to see it:
+  // its jobs (the workbook's work orders), knowledge-base notes and the parts catalog.
+  const u = c.get("user");
+  const db = c.env.DB;
+  const serial = String(m.serial);
+  const [jobs, notes, catalog] = await Promise.all([
+    has(u, "jobs.view")
+      ? db.prepare("SELECT id, job_number, customer, status, first_day, last_day FROM jobs WHERE machine = ? COLLATE NOCASE AND status != 'cancelled' ORDER BY first_day IS NULL, first_day DESC LIMIT 100").bind(serial).all().then((r) => r.results)
+      : null,
+    has(u, "kb.view")
+      ? db.prepare("SELECT id, code, kind, title, updated_at FROM kb_articles WHERE serial = ? COLLATE NOCASE AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 50").bind(serial).all().then((r) => r.results)
+      : null,
+    has(u, "catalog.view")
+      ? db.prepare("SELECT COUNT(*) AS sheets FROM catalog_sheets WHERE machine_id = ?").bind(m.id).first<{ sheets: number }>().then((r) => ({ sheets: r?.sheets ?? 0 }))
+      : null,
+  ]);
   // Spare parts orders for this machine, only for people who may see parts orders.
-  const partsOrders = has(c.get("user"), "partsorders.view")
-    ? (await c.env.DB.prepare("SELECT id, 'P-' || seq AS number, customer, status, customer_po, updated_at FROM parts_orders WHERE machine = ? AND removed_at IS NULL ORDER BY updated_at DESC LIMIT 100").bind(String(m.serial).toUpperCase()).all()).results
+  const partsOrders = has(u, "partsorders.view")
+    ? (await db.prepare("SELECT id, 'P-' || seq AS number, customer, status, customer_po, updated_at FROM parts_orders WHERE machine = ? AND removed_at IS NULL ORDER BY updated_at DESC LIMIT 100").bind(serial.toUpperCase()).all()).results
     : undefined;
-  return c.json({ machine: m, boards: boards.results, orders, partsOrders });
+  return c.json({ machine: m, boards: boards.results, orders, jobs, notes, catalog, partsOrders });
 });
 
 function fields(b: Record<string, unknown>) {

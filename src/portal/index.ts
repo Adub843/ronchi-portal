@@ -28,6 +28,7 @@ import { prefs } from "./routes/prefs";
 import { settings } from "./routes/settings";
 import { shipping } from "./routes/shipping";
 import { software } from "./routes/software";
+import { workbook } from "./routes/workbook";
 import { users } from "./routes/users";
 
 const HEADERS = securityHeaders({ csp: PORTAL_CSP });
@@ -82,6 +83,7 @@ app.route("/api/switches", switches);
 app.route("/api/links", links);
 app.route("/api/software", software);
 app.route("/api/shipping", shipping);
+app.route("/api/workbook", workbook);
 
 app.all("/api/*", () => fail(404, "Not found."));
 

@@ -56,7 +56,7 @@ export function ChangeParts({ me, tab }: { me: Me; tab?: "sales" | "orders" }) {
 }
 
 function OrderList({ me }: { me: Me }) {
-  const { data, error, reload } = useLoad<{ orders: Order[] }>(() => api("/change-parts"));
+  const { data, error, reload } = useLoad<{ orders: Order[] }>(() => api("/change-parts"), [], { live: true });
   const [view, setView] = useState<View>("open");
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
@@ -502,7 +502,7 @@ const HISTORY: Record<string, string> = {
 };
 
 export function ChangePartPage({ id, me }: { id: string; me: Me }) {
-  const { data, error, reload } = useLoad<{ order: Order & Record<string, any>; history: any[] }>(() => api(`/change-parts/${encodeURIComponent(id)}`), [id]);
+  const { data, error, reload } = useLoad<{ order: Order & Record<string, any>; history: any[] }>(() => api(`/change-parts/${encodeURIComponent(id)}`), [id], { live: true });
   const [editing, setEditing] = useState(false);
   const [selling, setSelling] = useState(false);
   const [sure, setSure] = useState(false);

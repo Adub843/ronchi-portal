@@ -144,6 +144,17 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
+    id: "install-app", area: "basics", needs: [],
+    title: T("Put the portal on your phone or desktop as an app", "Poner el portal como aplicación en su teléfono o escritorio", "Mettere il portale come app sul telefono o sul desktop"),
+    summary: T("The portal can open in its own window with a Ronchi icon, like any other app. Nothing to download from a store.", "El portal puede abrirse en su propia ventana con un icono de Ronchi, como cualquier aplicación. No hay que descargar nada de una tienda.", "Il portale può aprirsi in una sua finestra con l'icona Ronchi, come qualsiasi app. Niente da scaricare da uno store."),
+    steps: [
+      T("On a computer or Android phone (Chrome or Edge): open the account menu at the top right and press Install as an app.", "En computadora o teléfono Android (Chrome o Edge): abra el menú de la cuenta arriba a la derecha y pulse Instalar como aplicación.", "Su computer o telefono Android (Chrome o Edge): apri il menu dell'account in alto a destra e premi Installa come app."),
+      T("On an iPhone (Safari): press Share, then Add to Home Screen.", "En iPhone (Safari): pulse Compartir y luego Agregar a pantalla de inicio.", "Su iPhone (Safari): premi Condividi, poi Aggiungi alla schermata Home."),
+      T("Open the portal from the new icon. You stay signed in, and it always shows the latest version.", "Abra el portal desde el icono nuevo. Su sesión sigue iniciada y siempre muestra la versión más reciente.", "Apri il portale dalla nuova icona. Resti collegato e mostra sempre la versione più recente."),
+    ],
+    tip: T("No Install as an app in the menu? It's already installed, or this browser doesn't offer it. Use the browser's own menu instead.", "¿No aparece Instalar como aplicación en el menú? Ya está instalada o este navegador no lo ofrece. Use el menú del propio navegador.", "Non vedi Installa come app nel menu? È già installata o questo browser non lo offre. Usa il menu del browser."),
+  },
+  {
     id: "lost-device", area: "basics", needs: [], open: "/settings",
     title: T("Sign out a lost phone", "Cerrar la sesión de un teléfono perdido", "Disconnettere un telefono perso"),
     summary: T("If a phone or computer is lost or replaced, take its sign-in away.", "Si pierde o cambia un teléfono o computadora, quítele el acceso.", "Se un telefono o computer è perso o sostituito, togli il suo accesso."),
@@ -321,6 +332,27 @@ export const GUIDES: Guide[] = [
       T("Use Print or save as PDF, or Download the log (CSV).", "Use Imprimir o guardar como PDF, o Descargar el registro (CSV).", "Usa Stampa o salva in PDF, o Scarica il registro (CSV)."),
     ],
     tip: T("If an admin switches the Ronchi workbook off, Work orders leaves the menu but jobs keep working.", "Si un administrador apaga el cuaderno de trabajo Ronchi, Órdenes de trabajo sale del menú pero los trabajos siguen funcionando.", "Se un amministratore spegne il quaderno di lavoro Ronchi, Ordini di lavoro sparisce dal menu ma i lavori continuano a funzionare."),
+  },
+  {
+    id: "fill-work-order", area: "jobs", needs: ["jobs.view"], open: "/work-orders",
+    title: T("Fill in the service report on a work order", "Llenar el informe de servicio en una orden de trabajo", "Compilare il rapporto di assistenza in un ordine di lavoro"),
+    summary: T("The Ronchi workbook lives in each work order: daily log, photos, billable hours, expenses and the customer's signature. It saves as you go.", "El cuaderno de trabajo Ronchi vive en cada orden de trabajo: registro diario, fotos, horas facturables, gastos y la firma del cliente. Se guarda mientras escribe.", "Il quaderno di lavoro Ronchi è in ogni ordine di lavoro: registro giornaliero, foto, ore fatturabili, spese e firma del cliente. Si salva mentre scrivi."),
+    steps: [
+      T("Open your job's work order. Pick the type of work and add each day to the Daily work log, with any issues found (one per line).", "Abra la orden de trabajo de su trabajo. Elija el tipo de trabajo y agregue cada día al Registro diario, con los problemas encontrados (uno por línea).", "Apri l'ordine di lavoro del tuo lavoro. Scegli il tipo di lavoro e aggiungi ogni giorno al Registro giornaliero, con i problemi trovati (uno per riga)."),
+      T("Add photos of the machine and the recipe screens, with a caption.", "Agregue fotos de la máquina y de las pantallas de receta, con una leyenda.", "Aggiungi foto della macchina e delle schermate delle ricette, con una didascalia."),
+      T("Enter each day's billable hours (what the customer is billed for, not a time clock) and your expenses with a receipt photo.", "Anote las horas facturables de cada día (lo que se le factura al cliente, no un reloj de fichaje) y sus gastos con foto del recibo.", "Inserisci le ore fatturabili di ogni giorno (ciò che si fattura al cliente, non una timbratura) e le spese con la foto della ricevuta."),
+      T("Have the customer sign on the screen, then press Submit. The office gets the report and each issue becomes a quick note on the machine.", "Pida al cliente que firme en la pantalla y pulse Enviar. La oficina recibe el informe y cada problema se convierte en una nota rápida de la máquina.", "Fai firmare il cliente sullo schermo, poi premi Invia. L'ufficio riceve il rapporto e ogni problema diventa una nota rapida sulla macchina."),
+    ],
+    tip: T("Use Open the job chat to talk with everyone on the job. After Submit the report locks; a scheduler can reopen it.", "Use Abrir el chat del trabajo para hablar con todos los del trabajo. Después de Enviar el informe se bloquea; un programador puede reabrirlo.", "Usa Apri la chat del lavoro per parlare con tutti quelli del lavoro. Dopo Invia il rapporto si blocca; un pianificatore può riaprirlo."),
+  },
+  {
+    id: "billing-week", area: "jobs", needs: ["jobs.view", "workbook.billing"], open: "/work-orders",
+    title: T("Bill customers from work orders", "Facturar a los clientes desde las órdenes de trabajo", "Fatturare ai clienti dagli ordini di lavoro"),
+    summary: T("Every field service engineer's billable hours and expenses, one week at a time.", "Las horas facturables y los gastos de cada ingeniero de servicio de campo, semana por semana.", "Ore fatturabili e spese di ogni ingegnere di assistenza sul campo, una settimana alla volta."),
+    steps: [
+      T("Open Work orders and press Billing from work orders.", "Abra Órdenes de trabajo y pulse Facturación desde las órdenes de trabajo.", "Apri Ordini di lavoro e premi Fatturazione dagli ordini di lavoro."),
+      T("Move between weeks, open a job to see its report, and press Download (CSV) for your invoicing.", "Cambie de semana, abra un trabajo para ver su informe y pulse Descargar (CSV) para facturar.", "Spostati tra le settimane, apri un lavoro per vedere il rapporto e premi Scarica (CSV) per la fatturazione."),
+    ],
   },
 
   // ---------- Knowledge base ----------

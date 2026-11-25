@@ -23,7 +23,7 @@ export function KnowledgeBase({ me }: { me: Me }) {
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const params = new URLSearchParams({ q: query, ...filters }).toString();
-  const { data, error, reload } = useLoad(() => api(`/kb?${params}`), [params]);
+  const { data, error, reload } = useLoad(() => api(`/kb?${params}`), [params], { live: true });
   const file = useRef<HTMLInputElement>(null);
   const [showFilters, setShowFilters] = useState(false);
 
@@ -155,7 +155,7 @@ export function KbArticle({ id, me }: { id: string; me: Me }) {
 }
 
 function KbView({ id, me }: { id: string; me: Me }) {
-  const { data, error, reload } = useLoad(() => api(`/kb/${encodeURIComponent(id)}`), [id]);
+  const { data, error, reload } = useLoad(() => api(`/kb/${encodeURIComponent(id)}`), [id], { live: true });
   // The names customers won't see in this article (they get [customer] or [site] instead).
   const forCustomers = data?.article?.audience === "customer";
   const preview = useLoad(() => (forCustomers ? api(`/kb/${encodeURIComponent(id)}/scan`, { body: {} }) : Promise.resolve(null)), [id, forCustomers, data?.article?.updated_at]);

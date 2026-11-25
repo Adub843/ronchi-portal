@@ -57,7 +57,8 @@ export type Permission =
   | "jobs.view"           // see field service jobs and their machine history, and add files to them
   | "jobs.schedule"       // schedule jobs, choose the field service engineers, send the job emails
   | "shipping.view"       // see shipments going out and coming in, track them, add photos and papers
-  | "shipping.edit";      // make and change shipments, mark them shipped, check deliveries in
+  | "shipping.edit"      // make and change shipments, mark them shipped, check deliveries in
+  | "workbook.billing";   // see every engineer's billable hours and expenses across jobs, and export them
 
 const ALL: Permission[] = [
   "settings.manage", "users.manage", "audit.view", "machines.view", "machines.add", "machines.edit",
@@ -67,7 +68,7 @@ const ALL: Permission[] = [
   "partsorders.view", "partsorders.add", "partsorders.edit", "partsorders.remove", "partsorders.prices", "partsorders.reports", "partsorders.export",
   "kb.view", "kb.write", "kb.edit_all", "kb.import", "kb.publish",
   "software.view", "software.manage",
-  "jobs.view", "jobs.schedule",
+  "jobs.view", "jobs.schedule", "workbook.billing",
   "shipping.view", "shipping.edit",
 ];
 
@@ -81,7 +82,7 @@ export const PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
   admin: new Set(ALL),
   manager: new Set(MANAGER),
   // Billing (Lola) types the QuickBooks invoice number and needs the prices to bill.
-  billing: new Set([...STAFF_BASE, "quotes.manage", "partsorders.view", "partsorders.edit", "partsorders.prices", "partsorders.reports", "partsorders.export"]),
+  billing: new Set([...STAFF_BASE, "quotes.manage", "workbook.billing", "partsorders.view", "partsorders.edit", "partsorders.prices", "partsorders.reports", "partsorders.export"]),
   // Scheduling (Meagan) also handles parts: she can take orders and track arrivals, without prices.
   scheduling: new Set([...STAFF_BASE, "jobs.schedule", "shipping.edit", "partsorders.view", "partsorders.add", "partsorders.edit", "partsorders.export"]),
   service: new Set([...STAFF_BASE, "machines.add", "machines.edit", "boards.moderate", "catalog.edit", "catalog.publish", "customers.manage", "customers.invite", "quotes.manage", "kb.edit_all", "kb.import", "kb.publish", "jobs.schedule", "shipping.edit"]),
@@ -234,6 +235,7 @@ export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label:
   { group: "Field service jobs", perms: [
     { id: "jobs.view", label: "See jobs", hint: "Field service jobs, each job's machine history, and adding files to a job." },
     { id: "jobs.schedule", label: "Schedule jobs", hint: "Make and change jobs, choose the field service engineers and send the job emails." },
+    { id: "workbook.billing", label: "Billing from work orders", hint: "See every field service engineer's billable hours and expenses by week, and download them for invoicing." },
   ] },
   { group: "Shipping and receiving", perms: [
     { id: "shipping.view", label: "See shipments", hint: "What is going out and coming in, tracking links, and adding photos and papers." },

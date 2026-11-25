@@ -23,7 +23,8 @@ const fileHref = (f: FileRow) => f.url ?? `/api/software/files/${encodeURICompon
 // ---------- Tiles on the knowledge base page ----------
 
 export function SoftwareShelf({ me }: { me: Me }) {
-  const { data, error, reload } = useLoad<{ packages: Pkg[] }>(() => api("/software"), []);
+  // No request without the permission: it would only be refused (and counts toward Cloudflare's daily allowance).
+  const { data, error, reload } = useLoad<{ packages: Pkg[] }>(() => (can(me, "software.view") ? api("/software") : Promise.resolve({ packages: [] })), []);
   const [open, setOpen] = useState<Pkg | null>(null);
   const [uploading, setUploading] = useState(false);
   if (!can(me, "software.view")) return null;
