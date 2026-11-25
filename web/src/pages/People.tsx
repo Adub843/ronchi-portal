@@ -1,5 +1,6 @@
 // Paolo's page: invite people, set roles, and cut off access.
-import { useState } from "react";
+import { Fragment, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { api, fmtTime, type Me } from "../api";
 import { t } from "../i18n";
 import { ErrorNote, PageHead, toast, useLoad } from "../components/ui";
@@ -8,6 +9,8 @@ export function People({ me }: { me: Me }) {
   const { data, error, reload } = useLoad(() => api("/users"));
   const roles = useLoad(() => api("/users/roles"));
   const audit = useLoad(() => api("/users/audit/recent"));
+  const permList = useLoad(() => api("/users/permissions"));
+  const [open, setOpen] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", email: "", role: "tech" });
   const [link, setLink] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -76,24 +79,35 @@ export function People({ me }: { me: Me }) {
         <table>
           <thead><tr><th>{t("Name")}</th><th>{t("Role")}</th><th>{t("Status")}</th><th>{t("Devices")}</th><th /></tr></thead>
           <tbody>
-            {data?.users.map((u: any) => (
-              <tr key={u.id}>
+            {data?.users.map((u: any) => {
+              const changed = Object.keys(u.access ?? {}).length;
+              const adjustable = u.role !== "admin" && u.id !== me.id;
+              return (
+              <Fragment key={u.id}>
+              <tr>
                 <td><b>{u.name}</b><div className="muted">{u.email}</div></td>
                 <td>
                   <select value={u.role} onChange={(e) => update(u.id, { role: e.target.value })} disabled={u.id === me.id} aria-label={t("Role for {name}", { name: u.name })}>
                     {Object.entries(roleNames).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
+                  {changed > 0 && <div className="access-note">{changed === 1 ? t("1 change from the role") : t("{n} changes from the role", { n: changed })}</div>}
                 </td>
                 <td><span className={`pill ${u.status === "active" ? "p-ok" : "p-acc"}`}>{u.status === "active" ? t("active") : t("disabled")}</span></td>
                 <td className="muted">{t("{p} passkey(s), {s} signed in", { p: u.passkeys, s: u.sessions })}</td>
                 <td className="row" style={{ gap: 6 }}>
+                  {adjustable && <button className={`btn small${open === u.id ? " on" : ""}`} aria-expanded={open === u.id} onClick={() => setOpen(open === u.id ? null : u.id)}>{t("Access")}</button>}
                   <button className="btn small" onClick={() => signOutAll(u.id)}>{t("Sign out everywhere")}</button>
                   {u.id !== me.id && (
                     <button className="btn small danger" onClick={() => update(u.id, { status: u.status === "active" ? "disabled" : "active" })}>{u.status === "active" ? t("Disable") : t("Re-enable")}</button>
                   )}
                 </td>
               </tr>
-            ))}
+              {open === u.id && permList.data && (
+                <tr className="access-row"><td colSpan={5}><Access person={u} roleName={roleNames[u.role] ?? u.role} list={permList.data} onSaved={reload} onClose={() => setOpen(null)} /></td></tr>
+              )}
+              </Fragment>
+              );
+            })}
           </tbody>
         </table>
         {!!data?.invites.length && (
@@ -121,4 +135,98 @@ export function People({ me }: { me: Me }) {
       </div>
     </>
   );
+}
+
+type PermList = { groups: { group: string; perms: { id: string; label: string; hint: string; adjustable: boolean }[] }[]; byRole: Record<string, string[]> };
+
+/** Switch single permissions on or off for one person, on top of their role. */
+function Access({ person, roleName, list, onSaved, onClose }: { person: any; roleName: string; list: PermList; onSaved: () => void; onClose: () => void }) {
+  const [changes, setChanges] = useState<Record<string, boolean>>(person.access ?? {});
+  const [busy, setBusy] = useState(false);
+  const fromRole = new Set(list.byRole[person.role] ?? []);
+
+  async function save(body: Record<string, unknown>) {
+    setBusy(true);
+    try {
+      const r = await api(`/users/${encodeURIComponent(person.id)}/access`, { method: "PUT", body });
+      setChanges(r.changes);
+      onSaved();
+    } catch (x) {
+      toast((x as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const set = (perm: string, value: boolean | null) => save({ changes: { [perm]: value } });
+  const count = Object.keys(changes).length;
+  const phone = usePhone();
+  useEffect(() => {
+    if (!phone) return;
+    const was = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    addEventListener("keydown", esc);
+    return () => { document.body.style.overflow = was; removeEventListener("keydown", esc); };
+  }, [phone, onClose]);
+
+  const panel = (
+    <div className={`access${phone ? " sheet" : ""}`} role={phone ? "dialog" : undefined} aria-modal={phone || undefined} aria-label={t("What {name} can do", { name: person.name })}>
+      <div className="access-head">
+        <div>
+          <b>{t("What {name} can do", { name: person.name })}</b>
+          <div className="muted">{t("Starts from the role {role}. Switch anything on or off for this person only. It applies on their next click.", { role: roleName })}</div>
+        </div>
+        <div className="row" style={{ gap: 6 }}>
+          {count > 0 && <button className="btn small" disabled={busy} onClick={() => save({ reset: true })}>{t("Back to the role")}</button>}
+          <button className="btn small" onClick={onClose}>{t("Done")}</button>
+        </div>
+      </div>
+      <div className="access-groups">
+        {list.groups.map((g) => (
+          <section key={g.group} className="access-group">
+            <h3>{t(g.group)}</h3>
+            {g.perms.map((p) => {
+              const own = changes[p.id];
+              const role = fromRole.has(p.id);
+              const on = own ?? role;
+              return (
+                <div key={p.id} className={`access-perm${own !== undefined ? " changed" : ""}`}>
+                  <span className={`access-dot${on ? " on" : ""}`} aria-hidden="true" />
+                  <div className="access-text">
+                    <span>{t(p.label)}</span>
+                    <small className="muted">{t(p.hint)}</small>
+                  </div>
+                  {p.adjustable ? (
+                    <div className="seg" role="radiogroup" aria-label={t(p.label)}>
+                      <button type="button" role="radio" aria-checked={own === undefined} disabled={busy} className={own === undefined ? "on" : ""} onClick={() => set(p.id, null)}>
+                        {role ? t("Role: on") : t("Role: off")}
+                      </button>
+                      <button type="button" role="radio" aria-checked={own === true} disabled={busy} className={own === true ? "on" : ""} onClick={() => set(p.id, true)}>{t("On")}</button>
+                      <button type="button" role="radio" aria-checked={own === false} disabled={busy} className={own === false ? "on" : ""} onClick={() => set(p.id, false)}>{t("Off")}</button>
+                    </div>
+                  ) : (
+                    <span className="access-lock">{t("Admins only")}</span>
+                  )}
+                </div>
+              );
+            })}
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+  return phone ? createPortal(panel, document.body) : panel;
+}
+
+/** True on phone-width screens, where the people table scrolls sideways. */
+function usePhone(): boolean {
+  const q = "(max-width: 700px)";
+  const [on, setOn] = useState(() => matchMedia(q).matches);
+  useEffect(() => {
+    const m = matchMedia(q);
+    const f = () => setOn(m.matches);
+    m.addEventListener("change", f);
+    return () => m.removeEventListener("change", f);
+  }, []);
+  return on;
 }

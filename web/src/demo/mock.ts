@@ -3,7 +3,7 @@
 // can be clicked through without a server. Signed in as Aaron Lewis, admin.
 import logoUrl from "../assets/ronchi-logo.png";
 import { cleanName, fileInfo, fileProblem } from "../../../src/shared/files";
-import { PERMISSIONS, ROLES } from "../../../src/portal/lib/roles";
+import { adjustable, effective, isPermission, PERMISSION_GROUPS, PERMISSIONS, ROLES, type AccessChanges } from "../../../src/portal/lib/roles";
 import { CP_FIELDS, isOpen, readOrdersCsv } from "../../../src/shared/change-parts";
 import { KbFail, kbRoute, resetKb } from "./kb-mock";
 type Role = keyof typeof ROLES;
@@ -18,7 +18,7 @@ const daysAgo = (n: number, h: number, m = 0) => {
   return d;
 };
 
-interface User { id: string; email: string; name: string; role: Role; status: string; created_at: string }
+interface User { id: string; email: string; name: string; role: Role; status: string; created_at: string; access?: AccessChanges }
 interface DB {
   users: User[];
   invites: any[];
@@ -65,6 +65,7 @@ function seed(): DB {
     u("Steve Williams", "service", "steve@ronchiamerica.com"),
     u("Andrew Yang", "sales", "andrew@ronchiamerica.com"),
     u("Michele Falsini", "sales", "michele@ronchiamerica.com"),
+    u("Morad Rabah", "engineering", "morad@ronchiamerica.com"),
     // The rest of the field team (Aaron, 2026-11-24), and the visiting techs from Erre Enne in Italy.
     u("Elim Ramirez", "tech", "ElimR"),
     u("Andrew Jackson", "tech", "AndrewJ"),
@@ -210,8 +211,25 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   }
   // --- people ---
   if (path === "/users/roles") return { roles: ROLES };
+  if (path === "/users/permissions")
+    return { groups: PERMISSION_GROUPS.map((g) => ({ ...g, perms: g.perms.map((p) => ({ ...p, adjustable: adjustable(p.id) })) })), byRole: Object.fromEntries(Object.entries(PERMISSIONS).map(([r, s]) => [r, [...s]])) };
+  if (seg[0] === "users" && seg[2] === "access" && method === "PUT") {
+    const t = db.users.find((x) => x.id === seg[1]);
+    if (!t) throw new Fail(404, "Not found.");
+    if (t.id === u.id) throw new Fail(400, "You can't change your own access. Ask another admin.");
+    if (t.role === "admin") throw new Fail(400, "Admins always have everything. Change their role first.");
+    const next: AccessChanges = body.reset ? {} : { ...(t.access ?? {}) };
+    for (const [perm, on] of Object.entries(body.changes ?? {})) {
+      if (!isPermission(perm) || !adjustable(perm)) throw new Fail(400, "Managing people and the audit log stay with admins. Make them an admin instead.");
+      if (on === null) delete next[perm];
+      else next[perm] = !!on;
+    }
+    t.access = next;
+    log("user.access");
+    return { changes: next, permissions: [...effective(t.role, next)] };
+  }
   if (path === "/users" && method === "GET")
-    return { users: db.users.map((x) => ({ ...x, passkeys: 1 + (x.id === u.id ? 1 : 0), sessions: x.status === "active" ? 1 : 0 })), invites: db.invites };
+    return { users: db.users.map((x) => ({ ...x, access: x.role === "admin" ? {} : (x.access ?? {}), permissions: [...effective(x.role, x.access)], passkeys: 1 + (x.id === u.id ? 1 : 0), sessions: x.status === "active" ? 1 : 0 })), invites: db.invites };
   if (path === "/users/invite") {
     if (!body.name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email ?? "")) throw new Fail(400, "Enter a name and a valid email.");
     db.invites.unshift({ id: id(), email: body.email, name: body.name, role: body.role, expires_at: iso(new Date(Date.now() + 72 * 3600000)) });

@@ -5,8 +5,7 @@ import { randomId } from "../../shared/crypto";
 import { MACHINE_SERIAL } from "../../shared/service-report";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
-import { body, fail, mustStr, requirePerm, str } from "../lib/http";
-import { can } from "../lib/roles";
+import { body, fail, mustStr, requirePerm, str, has } from "../lib/http";
 
 export const machines = new Hono<AppEnv>();
 
@@ -30,7 +29,7 @@ machines.get("/:id", async (c) => {
   if (!m) fail(404, "Not found.");
   const boards = await c.env.DB.prepare("SELECT id, name FROM boards WHERE machine_id = ? AND archived_at IS NULL").bind(c.req.param("id")).all();
   // Change-part orders for this machine, only for people who may see orders.
-  const orders = can(c.get("user")?.role, "orders.view")
+  const orders = has(c.get("user"), "orders.view")
     ? (await c.env.DB.prepare("SELECT id, part, status, ship_date, updated_at FROM cp_orders WHERE instr(upper(machine), ?) > 0 AND removed_at IS NULL ORDER BY updated_at DESC").bind(m.serial).all()).results
     : null;
   return c.json({ machine: m, boards: boards.results, orders });

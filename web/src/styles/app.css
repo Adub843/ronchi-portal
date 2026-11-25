@@ -357,3 +357,34 @@ body:has(.chat-compose) .alerts{bottom:calc(96px + env(safe-area-inset-bottom,0p
 .kb-aud label{display:inline-flex;gap:6px;align-items:center;margin-right:14px;font-weight:500}
 .touch-filters{display:none}
 @media (max-width:720px){.kb-issuefix{grid-template-columns:1fr}.touch-filters{display:inline-flex;margin-bottom:10px}.kb .facet{display:none}.kb .facet.open{display:flex}.kb-results{padding:4px 14px}}
+
+/* People > Access: switch single permissions per person */
+.access-note{font-size:11.5px;color:var(--accent);margin-top:4px;font-weight:600}
+.btn.small.on{border-color:var(--accent);color:var(--accent)}
+.tbl tr.access-row>td{padding:0 0 14px;border-bottom:1px solid var(--line)}
+.access{background:var(--solid);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.access-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.access-head .muted{font-size:12.5px;max-width:62ch;margin-top:2px}
+.access-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:12px}
+.access-group{border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.access-group h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:4px 0 6px;font-weight:600}
+.access-perm{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.access-perm:first-of-type{border-top:0}
+.access-dot{width:8px;height:8px;border-radius:99px;background:var(--line);flex:none}
+.access-dot.on{background:var(--ok)}
+.access-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.access-text span{font-size:13.5px;font-weight:500}
+.access-text small{font-size:11.5px;line-height:1.35}
+.access-perm.changed .access-text span::after{content:"";display:inline-block;width:6px;height:6px;border-radius:99px;background:var(--accent);margin-left:6px;vertical-align:middle}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:none}
+.seg button{font:inherit;font-size:12px;padding:5px 9px;background:transparent;color:var(--muted);border:0;border-left:1px solid var(--line);cursor:pointer;white-space:nowrap}
+.seg button:first-child{border-left:0}
+.seg button.on{background:var(--steel);color:var(--steel-ink);font-weight:600}
+.seg button:disabled{cursor:wait}
+.access-lock{font-size:11.5px;color:var(--muted);white-space:nowrap}
+@media (max-width:560px){.access-perm{flex-wrap:wrap}.seg{margin-left:18px}}
+/* On phones the people table scrolls sideways, so the access switches open as a full-screen sheet
+   (put on <body>, because the see-through panels would otherwise trap a fixed layer). */
+.access.sheet{position:fixed;inset:0;z-index:200;overflow-y:auto;border:0;border-radius:0;
+  padding:0 max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.access.sheet .access-head{position:sticky;top:0;background:var(--solid);padding:calc(14px + env(safe-area-inset-top,0px)) 0 10px;z-index:1;border-bottom:1px solid var(--line)}
