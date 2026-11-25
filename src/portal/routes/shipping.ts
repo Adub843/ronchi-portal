@@ -490,6 +490,10 @@ shipping.patch("/:id", async (c) => {
     const keep = new Set(lines.map((l) => l.id).filter(Boolean));
     const dropped = had.filter((h) => !keep.has(h.id));
     if (dropped.some((h) => h.qty_received > 0)) fail(400, "An item that has already been checked in can't be taken off the list.");
+    for (const l of lines) {
+      const old = l.id ? had.find((h) => h.id === l.id) : undefined;
+      if (old && l.qty < old.qty_received) fail(400, `${l.description}: ${old.qty_received} already checked in, so the quantity can't be less than that.`);
+    }
     for (const h of dropped) stmts.push(db.prepare(`DELETE FROM shipment_lines WHERE id = ? ${guard}`).bind(h.id, id, before.revision + 1));
     lines.forEach((l, i) => {
       const old = l.id ? had.find((h) => h.id === l.id) : undefined;

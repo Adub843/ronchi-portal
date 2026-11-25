@@ -64,11 +64,12 @@ export const CP_STATUSES = [
  * Statuses that mean the job is finished, so it drops off the Open list. Shipping doesn't finish a
  * job: it stays open until the customer approves the parts and someone marks it Completed.
  */
-const DONE = /^(closed|complete[d]?|cancel+ed|canceled|done|invoiced)\b/i;
+const DONE = /^(closed|complete[d]?|cancel+ed|canceled|done)\b/i;
 export const isOpen = (status: string | null | undefined) => !DONE.test((status ?? "").trim());
 
-/** Parts are on their way or with the customer (so a ship date in the past isn't late). */
-const SENT = /^(shipped|delivered|dry fit|trial|waiting on customer)/i;
+/** Parts are on their way or with the customer (so a ship date in the past isn't late). Older orders
+ *  typed "Invoiced" count here too: they wait for someone to mark them Completed, but aren't late. */
+const SENT = /^(shipped|delivered|invoiced|dry fit|trial|waiting on customer)/i;
 export const isShipped = (status: string | null | undefined) => SENT.test((status ?? "").trim());
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];

@@ -162,6 +162,24 @@ describe("Submit", () => {
     expect((await meagan.json(`${w}/reopen`, { body: {} })).status).toBe(200);
     expect((await aaron.json(`${w}/entries`, { body: { day: "2026-11-24", description: "late add" } })).status).toBe(200);
   });
+
+  it("sends expense amounts only to people who may see them", async () => {
+    e.EMAIL = { send: async (m: any) => { sent.push(m); return { messageId: "m1" }; } };
+    e.MAIL_FROM = "workbook@ronchi.test";
+    const admin = await person("admin");
+    const lola = await person("billing");
+    const sam = await person("sales");
+    const meagan = await person("scheduling");
+    const aaron = await person("tech");
+    expect((await admin.json("/api/workbook/settings/recipients", { method: "PUT", body: { userIds: [lola.id, sam.id] } })).status).toBe(200);
+    const id = await jobWith(meagan, [aaron.id]);
+    const w = `/api/workbook/${id}`;
+    await aaron.json(`${w}/entries`, { body: { day: "2026-11-23", description: "Work" } });
+    await aaron.json(`${w}/expenses`, { body: { day: "2026-11-23", type: "Hotel", amount: "129.00" } });
+    expect((await aaron.json(`${w}/submit`, { body: {} })).status).toBe(200);
+    expect(sent.find((m) => m.to === lola.email).text).toContain("Total expenses: 129.00");
+    expect(sent.find((m) => m.to === sam.email).text).not.toContain("129.00");
+  });
 });
 
 describe("billing", () => {

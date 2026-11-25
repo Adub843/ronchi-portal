@@ -25,6 +25,7 @@ import { audit, now } from "../lib/db";
 import { body, fail, has, requirePerm, str } from "../lib/http";
 import { mailTo, sendMail } from "../lib/mail";
 import { isOn } from "../lib/switches";
+import { ACCESS_LIVE, effective, readChanges } from "../lib/roles";
 import { loadSettings } from "../lib/settings-store";
 import { addQuickNote } from "./kb";
 
@@ -85,6 +86,9 @@ const SUBMITTED = "This report was submitted. A scheduler can reopen it if somet
 /** Added to every write of the log, photos, hours and expenses (bind the job id last), so a write that
  *  races a Submit can't land on a report that was just sent. */
 const STILL_OPEN = "NOT EXISTS (SELECT 1 FROM wb_reports WHERE job_id = ? AND status = 'submitted')";
+/** Every change to a work order goes in the activity log, on the job. */
+const log = (c: Context<AppEnv>, u: SessionUser, jobId: string, action: string, detail: Record<string, unknown>) =>
+  audit(c.env.DB, { userId: u.id, action, targetType: "job", targetId: jobId, detail, ip: c.get("ip") });
 const landed = (r: D1Result) => { if (!r.meta.changes) fail(409, SUBMITTED); };
 
 /** Whose row an engineer may write: their own; a scheduler may write for any engineer on the job. */
@@ -177,6 +181,7 @@ workbook.put("/:jobId/report", async (c) => {
   ).bind(job.id, f.scope, f.summary, f.open_issues, f.sign_name, f.sign_title, f.sign_date, signature, revision, u.id, at, old?.revision ?? 0).run();
   // Two saves at the same moment: only the first one lands, the other is told to reload.
   if (!saved.meta.changes) fail(409, "Someone else changed this report. Reload to see their changes, then save yours again.");
+  await log(c, u, job.id, "workbook.report", { revision, fields: Object.keys(b).filter((k) => k !== "revision") });
   return c.json({ ok: true, revision });
 });
 
@@ -206,6 +211,7 @@ workbook.post("/:jobId/entries", async (c) => {
   landed(await c.env.DB.prepare(
     `INSERT INTO wb_entries (id, job_id, user_id, day, work, description, done, pct, issues, created_by, created_at, updated_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE ${STILL_OPEN}`,
   ).bind(id, job.id, who, f.day, f.work, f.description, f.done, f.pct, f.issues, u.id, at, at, job.id).run());
+  await log(c, u, job.id, "workbook.entry.add", { id, for: who, day: f.day });
   return c.json({ id });
 });
 
@@ -219,6 +225,7 @@ workbook.patch("/:jobId/entries/:id", async (c) => {
   const f = entryFields(await body(c));
   landed(await c.env.DB.prepare(`UPDATE wb_entries SET day = ?, work = ?, description = ?, done = ?, pct = ?, issues = ?, updated_at = ? WHERE id = ? AND ${STILL_OPEN}`)
     .bind(f.day, f.work, f.description, f.done, f.pct, f.issues, now(), c.req.param("id"), job.id).run());
+  await log(c, u, job.id, "workbook.entry.update", { id: c.req.param("id"), day: f.day });
   return c.json({ ok: true });
 });
 
@@ -230,6 +237,7 @@ workbook.delete("/:jobId/entries/:id", async (c) => {
   if (!row) fail(404, "Not found.");
   if (row.user_id !== u.id && !has(u, "jobs.schedule")) fail(403, "You can only remove your own lines in the log.");
   landed(await c.env.DB.prepare(`UPDATE wb_entries SET removed_at = ? WHERE id = ? AND ${STILL_OPEN}`).bind(now(), c.req.param("id"), job.id).run());
+  await log(c, u, job.id, "workbook.entry.remove", { id: c.req.param("id") });
   return c.json({ ok: true });
 });
 
@@ -245,6 +253,7 @@ workbook.put("/:jobId/photos/:fileId", async (c) => {
     `INSERT INTO wb_photos (file_id, job_id, caption, recipe_screen, updated_at) SELECT ?,?,?,?,? WHERE ${STILL_OPEN}
      ON CONFLICT(file_id) DO UPDATE SET caption = excluded.caption, recipe_screen = excluded.recipe_screen, updated_at = excluded.updated_at`,
   ).bind(c.req.param("fileId"), job.id, str(b.caption, 300), str(b.recipe_screen, 80), now(), job.id).run());
+  await log(c, c.get("user")!, job.id, "workbook.photo", { file: c.req.param("fileId") });
   return c.json({ ok: true });
 });
 
@@ -264,6 +273,7 @@ workbook.put("/:jobId/hours", async (c) => {
   if (HOUR_KEYS.every((k) => !h[k]) && !h.miles) {
     await db.prepare(`DELETE FROM wb_hours WHERE job_id = ? AND user_id = ? AND day = ? AND ${STILL_OPEN}`).bind(job.id, who, d, job.id).run();
     await mustBeOpen(db, job.id); // nothing to remove and nothing changed: still say so if it was submitted meanwhile
+    await log(c, c.get("user")!, job.id, "workbook.hours", { for: who, day: d, removed: true });
     return c.json({ ok: true, removed: true });
   }
   const at = now();
@@ -273,6 +283,7 @@ workbook.put("/:jobId/hours", async (c) => {
      ON CONFLICT(job_id, user_id, day) DO UPDATE SET travel_wd = excluded.travel_wd, travel_we = excluded.travel_we, regular = excluded.regular,
        training = excluded.training, overtime = excluded.overtime, warranty = excluded.warranty, miles = excluded.miles, note = excluded.note, updated_at = excluded.updated_at`,
   ).bind(randomId(), job.id, who, d, h.travel_wd, h.travel_we, h.regular, h.training, h.overtime, h.warranty, h.miles, note, at, at, job.id).run());
+  await log(c, c.get("user")!, job.id, "workbook.hours", { for: who, day: d, ...h });
   return c.json({ ok: true });
 });
 
@@ -309,30 +320,35 @@ workbook.post("/:jobId/expenses", async (c) => {
   landed(await c.env.DB.prepare(
     `INSERT INTO wb_expenses (id, job_id, user_id, day, type, amount_cents, pay, description, billable, receipt_file, created_at, updated_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE ${STILL_OPEN}`,
   ).bind(id, job.id, who, f.day, f.type, f.amount, f.pay, f.description, f.billable ?? billableFor(job.job_number), f.receipt, at, at, job.id).run());
+  await log(c, c.get("user")!, job.id, "workbook.expense.add", { id, for: who, day: f.day, type: f.type, amount_cents: f.amount });
   return c.json({ id });
 });
 
 async function ownExpense(c: Context<AppEnv>, jobId: string) {
   const u = await mustFill(c, jobId);
   await mustBeOpen(c.env.DB, jobId);
-  const row = await c.env.DB.prepare("SELECT user_id FROM wb_expenses WHERE id = ? AND job_id = ? AND removed_at IS NULL").bind(c.req.param("id"), jobId).first<{ user_id: string }>();
+  const row = await c.env.DB.prepare("SELECT user_id, billable FROM wb_expenses WHERE id = ? AND job_id = ? AND removed_at IS NULL").bind(c.req.param("id"), jobId).first<{ user_id: string; billable: string }>();
   if (!row) fail(404, "Not found.");
   if (row.user_id !== u.id && !has(u, "jobs.schedule")) fail(403, "You can only change your own expenses.");
+  return { u, row };
 }
 
 workbook.patch("/:jobId/expenses/:id", async (c) => {
   const job = await loadJob(c.env.DB, c.req.param("jobId"));
-  await ownExpense(c, job.id);
+  const { u, row } = await ownExpense(c, job.id);
   const f = await expenseFields(c, job.id, await body(c));
+  f.billable ??= row.billable as "Y" | "N"; // left out: keep what it was
   landed(await c.env.DB.prepare(`UPDATE wb_expenses SET day = ?, type = ?, amount_cents = ?, pay = ?, description = ?, billable = ?, receipt_file = ?, updated_at = ? WHERE id = ? AND ${STILL_OPEN}`)
-    .bind(f.day, f.type, f.amount, f.pay, f.description, f.billable ?? billableFor(job.job_number), f.receipt, now(), c.req.param("id"), job.id).run());
+    .bind(f.day, f.type, f.amount, f.pay, f.description, f.billable, f.receipt, now(), c.req.param("id"), job.id).run());
+  await log(c, u, job.id, "workbook.expense.update", { id: c.req.param("id"), day: f.day, type: f.type, amount_cents: f.amount, billable: f.billable });
   return c.json({ ok: true });
 });
 
 workbook.delete("/:jobId/expenses/:id", async (c) => {
   const job = await loadJob(c.env.DB, c.req.param("jobId"));
-  await ownExpense(c, job.id);
+  const { u } = await ownExpense(c, job.id);
   landed(await c.env.DB.prepare(`UPDATE wb_expenses SET removed_at = ? WHERE id = ? AND ${STILL_OPEN}`).bind(now(), c.req.param("id"), job.id).run());
+  await log(c, u, job.id, "workbook.expense.remove", { id: c.req.param("id") });
   return c.json({ ok: true });
 });
 
@@ -383,14 +399,25 @@ workbook.post("/:jobId/submit", async (c) => {
     db.prepare("SELECT h.*, u.name AS who FROM wb_hours h JOIN users u ON u.id = h.user_id WHERE h.job_id = ? ORDER BY h.day, u.name").bind(job.id).all<{ day: string; who: string; miles: number } & Record<HourType, number>>(),
     db.prepare("SELECT x.day, u.name AS who, x.type, x.amount_cents, x.billable, x.description FROM wb_expenses x JOIN users u ON u.id = x.user_id WHERE x.job_id = ? AND x.removed_at IS NULL ORDER BY x.day").bind(job.id).all<{ day: string; who: string; type: string; amount_cents: number; billable: string; description: string | null }>(),
     db.prepare(`SELECT COUNT(*) AS n FROM job_files f WHERE f.job_id = ? AND f.deleted_at IS NULL AND lower(f.ext) IN ('jpg','jpeg','png','webp','heic','gif') AND ${NOT_RECEIPT}`).bind(job.id).first<{ n: number }>(),
-    db.prepare("SELECT u.id, u.name, u.email, n.email AS notify_email FROM wb_recipients r JOIN users u ON u.id = r.user_id AND u.status = 'active' LEFT JOIN notice_emails n ON n.user_id = u.id ORDER BY u.name").all<{ id: string; name: string; email: string; notify_email: string | null }>(),
+    db.prepare(`SELECT u.id, u.name, u.email, u.role, n.email AS notify_email,
+                       (SELECT group_concat(a.perm || '=' || a.allow) FROM user_access a WHERE a.user_id = u.id AND ${ACCESS_LIVE}) AS access,
+                       (SELECT ro.perms FROM roles ro WHERE ro.id = u.role) AS role_perms,
+                       EXISTS (SELECT 1 FROM job_techs t WHERE t.job_id = ? AND t.user_id = u.id) AS on_job
+                  FROM wb_recipients r JOIN users u ON u.id = r.user_id AND u.status = 'active' LEFT JOIN notice_emails n ON n.user_id = u.id ORDER BY u.name`)
+      .bind(job.id).all<{ id: string; name: string; email: string; role: string; notify_email: string | null; access: string | null; role_perms: string | null; on_job: number }>(),
   ]);
   const at = now();
   const blank = { scope: null, summary: null, open_issues: null, sign_name: null, sign_title: null, sign_date: null, signature: null };
-  const mail = reportText({
-    job, report: report ?? blank, entries, hours, expenses, photos: photos?.n ?? 0, by: u.name,
-    link: jobLink(c.env.ORIGIN, job.id, true),
-  });
+  const base = { job, report: report ?? blank, entries, hours, photos: photos?.n ?? 0, by: u.name, link: jobLink(c.env.ORIGIN, job.id, true) };
+  const mail = reportText({ ...base, expenses });
+  // Expense amounts only go to people who may see them (on the job, schedulers, billing); others get the
+  // same report without the expenses.
+  const plainMail = reportText({ ...base, expenses: [] });
+  const seesMoney = (r: { role: string; access: string | null; role_perms: string | null; on_job: number }) => {
+    if (r.on_job) return true;
+    const p = effective(r.role, readChanges(r.access), r.role_perms);
+    return p.has("jobs.schedule") || p.has("workbook.billing");
+  };
   // Mark it submitted first, and only if it's still a draft, so pressing Submit twice sends one email and one set of notes.
   const claimed = await db.prepare(
     `INSERT INTO wb_reports (job_id, status, submitted_by, submitted_at, revision, updated_by, updated_at) VALUES (?, 'submitted', ?, ?, 1, ?, ?)
@@ -417,7 +444,8 @@ workbook.post("/:jobId/submit", async (c) => {
   const sent = [];
   for (const r of recipients) {
     const to = mailTo(r);
-    const status = to ? await sendMail(c.env, { to, subject: mail.subject, text: mail.text, html: htmlOf(mail.text), replyTo }) : "no_address";
+    const m = seesMoney(r) ? mail : plainMail;
+    const status = to ? await sendMail(c.env, { to, subject: m.subject, text: m.text, html: htmlOf(m.text), replyTo }) : "no_address";
     sent.push({ name: r.name, to, status });
   }
   await audit(db, { userId: u.id, action: "workbook.submit", targetType: "job", targetId: job.id, detail: { notes, sent: sent.map((s) => ({ to: s.name, status: s.status })) }, ip: c.get("ip") });

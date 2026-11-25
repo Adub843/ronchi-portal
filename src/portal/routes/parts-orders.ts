@@ -118,6 +118,16 @@ async function shippingReady(db: D1Database): Promise<boolean> {
 }
 
 /** What Shipping shipped and received for parts order lines (all of them, or one order's). */
+/** The changes written in one history row; an unreadable row shows as no detail instead of breaking the page. */
+function readChanges(detail: string | null): Row | null {
+  if (!detail) return null;
+  try {
+    return (JSON.parse(detail) as Row).changes ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** The orders the list shows (bind the machine twice, '' for all): newest 3000. */
 const LISTED = "SELECT id FROM parts_orders WHERE removed_at IS NULL AND (? = '' OR machine = ?) ORDER BY updated_at DESC LIMIT 3000";
 
@@ -145,11 +155,6 @@ function merged(l: Row, ship: Map<string, { shipped: number; received: number }>
   return s ? { ...l, qty_received: Math.max(l.qty_received, s.received), qty_shipped: Math.max(l.qty_shipped, s.shipped) } : l;
 }
 
-/**
- * After Shipping saves a shipment: move each parts order it carries parts for forward, the same way a
- * save on the order would (autoStatus: only forward, only from Customer PO received onward). Written to
- * the order's history as done by that shipment. Shipping calls this; nothing here changes a shipment.
- */
 /** The parts orders a shipment carries lines for, as it is now. */
 export async function partsOrdersOnShipment(db: D1Database, shipmentId: string): Promise<string[]> {
   if (!(await shippingReady(db))) return [];
@@ -159,16 +164,17 @@ export async function partsOrdersOnShipment(db: D1Database, shipmentId: string):
   return results.map((r) => r.order_id);
 }
 
+/**
+ * After Shipping saves a shipment: move each parts order it carries parts for forward, the same way a
+ * save on the order would (autoStatus: only forward, only from Customer PO received onward). Written to
+ * the order's history as done by that shipment. Shipping calls this; nothing here changes a shipment.
+ */
 export async function syncPartsOrdersForShipment(db: D1Database, shipmentId: string, userId: string, ip: string, alsoOrders: string[] = []): Promise<void> {
   if (!(await shippingReady(db))) return;
   if ((await loadSettings(db)).sections.partsOrders === false) return; // section switched off: leave orders alone
   const s = await db.prepare("SELECT number FROM shipments WHERE id = ?").bind(shipmentId).first<{ number: string }>();
-  const { results } = await db.prepare(
-    `SELECT DISTINCT p.order_id FROM shipment_lines l JOIN parts_order_lines p ON p.id = l.source_id
-      WHERE l.shipment_id = ? AND l.source_type = 'parts_order_line'`,
-  ).bind(shipmentId).all<{ order_id: string }>();
   // alsoOrders: orders the shipment carried before this save, whose lines may have been cut from it.
-  for (const order_id of new Set([...results.map((r) => r.order_id), ...alsoOrders])) {
+  for (const order_id of new Set([...(await partsOrdersOnShipment(db, shipmentId)), ...alsoOrders])) {
     const o = await db.prepare("SELECT * FROM parts_orders WHERE id = ? AND removed_at IS NULL").bind(order_id).first<Row>();
     if (!o) continue;
     const ship = await shippedFromShipping(db, order_id);
@@ -319,7 +325,7 @@ partsOrders.get("/:id", async (c) => {
     `SELECT a.at, a.action, a.detail, u.name AS who FROM audit_log a LEFT JOIN users u ON u.id = a.user_id
       WHERE a.target_type = 'parts_order' AND a.target_id = ? ORDER BY a.at DESC LIMIT 200`,
   ).bind(id).all<{ at: string; action: string; detail: string | null; who: string | null }>();
-  const history = results.map((h) => ({ at: h.at, action: h.action, who: h.who, changes: h.detail ? (JSON.parse(h.detail).changes ?? null) : null }));
+  const history = results.map((h) => ({ at: h.at, action: h.action, who: h.who, changes: readChanges(h.detail) }));
   // Only for people who may see Shipping (taken away too when Shipping is switched off).
   const shipments = has(u, "shipping.view") && (await shippingReady(c.env.DB))
     ? (await c.env.DB.prepare(

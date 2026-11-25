@@ -101,11 +101,12 @@ machines.patch("/:id", async (c) => {
   const sent: Record<string, string> = { model: "model", customer: "customer", site: "site", notes: "notes", sharepointUrl: "sharepoint_url" };
   const f = Object.fromEntries(Object.entries(sent).filter(([k]) => k in b).map(([, col]) => [col, all[col as keyof typeof all]]));
   const cols = Object.keys(f);
-  if (cols.length) {
-    await c.env.DB.prepare(`UPDATE machines SET ${cols.map((k) => `${k} = ?`).join(", ")}, updated_at = ? WHERE id = ?`)
-      .bind(...cols.map((k) => f[k] ?? null), now(), id)
-      .run();
-  }
+  if (!cols.length) return c.json({ ok: true });
+  // Only lands if nobody saved in between (two saves at the same moment: the second is told to reload).
+  const r = await c.env.DB.prepare(`UPDATE machines SET ${cols.map((k) => `${k} = ?`).join(", ")}, updated_at = ? WHERE id = ? AND updated_at = ?`)
+    .bind(...cols.map((k) => f[k] ?? null), now(), id, before.updated_at)
+    .run();
+  if (!r.meta.changes) fail(409, "Someone else changed this machine while you were editing. Reload to see their change, then edit again.");
   await audit(c.env.DB, { userId: u.id, action: "machine.update", targetType: "machine", targetId: id, detail: { before, after: f }, ip: c.get("ip") });
   return c.json({ ok: true });
 });

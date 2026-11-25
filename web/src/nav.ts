@@ -48,6 +48,6 @@ export function pageAllowed(path: string, perms: ReadonlySet<string>): boolean {
 export function fromOldAddress(path: string): string {
   if (path === "/work-orders") return "/jobs";
   if (path === "/work-orders/billing") return "/jobs/billing";
-  const m = /^\/work-orders\/([A-Za-z0-9_-]+)$/.exec(path);
+  const m = /^\/work-orders\/([A-Za-z0-9_-]+)(?:\/work-order)?$/.exec(path); // also old preview links #work-order-<id>/work-order
   return m ? `/jobs/${m[1]}/work-order` : path;
 }

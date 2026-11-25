@@ -92,6 +92,7 @@ CREATE TABLE wb_expenses (
 );
 CREATE INDEX wb_expenses_job ON wb_expenses(job_id);
 CREATE INDEX wb_expenses_day ON wb_expenses(day);
+CREATE INDEX IF NOT EXISTS wb_expenses_receipt ON wb_expenses(receipt_file) WHERE receipt_file IS NOT NULL;
 
 -- Who gets the submitted service report (Aaron's list: Paolo, Meagan, Lola, Steve). Admins set it.
 -- No foreign key, so rebuilding the users table (as role migrations do) can never drop it.

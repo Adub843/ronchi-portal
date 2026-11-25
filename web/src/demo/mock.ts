@@ -519,11 +519,16 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     const m = db.machines.find((x) => x.id === seg[1]);
     if (!m) throw new Fail(404, "Not found.");
     if (method === "PATCH") {
-      Object.assign(m, { model: body.model || null, customer: body.customer || null, site: body.site || null, notes: body.notes || null, sharepoint_url: body.sharepointUrl || null, updated_at: iso(new Date()) });
+      if (typeof body.updated_at === "string" && body.updated_at !== m.updated_at) throw new Fail(409, "Someone else changed this machine while you were editing. Reload to see their change, then edit again.");
+      const cols: Record<string, string> = { model: "model", customer: "customer", site: "site", notes: "notes", sharepointUrl: "sharepoint_url" };
+      for (const [k, col] of Object.entries(cols)) if (k in body) (m as any)[col] = body[k] || null;
+      m.updated_at = iso(new Date());
       log("machine.update");
       return { ok: true };
     }
-    return { machine: m, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at), orders: db.orders.filter((x) => x.machine === m.serial && !x.removed_at && x.phase !== "sale").map(({ _h, ...x }) => x), partsOrders: partsOrdersFor(m.serial, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id }) };
+    const perms = effective(u.role, u.access, savedPerms(u.role)) as Set<string>;
+    const jobs = perms.has("jobs.view") ? demoJobs().filter((j) => j.machine === m.serial).sort((a, b) => (b.first_day ?? "").localeCompare(a.first_day ?? "")).map((j) => ({ id: j.id, job_number: j.job_number, status: j.status, first_day: j.first_day })) : undefined;
+    return { machine: m, jobs, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at), orders: db.orders.filter((x) => x.machine === m.serial && !x.removed_at && x.phase !== "sale").map(({ _h, ...x }) => x), partsOrders: partsOrdersFor(m.serial, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id }) };
   }
   if (seg[0] === "shipping") {
     try {

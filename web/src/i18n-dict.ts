@@ -6,6 +6,7 @@ import { SHIPPING_DYNAMIC, SHIPPING_ES, SHIPPING_IT } from "./i18n-shipping";
 import { SOFTWARE_DYNAMIC, SOFTWARE_ES, SOFTWARE_IT } from "./i18n-software";
 import { PARTS_ORDERS_DYNAMIC, PARTS_ORDERS_ES, PARTS_ORDERS_IT } from "./i18n-parts-orders";
 import { WORKBOOK_DYNAMIC, WORKBOOK_ES, WORKBOOK_IT } from "./i18n-workbook";
+import { ERRORS_ES, ERRORS_IT } from "./i18n-errors";
 import { THEME_ES, THEME_IT } from "./i18n-themes";
 import { THEMES } from "../../src/shared/themes";
 
@@ -2098,4 +2099,6 @@ DYNAMIC.push(...PARTS_ORDERS_DYNAMIC);
 // Shipping and receiving keeps its own words in i18n-shipping.ts (fewer clashes in this file).
 for (const [k, v] of Object.entries(SHIPPING_ES)) ES[k] ??= v;
 for (const [k, v] of Object.entries(SHIPPING_IT)) IT[k] ??= v;
+for (const [k, v] of Object.entries(ERRORS_ES)) ES[k] ??= v;
+for (const [k, v] of Object.entries(ERRORS_IT)) IT[k] ??= v;
 DYNAMIC.push(...SHIPPING_DYNAMIC);
