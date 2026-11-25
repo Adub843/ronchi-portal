@@ -18,13 +18,13 @@ export const LANG_IDS: Lang[] = ["en", "es", "it"];
 export const SECTIONS = {
   // A new part of the portal adds one line here: its permissions close to everyone but admins when
   // the owner switches it off in Settings > Command center. `hint` is one optional plain sentence.
-  chats: { label: "Chats and boards", perms: ["boards.use", "boards.create", "chats.start", "files.send", "boards.moderate"] },
+  chats: { label: "Chats and boards", perms: ["boards.use", "boards.create", "chats.start", "files.send", "boards.moderate", "boards.export"] },
   jobs: { label: "Jobs (field service scheduling)", perms: ["jobs.view", "jobs.schedule", "workbook.billing"] },
   machines: { label: "Machines", perms: ["machines.view", "machines.add", "machines.edit"] },
-  catalog: { label: "Parts catalog", perms: ["catalog.view", "catalog.edit"] },
+  catalog: { label: "Parts catalog", perms: ["catalog.view", "catalog.edit", "catalog.publish"] },
   customers: { label: "Customers and quote requests", perms: ["customers.manage", "customers.invite", "quotes.manage"] },
   cpSales: { label: "Change-part sales", perms: ["cpsales.view", "cpsales.edit"] },
-  changeParts: { label: "Change parts", perms: ["orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import"] },
+  changeParts: { label: "Change parts", perms: ["orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import", "orders.export"] },
   knowledge: { label: "Knowledge base", perms: ["kb.view", "kb.write", "kb.edit_all", "kb.import", "kb.publish"] },
   software: { label: "Software downloads", perms: ["software.view", "software.manage"] },
 } as const satisfies Record<string, { label: string; perms: Permission[]; hint?: string }>;

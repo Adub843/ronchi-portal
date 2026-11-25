@@ -5,7 +5,7 @@ import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { randomToken, sha256Hex } from "../../shared/crypto";
 import type { AppEnv, SessionUser } from "../env";
-import { effective, readChanges } from "./roles";
+import { ACCESS_LIVE, effective, readChanges } from "./roles";
 import { addSeconds, now } from "./db";
 import { getSettings } from "./settings-store";
 import { isOwner, OWNERS_SQL } from "./owner";
@@ -43,7 +43,7 @@ export async function loadSession(c: Context<AppEnv>): Promise<SessionUser | nul
   const hash = await sha256Hex(token);
   const row = await c.env.DB.prepare(
     `SELECT s.id_hash, s.created_at, s.last_seen_at, s.expires_at, u.id, u.email, u.name, u.role, u.status,
-            (SELECT group_concat(a.perm || '=' || a.allow) FROM user_access a WHERE a.user_id = u.id) AS access,
+            (SELECT group_concat(a.perm || '=' || a.allow) FROM user_access a WHERE a.user_id = u.id AND ${ACCESS_LIVE}) AS access,
             (SELECT r.perms FROM roles r WHERE r.id = u.role) AS role_perms,
             u.is_owner, (${OWNERS_SQL}) AS owners
        FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id_hash = ?`,
