@@ -1,11 +1,13 @@
-// On/off switches for whole parts of the portal (admins set them on the Settings page).
+// On/off switches for whole parts of the portal, set by the owner in Settings > Command center.
+// Two kinds: SECTIONS in lib/settings.ts (off = closed to everyone but admins, by permission) and these
+// (off = gone for everyone, admins too). A new part of the portal adds one line to either list.
 // When a part is off, its pages leave the menu AND its API answers "Not found", so it is really gone,
 // and everything else keeps working without it.
 export const SWITCHES = {
   // The Ronchi workbook: the Work orders pages (each job's work order with the log of past work orders
   // and the machine's history). Off = Ronchi keeps using its Excel sheets; scheduling, the job emails
   // and job files still work.
-  workbook: { default: true },
+  workbook: { default: true, label: "Ronchi workbook (Work orders)", hint: "Off: the Work orders pages are gone and Ronchi keeps using its Excel sheets. Jobs keep working." },
 } as const;
 export type SwitchName = keyof typeof SWITCHES;
 export const isSwitch = (v: unknown): v is SwitchName => typeof v === "string" && Object.prototype.hasOwnProperty.call(SWITCHES, v);

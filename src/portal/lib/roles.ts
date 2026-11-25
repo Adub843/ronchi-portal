@@ -30,6 +30,8 @@ export type Permission =
   | "customers.manage"    // customer companies and which machines each one sees
   | "customers.invite"    // customer sign-up links, and turning a customer person on or off
   | "quotes.manage"       // read customer quote requests and set their status
+  | "cpsales.view"        // see change-part sales (before they're orders)
+  | "cpsales.edit"        // start, work and close change-part sales, and mark them sold
   | "orders.view"         // see change-part orders (sales side)
   | "orders.add"          // add a change-part order
   | "orders.edit"         // change an order's details and status
@@ -49,7 +51,7 @@ const ALL: Permission[] = [
   "settings.manage", "users.manage", "audit.view", "machines.view", "machines.add", "machines.edit",
   "boards.use", "boards.create", "chats.start", "files.send", "boards.moderate",
   "catalog.view", "catalog.edit", "customers.manage", "customers.invite", "quotes.manage",
-  "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import",
+  "cpsales.view", "cpsales.edit", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import",
   "kb.view", "kb.write", "kb.edit_all", "kb.import", "kb.publish",
   "software.view", "software.manage",
   "jobs.view", "jobs.schedule",
@@ -67,7 +69,7 @@ export const PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
   billing: new Set([...STAFF_BASE, "quotes.manage"]),
   scheduling: new Set([...STAFF_BASE, "jobs.schedule"]),
   service: new Set([...STAFF_BASE, "machines.add", "machines.edit", "boards.moderate", "catalog.edit", "customers.manage", "customers.invite", "quotes.manage", "kb.edit_all", "kb.import", "kb.publish", "jobs.schedule"]),
-  sales: new Set([...STAFF_BASE, "customers.manage", "customers.invite", "quotes.manage", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import"]),
+  sales: new Set([...STAFF_BASE, "customers.manage", "customers.invite", "quotes.manage", "cpsales.view", "cpsales.edit", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import"]),
   engineering: new Set([...STAFF_BASE, "machines.add", "machines.edit", "catalog.edit", "kb.edit_all", "kb.import", "kb.publish", "software.manage"]),
   tech: new Set([...STAFF_BASE]),
 };
@@ -79,7 +81,7 @@ export function can(role: Role | undefined | null, perm: Permission): boolean {
   return PERMISSIONS[role]?.has(perm) ?? false;
 }
 
-// ---- Sections switched off in Settings > Admin controls ----
+// ---- Sections switched off in Settings > Command center ----
 // Their permissions are taken from everyone except admins, whatever their role or own changes say.
 let switchedOff: ReadonlySet<Permission> = new Set();
 
@@ -152,7 +154,7 @@ export function readChanges(list: string | null | undefined): AccessChanges {
 }
 
 /** Seeing, without changing anything: what "View only" on the access screen keeps on. */
-export const VIEW_PERMS: ReadonlySet<Permission> = new Set(["boards.use", "machines.view", "catalog.view", "kb.view", "software.view", "orders.view", "jobs.view"]);
+export const VIEW_PERMS: ReadonlySet<Permission> = new Set(["boards.use", "machines.view", "catalog.view", "kb.view", "software.view", "cpsales.view", "orders.view", "jobs.view"]);
 
 /** Plain-English names for the access screen, grouped the way the menu is. */
 export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label: string; hint: string }[] }[] = [
@@ -177,7 +179,9 @@ export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label:
     { id: "customers.invite", label: "Customer logins", hint: "Make sign-up links, and turn a customer's login on or off." },
     { id: "quotes.manage", label: "Quote requests", hint: "Read customer quote requests and set their status." },
   ] },
-  { group: "Change-part orders", perms: [
+  { group: "Change parts", perms: [
+    { id: "cpsales.view", label: "See change-part sales", hint: "Change-part requests and quotes that aren't sold yet." },
+    { id: "cpsales.edit", label: "Work change-part sales", hint: "Start, update and close sales, and mark a sale sold so it becomes an order." },
     { id: "orders.view", label: "See orders", hint: "The change-part order tracker." },
     { id: "orders.add", label: "Add orders", hint: "Start a new change-part order." },
     { id: "orders.edit", label: "Change orders", hint: "Change an order's details and status." },
