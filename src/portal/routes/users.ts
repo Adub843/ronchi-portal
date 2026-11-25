@@ -71,7 +71,7 @@ users.put("/:id/access", async (c) => {
 users.get("/", async (c) => {
   requirePerm(c, "users.manage");
   const { results } = await c.env.DB.prepare(
-    `SELECT u.id, u.email, u.name, u.role, u.status, u.notify_email, u.created_at,
+    `SELECT u.id, u.email, u.name, u.role, u.status, (SELECT n.email FROM notice_emails n WHERE n.user_id = u.id) AS notify_email, u.created_at,
             (SELECT COUNT(*) FROM passkeys p WHERE p.user_id = u.id) AS passkeys,
             (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id) AS sessions
        FROM users u ORDER BY u.name`,
@@ -123,11 +123,16 @@ users.patch("/:id", async (c) => {
     if (b.status !== "active" && b.status !== "disabled") fail(400, "Unknown status.");
     changes.status = b.status;
   }
-  // Where job emails go, for people whose login is a username (Aaron, 2026-11-25: techs get job emails).
+  // Where job emails go, for people whose login is a username (Aaron, 2026-11-25: field service
+  // engineers get job emails). Kept in its own table (migration 0012); it doesn't sign anyone out.
   if (b.notify_email !== undefined) {
     const v = typeof b.notify_email === "string" ? b.notify_email.trim().toLowerCase() : "";
     if (v && !isEmail(v)) fail(400, "That email doesn't look right.");
-    changes.notify_email = v || null;
+    await (v
+      ? c.env.DB.prepare("INSERT INTO notice_emails (user_id, email, set_by, set_at) VALUES (?,?,?,?) ON CONFLICT (user_id) DO UPDATE SET email = excluded.email, set_by = excluded.set_by, set_at = excluded.set_at").bind(id, v, admin.id, now())
+      : c.env.DB.prepare("DELETE FROM notice_emails WHERE user_id = ?").bind(id)).run();
+    await audit(c.env.DB, { userId: admin.id, action: "user.notice_email", targetType: "user", targetId: id, detail: { email: v || null }, ip: c.get("ip") });
+    if (!Object.keys(changes).length) return c.json({ ok: true });
   }
   if (!Object.keys(changes).length) fail(400, "Nothing to change.");
   const cols = Object.keys(changes);

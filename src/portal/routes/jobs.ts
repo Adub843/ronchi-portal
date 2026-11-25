@@ -136,7 +136,7 @@ async function emailEngineers(c: Context<AppEnv>, row: JobRow, userIds: string[]
   const db = c.env.DB;
   const job = toJob(row);
   const link = jobLink(c.env.ORIGIN, job.id, await isOn(db, "workbook"));
-  const { results } = await db.prepare(`SELECT id, name, email, notify_email FROM users WHERE id IN (${marks(userIds.length)})`)
+  const { results } = await db.prepare(`SELECT u.id, u.name, u.email, n.email AS notify_email FROM users u LEFT JOIN notice_emails n ON n.user_id = u.id WHERE u.id IN (${marks(userIds.length)})`)
     .bind(...userIds).all<{ id: string; name: string; email: string; notify_email: string | null }>();
   const at = now();
   const replyTo = mailTo({ email: by.email, notify_email: null }) ?? undefined;
@@ -192,7 +192,7 @@ jobs.get("/", async (c) => {
 jobs.get("/staff", async (c) => {
   requirePerm(c, "jobs.schedule");
   const { results } = await c.env.DB.prepare(
-    "SELECT id, name, role, email, notify_email FROM users WHERE status = 'active' ORDER BY CASE role WHEN 'tech' THEN 0 ELSE 1 END, name",
+    "SELECT u.id, u.name, u.role, u.email, n.email AS notify_email FROM users u LEFT JOIN notice_emails n ON n.user_id = u.id WHERE u.status = 'active' ORDER BY CASE u.role WHEN 'tech' THEN 0 ELSE 1 END, u.name",
   ).all<{ id: string; name: string; role: string; email: string; notify_email: string | null }>();
   return c.json({ people: results.map((p) => ({ id: p.id, name: p.name, role: p.role, emailTo: mailTo(p) })) });
 });

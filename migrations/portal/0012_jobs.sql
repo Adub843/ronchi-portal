@@ -2,8 +2,15 @@
 -- get an email with a link to the job's page, and anyone on the job can add files to it.
 -- Business side only: the help center and parts site never see these tables.
 
--- Where job emails go for people whose login is a plain username (no email). NULL = use the login if it is an email.
-ALTER TABLE users ADD COLUMN notify_email TEXT;
+-- Where job emails go for people whose login is a plain username (no email). No row = use the login if
+-- it is an email. Kept in its own table, not a column on users, so rebuilding the users table (as the
+-- role migrations do) can never drop it. No foreign key on purpose, for the same reason.
+CREATE TABLE notice_emails (
+  user_id  TEXT PRIMARY KEY,
+  email    TEXT NOT NULL,
+  set_by   TEXT,
+  set_at   TEXT NOT NULL
+);
 
 CREATE TABLE jobs (
   id             TEXT PRIMARY KEY,

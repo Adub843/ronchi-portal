@@ -75,6 +75,19 @@ describe("tech jobs", () => {
     expect(sent).toHaveLength(3);
   });
 
+  it("sends to the email for job notices an admin set, instead of the login", async () => {
+    emailOn();
+    const admin = await person("admin");
+    const m = await person("scheduling");
+    const t1 = await person("tech");
+    expect((await admin.json(`/api/users/${t1.id}`, { method: "PATCH", body: { notify_email: "Field1@Ronchi.test" } })).status).toBe(200);
+    const list = await admin.json("/api/users");
+    expect(list.data.users.find((x: any) => x.id === t1.id).notify_email).toBe("field1@ronchi.test");
+    await m.json("/api/jobs", { body: jobBody({ techIds: [t1.id] }) });
+    expect(sent[0].to).toBe("field1@ronchi.test");
+    expect((await admin.json(`/api/users/${t1.id}`, { method: "PATCH", body: { notify_email: "nope" } })).status).toBe(400);
+  });
+
   it("without email set up, says so and gives the email to send by hand", async () => {
     const m = await person("scheduling");
     const t1 = await person("tech");
