@@ -4,7 +4,7 @@
 import { useRef, useState } from "react";
 import { api, can, fmtTime, type Me } from "../api";
 import { t } from "../i18n";
-import { Empty, ErrorNote, Link, toast, useLoad } from "../components/ui";
+import { Empty, ErrorNote, Link, toast, useLoad, Tip } from "../components/ui";
 import { navigate } from "../router";
 
 const KINDS: Record<string, string> = {
@@ -376,7 +376,7 @@ function KbEditor({ me, article, quickNote, onDone }: { me: Me; article?: any; q
     <>
       <div className="pagehead">
         <h1>{article ? t("Edit {code}", { code: article.code }) : note ? t("Add a quick note") : t("New article")}</h1>
-        {note && !article && <p className="muted">{t("A short Issue and Fix from the field, so the next field service engineer who hits it finds the answer.")}</p>}
+        {note && !article && <Tip id="kb.quick-note">{t("A short Issue and Fix from the field, so the next field service engineer who hits it finds the answer.")}</Tip>}
       </div>
       <form className="panel stack kb-form" onSubmit={save}>
         <div className="grid g2">
@@ -440,7 +440,7 @@ function KbEditor({ me, article, quickNote, onDone }: { me: Me; article?: any; q
             <textarea id="kb-body" value={f.body} onChange={set("body")} maxLength={20000} rows={8} />
           </div>
         )}
-        {details === null && <p className="muted small-note">{t("The steps and tables come from the document. To change them, import the document again.")}</p>}
+        {details === null && <Tip id="kb.imported" className="muted small-note">{t("The steps and tables come from the document. To change them, import the document again.")}</Tip>}
         <ErrorNote error={err} />
         <div className="row">
           <button className="btn primary" type="submit">{article ? t("Save") : note ? t("Save quick note") : t("Save article")}</button>

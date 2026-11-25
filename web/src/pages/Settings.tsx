@@ -1,7 +1,8 @@
 // My look, language and alerts (saved to my login), and my devices.
 import { useState } from "react";
 import { api, fmtTime, type Me } from "../api";
-import { PageHead, toast, useLoad } from "../components/ui";
+import { PageHead, toast, useLoad, Tip } from "../components/ui";
+import { showAllTips, useHiddenTipCount } from "../tips";
 import { LANGS, t } from "../i18n";
 import { THEMES, type Prefs } from "../theme";
 
@@ -29,6 +30,7 @@ export function Settings({ me, prefs, onPrefs, onSignOut, sound, onSound }: {
     return [k.steel, k.bg, k.solid, k.accent];
   };
   const lang = prefs?.lang ?? "en";
+  const tipCount = useHiddenTipCount();
   const popups = prefs?.popups !== false;
 
   return (
@@ -39,7 +41,7 @@ export function Settings({ me, prefs, onPrefs, onSignOut, sound, onSound }: {
       <div className="grid g2">
         <div className="panel stack">
           <h2 style={{ margin: 0 }}>{t("Language")}</h2>
-          <p className="muted" style={{ margin: 0 }}>{t("Menus, buttons and dates. Messages always show exactly as people wrote them.")}</p>
+          <Tip id="settings.language">{t("Menus, buttons and dates. Messages always show exactly as people wrote them.")}</Tip>
           <div className="row" role="radiogroup" aria-label={t("Language")}>
             {LANGS.map((l) => (
               <button key={l.id} className={`btn${lang === l.id ? " primary" : ""}`} role="radio" aria-checked={lang === l.id} onClick={() => onPrefs({ lang: l.id })}>{l.name}</button>
@@ -56,7 +58,7 @@ export function Settings({ me, prefs, onPrefs, onSignOut, sound, onSound }: {
             <input type="checkbox" checked={sound} onChange={(e) => onSound(e.target.checked)} />
             <span><b>{t("Alert sound")}</b><small className="muted">{t("A soft chime with each pop-up. Set on each device.")}</small></span>
           </label>
-          <p className="muted" style={{ margin: 0 }}>{t("To silence one chat or board, open it and choose Mute alerts in its menu.")}</p>
+          <Tip id="settings.mute">{t("To silence one chat or board, open it and choose Mute alerts in its menu.")}</Tip>
         </div>
       </div>
       <div className="panel stack">
@@ -65,8 +67,11 @@ export function Settings({ me, prefs, onPrefs, onSignOut, sound, onSound }: {
           <span className="spacer" />
           <button className="btn" onClick={shuffle}>{t("Shuffle")}</button>
           <button className="btn" onClick={() => onPrefs({ reset: true })}>{t("Reset to Ronchi")}</button>
+          <button className="btn" disabled={!tipCount} title={t("Bring back the instruction notes you closed with the ×")} onClick={() => showAllTips().then(() => toast(t("Tips are back on every page.")), () => toast(t("Couldn't bring the tips back. Try again.")))}>
+            {tipCount ? t("Show {n} hidden tips", { n: tipCount }) : t("No hidden tips")}
+          </button>
         </div>
-        <p className="muted">{t("Saved to your login, so it follows you to your phone and computer.")}</p>
+        <Tip id="settings.look">{t("Saved to your login, so it follows you to your phone and computer.")}</Tip>
         {prefs?.theme === "ronchi" && (
           <div className="row" role="radiogroup" aria-label={t("Light or dark")}>
             {(["auto", "light", "dark"] as const).map((m) => (
@@ -85,7 +90,7 @@ export function Settings({ me, prefs, onPrefs, onSignOut, sound, onSound }: {
             </button>
           ))}
         </div>
-        <p className="muted">{t("Home layouts (20 to pick from) and drag-to-arrange tiles arrive in Step 4.")}</p>
+        <Tip id="settings.layouts">{t("Home layouts (20 to pick from) and drag-to-arrange tiles arrive in Step 4.")}</Tip>
       </div>
       <div className="panel">
         <div className="row">
@@ -115,7 +120,7 @@ export function Settings({ me, prefs, onPrefs, onSignOut, sound, onSound }: {
             </div>
           </div>
         )}
-        <p className="muted">{t("Lost a phone? Sign it out here, or ask Paolo to sign you out everywhere.")}</p>
+        <Tip id="settings.lost-phone">{t("Lost a phone? Sign it out here, or ask Paolo to sign you out everywhere.")}</Tip>
       </div>
     </>
   );

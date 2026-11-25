@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, apiPut, can, fmtTime, type Me } from "../api";
 import { getLang, t } from "../i18n";
-import { Empty, ErrorNote, Link, PageHead, toast, useLoad } from "../components/ui";
+import { Empty, ErrorNote, Link, PageHead, toast, useLoad, Tip } from "../components/ui";
 import { navigate } from "../router";
 import { CatalogTree, type TreeSheet } from "../../catalog/CatalogTree";
 import { SheetView } from "../../catalog/SheetView";
@@ -41,7 +41,7 @@ function CatalogHome({ me }: { me: Me }) {
 
   return (
     <>
-      <PageHead title={t("Parts catalog")} sub={t("Drawings, 3D models and parts lists for every machine, read from each manual's chapter 11.")} />
+      <PageHead title={t("Parts catalog")} sub={t("Drawings, 3D models and parts lists for every machine, read from each manual's chapter 11.")} tip="catalog.head" />
       <form className="row" onSubmit={(e) => { e.preventDefault(); setQuery(q.trim()); }}>
         <input className="panel" style={{ flex: 1, padding: "10px 12px", font: "inherit" }} value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search all machines by part number or name")} aria-label={t("Search parts")} />
         <button className="btn" type="submit">{t("Search")}</button>
@@ -308,7 +308,7 @@ function ImportManual({ machineId, onDone }: { machineId: string; onDone: () => 
   return (
     <div className="panel stack">
       <h2>{t("Import from the manual")}</h2>
-      <p className="muted">{t("Choose the machine's manual PDF (chapter 11, Construction tables). It's read in this browser; only the parts tables and one picture per drawing are saved. Importing again replaces the drawings from the last import, and keeps drawings added by hand or from CAD.")}</p>
+      <Tip id="catalog.import">{t("Choose the machine's manual PDF (chapter 11, Construction tables). It's read in this browser; only the parts tables and one picture per drawing are saved. Importing again replaces the drawings from the last import, and keeps drawings added by hand or from CAD.")}</Tip>
       <div className="row" style={{ flexWrap: "wrap" }}>
         <input type="file" accept="application/pdf,.pdf" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setResult(null); }} aria-label={t("Manual PDF")} />
         <label className="row" style={{ gap: 6 }}>{t("Pages")} <input style={{ width: 70 }} inputMode="numeric" value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} placeholder={t("first")} aria-label={t("First page")} /> – <input style={{ width: 70 }} inputMode="numeric" value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} placeholder={t("last")} aria-label={t("Last page")} /></label>
@@ -508,7 +508,7 @@ function SheetEditor({ sheet, rows, machineId, onSaved }: { sheet: any; rows: Ro
       </div>
       {unmapped.length > 0 && (
         <div className="stack">
-          <p className="muted">{t("These 3D part names don't start with a part number. Pick the part each one is, so clicking it in 3D finds it in the list.")}</p>
+          <Tip id="catalog.3d-names">{t("These 3D part names don't start with a part number. Pick the part each one is, so clicking it in 3D finds it in the list.")}</Tip>
           <div className="tbl" style={{ maxHeight: 280, overflow: "auto" }}>
             <table><tbody>
               {unmapped.map((n) => (
@@ -613,7 +613,7 @@ function CatalogPart({ code, me }: { code: string; me: Me }) {
         </div>
         <div className="panel stack">
           <h2>{t("Staff notes")}</h2>
-          <p className="muted">{t("Fix tips, what to watch for, where to buy it. Only staff see these; they're never published.")}</p>
+          <Tip id="catalog.staff-notes">{t("Fix tips, what to watch for, where to buy it. Only staff see these; they're never published.")}</Tip>
           <form className="stack" onSubmit={async (e) => {
             e.preventDefault();
             try {

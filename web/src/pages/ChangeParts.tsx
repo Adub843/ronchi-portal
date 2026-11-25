@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { CP_FIELDS, CP_LABELS, CP_STATUSES, normalDate, type CpField } from "../../../src/shared/change-parts";
 import { toCsv } from "../../../src/shared/csv";
 import { api, can, fmtTime, type Me } from "../api";
-import { Empty, ErrorNote, Link, PageHead, toast, useLoad } from "../components/ui";
+import { Empty, ErrorNote, Link, PageHead, toast, useLoad, Tip } from "../components/ui";
 import { loc, t } from "../i18n";
 import { navigate } from "../router";
 
@@ -95,7 +95,7 @@ export function ChangeParts({ me }: { me: Me }) {
 
   return (
     <>
-      <PageHead title={t("Change-part orders")} sub={t("Every change-part job, from quote to shipped.")}>
+      <PageHead title={t("Change-part orders")} sub={t("Every change-part job, from quote to shipped.")} tip="change-parts.head">
         <button className="btn" onClick={exportCsv} disabled={!shown.length}>{t("Export CSV")}</button>
         {can(me, "orders.import") && <button className="btn" onClick={() => setPanel(panel === "import" ? null : "import")}>{panel === "import" ? t("Cancel") : t("Import CSV")}</button>}
         {can(me, "orders.add") && <button className="btn primary" onClick={() => setPanel(panel === "new" ? null : "new")}>{panel === "new" ? t("Cancel") : t("New order")}</button>}
@@ -253,7 +253,7 @@ function ImportPanel({ onDone }: { onDone: () => void }) {
   return (
     <div className="panel stack">
       <h2>{t("Import from a spreadsheet")}</h2>
-      <p className="muted">{t("In Excel, open the Change Parts Management Master Sheet (or the old console's export) and use File, Save As, CSV. Then choose that file here. You'll see what was found before anything is added.")}</p>
+      <Tip id="change-parts.import">{t("In Excel, open the Change Parts Management Master Sheet (or the old console's export) and use File, Save As, CSV. Then choose that file here. You'll see what was found before anything is added.")}</Tip>
       <div className="field">
         <label htmlFor="cp-file">{t("CSV file")}</label>
         <input id="cp-file" type="file" accept=".csv,text/csv" onChange={(e) => pick(e.target.files?.[0])} />

@@ -29,6 +29,7 @@ interface DB {
   posts: any[];
   audit: any[];
   prefs: any;
+  tips?: string[];
   reads: Record<string, string>; // board id -> when Aaron last read it
   muted: Record<string, boolean>;
   members: Record<string, string[]>; // chat id -> user ids
@@ -224,6 +225,12 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   if (path === "/auth/me") return { user: { id: u.id, name: u.name, email: u.email, role: u.role, permissions: [...effective(u.role, u.access, savedPerms(u.role))] } };
   if (path === "/auth/logout") throw new Fail(400, "Sign-out is turned off in this preview.");
   if (path === "/auth/add-device") return { link: "https://portal.ronchiamerica.com/welcome#example-one-time-link" };
+  if (path === "/prefs/tips") {
+    db.tips ??= [];
+    if (method === "POST" && !db.tips.includes(body.id)) db.tips.push(body.id);
+    if (method === "DELETE") db.tips = [];
+    return { hidden: db.tips };
+  }
   if (path === "/prefs") {
     const cur = db.prefs ?? { theme: "ronchi", mode: "auto", layout: "L2", tiles: null, lang: "en", popups: true };
     if (method === "PUT") db.prefs = body.reset ? { ...cur, theme: "ronchi", mode: "auto", layout: "L2", tiles: null } : { theme: body.theme, mode: body.mode ?? "auto", layout: body.layout ?? "L2", tiles: body.tiles ?? null, lang: body.lang ?? "en", popups: body.popups !== false };

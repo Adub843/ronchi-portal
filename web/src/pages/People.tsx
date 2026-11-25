@@ -81,7 +81,7 @@ export function People({ me }: { me: Me }) {
 
   return (
     <>
-      <PageHead title={t("People")} sub={t("Add and remove employees, make roles, and set what each person can do.")} />
+      <PageHead title={t("People")} sub={t("Add and remove employees, make roles, and set what each person can do.")} tip="people.head" />
       <div className="seg people-tabs" role="tablist" aria-label={t("People")}>
         <button type="button" role="tab" aria-selected={tab === "people"} className={tab === "people" ? "on" : ""} onClick={() => setTab("people")}>{t("Employees")} <span className="count">{current.length}</span></button>
         <button type="button" role="tab" aria-selected={tab === "roles"} className={tab === "roles" ? "on" : ""} onClick={() => setTab("roles")}>{t("Roles")} <span className="count">{Object.keys(roleNames).length}</span></button>

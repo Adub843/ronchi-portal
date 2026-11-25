@@ -46,3 +46,29 @@ prefs.put("/", async (c) => {
   ).bind(u.id, theme, mode, layout, tiles, lang, popups, now()).run();
   return c.json({ theme, mode, layout, tiles: tiles ? JSON.parse(tiles) : null, lang, popups: !!popups });
 });
+
+// Instruction notes a person closed with the ×. Ids are short names chosen in the app ("people.head").
+const TIP_ID = /^[a-z0-9][a-z0-9.-]{0,59}$/;
+const TIP_CAP = 300;
+
+prefs.get("/tips", async (c) => {
+  const u = requireUser(c);
+  const rows = await c.env.DB.prepare("SELECT tip FROM user_tips WHERE user_id = ? ORDER BY tip").bind(u.id).all<{ tip: string }>();
+  return c.json({ hidden: rows.results.map((r) => r.tip) });
+});
+
+prefs.post("/tips", async (c) => {
+  const u = requireUser(c);
+  const b = await body(c);
+  const id = typeof b.id === "string" && TIP_ID.test(b.id) ? b.id : fail(400, "Unknown tip.");
+  const n = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM user_tips WHERE user_id = ?").bind(u.id).first<{ n: number }>();
+  if ((n?.n ?? 0) >= TIP_CAP) fail(400, "Too many hidden tips. Use Show tips again in Settings.");
+  await c.env.DB.prepare("INSERT OR IGNORE INTO user_tips (user_id, tip, hidden_at) VALUES (?,?,?)").bind(u.id, id, now()).run();
+  return c.json({ ok: true });
+});
+
+prefs.delete("/tips", async (c) => {
+  const u = requireUser(c);
+  await c.env.DB.prepare("DELETE FROM user_tips WHERE user_id = ?").bind(u.id).run();
+  return c.json({ hidden: [] });
+});

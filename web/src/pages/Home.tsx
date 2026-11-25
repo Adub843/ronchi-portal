@@ -11,7 +11,7 @@ export function Home({ me, unread }: { me: Me; unread: Unread }) {
 
   return (
     <>
-      <PageHead title={`${greet}, ${me.name.split(" ")[0]}`} sub={t("Ronchi America control hub")} />
+      <PageHead title={`${greet}, ${me.name.split(" ")[0]}`} sub={t("Ronchi America control hub")} tip="home.head" />
       <div className="tiles">
         {can(me, "boards.use") && (
           <Link to="/chats" className="panel tile">
