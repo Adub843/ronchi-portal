@@ -2,13 +2,16 @@
 // Admins also get a second tab, Admin controls (pages/AdminSettings.tsx).
 import { useState } from "react";
 import { api, can, fmtTime, type Me } from "../api";
-import { Link, PageHead, toast, useLoad } from "../components/ui";
+import { Link, PageHead, toast, useLoad, Tip } from "../components/ui";
 import { AdminSettings } from "./AdminSettings";
+import { showAllTips, useHiddenTipCount } from "../tips";
 import { LANGS, t } from "../i18n";
 import { THEMES, type Prefs } from "../theme";
 
-export function Settings({ me, admin, prefs, onPrefs, onSignOut, sound, onSound, onSettings }: {
-  me: Me; admin?: boolean; prefs: Prefs | null; onPrefs: (p: Partial<Prefs> | { reset: true }) => void; onSignOut: () => void; sound: boolean; onSound: (on: boolean) => void;
+type Switches = { workbook: boolean };
+
+export function Settings({ me, admin, prefs, onPrefs, onSignOut, sound, onSound, switches, onSwitches, onSettings }: {
+  me: Me; admin?: boolean; prefs: Prefs | null; switches: Switches; onSwitches: (s: Switches) => void; onPrefs: (p: Partial<Prefs> | { reset: true }) => void; onSignOut: () => void; sound: boolean; onSound: (on: boolean) => void;
   onSettings: (s: NonNullable<Me["settings"]>) => void;
 }) {
   const isAdmin = can(me, "settings.manage");
@@ -27,11 +30,11 @@ export function Settings({ me, admin, prefs, onPrefs, onSignOut, sound, onSound,
       </>
     );
   }
-  return <MySettings me={me} tabs={tabs} prefs={prefs} onPrefs={onPrefs} onSignOut={onSignOut} sound={sound} onSound={onSound} />;
+  return <MySettings me={me} tabs={tabs} prefs={prefs} switches={switches} onSwitches={onSwitches} onPrefs={onPrefs} onSignOut={onSignOut} sound={sound} onSound={onSound} />;
 }
 
-function MySettings({ me, tabs, prefs, onPrefs, onSignOut, sound, onSound }: {
-  me: Me; tabs: React.ReactNode; prefs: Prefs | null; onPrefs: (p: Partial<Prefs> | { reset: true }) => void; onSignOut: () => void; sound: boolean; onSound: (on: boolean) => void;
+function MySettings({ me, tabs, prefs, onPrefs, onSignOut, sound, onSound, switches, onSwitches }: {
+  me: Me; tabs: React.ReactNode; prefs: Prefs | null; switches: Switches; onSwitches: (s: Switches) => void; onPrefs: (p: Partial<Prefs> | { reset: true }) => void; onSignOut: () => void; sound: boolean; onSound: (on: boolean) => void;
 }) {
   const devices = useLoad(() => api("/users/me/devices"));
   const [deviceLink, setDeviceLink] = useState<string | null>(null);
@@ -58,6 +61,7 @@ function MySettings({ me, tabs, prefs, onPrefs, onSignOut, sound, onSound }: {
     return [k.steel, k.bg, k.solid, k.accent];
   };
   const lang = prefs?.lang ?? "en";
+  const tipCount = useHiddenTipCount();
   const popups = prefs?.popups !== false;
 
   return (
@@ -69,7 +73,7 @@ function MySettings({ me, tabs, prefs, onPrefs, onSignOut, sound, onSound }: {
       <div className="grid g2">
         <div className="panel stack">
           <h2 style={{ margin: 0 }}>{t("Language")}</h2>
-          <p className="muted" style={{ margin: 0 }}>{t("Menus, buttons and dates. Messages always show exactly as people wrote them.")}</p>
+          <Tip id="settings.language">{t("Menus, buttons and dates. Messages always show exactly as people wrote them.")}</Tip>
           <div className="row" role="radiogroup" aria-label={t("Language")}>
             {langs.map((l) => (
               <button key={l.id} className={`btn${lang === l.id ? " primary" : ""}`} role="radio" aria-checked={lang === l.id} onClick={() => onPrefs({ lang: l.id })}>{l.name}</button>
@@ -86,17 +90,39 @@ function MySettings({ me, tabs, prefs, onPrefs, onSignOut, sound, onSound }: {
             <input type="checkbox" checked={sound} onChange={(e) => onSound(e.target.checked)} />
             <span><b>{t("Alert sound")}</b><small className="muted">{t("A soft chime with each pop-up. Set on each device.")}</small></span>
           </label>
-          <p className="muted" style={{ margin: 0 }}>{t("To silence one chat or board, open it and choose Mute alerts in its menu.")}</p>
+          <Tip id="settings.mute">{t("To silence one chat or board, open it and choose Mute alerts in its menu.")}</Tip>
         </div>
       </div>
+      {can(me, "users.manage") && (
+        <div className="panel stack">
+          <h2 style={{ margin: 0 }}>{t("Ronchi workbook")}</h2>
+          <label className="row switchrow">
+            <input type="checkbox" checked={switches.workbook} onChange={async (e) => {
+              const on = e.target.checked;
+              if (!on && !window.confirm(t("Switch the Ronchi workbook off for everyone? Work orders leave the menu. Jobs, job emails and job files keep working, and nothing is deleted."))) return;
+              try {
+                const r = await api("/switches/workbook", { method: "PUT", body: { on } });
+                onSwitches(r.switches);
+                toast(on ? t("The Ronchi workbook is on") : t("The Ronchi workbook is off"));
+              } catch (x) {
+                toast((x as Error).message);
+              }
+            }} />
+            <span><b>{t("Use the Ronchi workbook (Work orders)")}</b><small className="muted">{t("On: each job has a work order with the machine's log of past work orders, and the field service engineer's email opens it. Off: for teams that keep their Excel sheets. Jobs, job emails and files keep working; switching back on brings everything back.")}</small></span>
+          </label>
+        </div>
+      )}
       <div className="panel stack">
         <div className="row">
           <h2 style={{ margin: 0 }}>{t("Your look")}</h2>
           <span className="spacer" />
           {themes.length > 1 && <button className="btn" onClick={shuffle}>{t("Shuffle")}</button>}
           <button className="btn" onClick={() => onPrefs({ reset: true })}>{me.settings && me.settings.look.defaultTheme !== "ronchi" ? t("Reset to the starting look") : t("Reset to Ronchi")}</button>
+          <button className="btn" disabled={!tipCount} title={t("Bring back the instruction notes you closed with the ×")} onClick={() => showAllTips().then(() => toast(t("Tips are back on every page.")), () => toast(t("Couldn't bring the tips back. Try again.")))}>
+            {tipCount ? t("Show {n} hidden tips", { n: tipCount }) : t("No hidden tips")}
+          </button>
         </div>
-        <p className="muted">{t("Saved to your login, so it follows you to your phone and computer.")}</p>
+        <Tip id="settings.look">{t("Saved to your login, so it follows you to your phone and computer.")}</Tip>
         {prefs?.theme === "ronchi" && (
           <div className="row" role="radiogroup" aria-label={t("Light or dark")}>
             {(["auto", "light", "dark"] as const).map((m) => (
@@ -115,7 +141,7 @@ function MySettings({ me, tabs, prefs, onPrefs, onSignOut, sound, onSound }: {
             </button>
           ))}
         </div>
-        <p className="muted">{t("Home layouts (20 to pick from) and drag-to-arrange tiles arrive in Step 4.")}</p>
+        <Tip id="settings.layouts">{t("Home layouts (20 to pick from) and drag-to-arrange tiles arrive in Step 4.")}</Tip>
       </div>
       <div className="panel">
         <div className="row">
@@ -145,7 +171,7 @@ function MySettings({ me, tabs, prefs, onPrefs, onSignOut, sound, onSound }: {
             </div>
           </div>
         )}
-        <p className="muted">{t("Lost a phone? Sign it out here, or ask Paolo to sign you out everywhere.")}</p>
+        <Tip id="settings.lost-phone">{t("Lost a phone? Sign it out here, or ask Paolo to sign you out everywhere.")}</Tip>
       </div>
     </>
   );

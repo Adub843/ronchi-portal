@@ -169,6 +169,18 @@ describe("sign-in and roles", () => {
     const bob = await customer(b);
     expect((await bob.json("/api/machines")).data.machines.map((m: any) => m.serial)).toEqual(["2903BB"]);
     expect((await bob.json("/api/machines/2902AA")).status).toBe(404);
+    // A machine-number search finds the company's own machines only, catalog or not.
+    expect((await alice.json("/api/search?q=290")).data.machines.map((m: any) => m.serial)).toEqual(["2901AA", "2902AA"]);
+    expect((await bob.json("/api/search?q=2902")).data.machines).toEqual([]);
+    // Searching by company name lists that company's own machines, never another company's.
+    expect((await alice.json("/api/search?q=bottler")).data.machines.map((m: any) => m.serial)).toEqual(["2901AA", "2902AA"]);
+    expect((await bob.json("/api/search?q=bottler")).data.machines.map((m: any) => m.serial)).toEqual(["2903BB"]);
+  });
+
+  it("Ronchi America machine numbers (RA1018) work for companies", async () => {
+    const co = await company(["RA1018"]);
+    const c = await customer(co);
+    expect((await c.json("/api/machines")).data.machines.map((m: any) => m.serial)).toEqual(["RA1018"]);
   });
 
   it("removing a machine from a company takes it away at once", async () => {

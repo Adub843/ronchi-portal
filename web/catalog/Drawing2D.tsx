@@ -1,7 +1,8 @@
 // The exploded drawing from the manual, with every balloon number clickable.
 // Drag to move, wheel or pinch to zoom. Clicking a balloon selects that row in the parts list;
 // selecting a row lights up its balloons and brings them into view.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { IC, Ib } from "./icons";
 import type { Hotspot } from "../../src/shared/catalog/model";
 import { w, type Lang } from "./words";
 
@@ -13,7 +14,7 @@ const MIN = 0.1;
 const MAX = 12;
 
 export function Drawing2D({
-  src, width, height, balloons, selected, onPick, lang, onPlace,
+  src, width, height, balloons, selected, onPick, lang, onPlace, lead, label,
 }: {
   src: string;
   width: number;
@@ -24,6 +25,8 @@ export function Drawing2D({
   lang: Lang;
   /** Staff only: a click on the drawing (not on a balloon) adds a balloon here. Fractions of the image. */
   onPlace?: (x: number, y: number) => void;
+  lead?: ReactNode;    // buttons at the start of the toolbar (the Drawing / 3D switch)
+  label?: string;      // shown at the end of the toolbar
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [view, setView] = useState({ s: 1, x: 0, y: 0 });
@@ -129,11 +132,13 @@ export function Drawing2D({
   return (
     <div className={`cv-stage${full ? " cv-full" : ""}`}>
       <div className="cv-tools" role="toolbar" aria-label={w(lang, "Drawing")}>
-        <button type="button" className="cv-btn" onClick={() => zoomAt(1.4, ...centre())} aria-label={w(lang, "Zoom in")} title={w(lang, "Zoom in")}>+</button>
-        <button type="button" className="cv-btn" onClick={() => zoomAt(1 / 1.4, ...centre())} aria-label={w(lang, "Zoom out")} title={w(lang, "Zoom out")}>−</button>
-        <button type="button" className="cv-btn" onClick={fit}>{w(lang, "Fit")}</button>
+        {lead}
+        <Ib icon={IC.home} label={w(lang, "Fit")} onClick={fit} />
+        <Ib icon={IC.zoomIn} label={w(lang, "Zoom in")} onClick={() => zoomAt(1.4, ...centre())} />
+        <Ib icon={IC.zoomOut} label={w(lang, "Zoom out")} onClick={() => zoomAt(1 / 1.4, ...centre())} />
+        <Ib icon={full ? IC.unfull : IC.full} label={w(lang, full ? "Exit full screen" : "Full screen")} pressed={full} onClick={() => setFull(!full)} />
         <span className="cv-gap" />
-        <button type="button" className="cv-btn" onClick={() => setFull(!full)} aria-pressed={full}>{w(lang, full ? "Exit full screen" : "Full screen")}</button>
+        {label && <span className="cv-label">{label}</span>}
       </div>
       <div
         ref={box}

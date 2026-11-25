@@ -2,16 +2,20 @@ import { api, can, type Me } from "../api";
 import type { Unread } from "../components/Alerts";
 import { Link, PageHead, useLoad } from "../components/ui";
 import { t } from "../i18n";
+import { QuickLinks } from "../components/QuickLinks";
+import { useRoleNames } from "../roles";
 
 export function Home({ me, unread }: { me: Me; unread: Unread }) {
   const boards = useLoad(() => (can(me, "boards.use") ? api("/boards") : Promise.resolve({ boards: [] })));
   const orders = useLoad(() => (can(me, "orders.view") ? api("/change-parts") : Promise.resolve(null)));
   const hour = new Date().getHours();
+  useRoleNames();
   const greet = hour < 12 ? t("Good morning") : hour < 18 ? t("Good afternoon") : t("Good evening");
 
   return (
     <>
-      <PageHead title={`${greet}, ${me.name.split(" ")[0]}`} sub={t("Ronchi America control hub")} />
+      <PageHead title={`${greet}, ${me.name.split(" ")[0]}`} sub={t("Ronchi America control hub")} tip="home.head" />
+      <QuickLinks me={me} />
       <div className="tiles">
         {can(me, "boards.use") && (
           <Link to="/chats" className="panel tile">

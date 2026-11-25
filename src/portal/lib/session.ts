@@ -42,11 +42,12 @@ export async function loadSession(c: Context<AppEnv>): Promise<SessionUser | nul
   const hash = await sha256Hex(token);
   const row = await c.env.DB.prepare(
     `SELECT s.id_hash, s.created_at, s.last_seen_at, s.expires_at, u.id, u.email, u.name, u.role, u.status,
-            (SELECT group_concat(a.perm || '=' || a.allow) FROM user_access a WHERE a.user_id = u.id) AS access
+            (SELECT group_concat(a.perm || '=' || a.allow) FROM user_access a WHERE a.user_id = u.id) AS access,
+            (SELECT r.perms FROM roles r WHERE r.id = u.role) AS role_perms
        FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id_hash = ?`,
   )
     .bind(hash)
-    .first<{ id_hash: string; created_at: string; last_seen_at: string; expires_at: string; id: string; email: string; name: string; role: SessionUser["role"]; status: string; access: string | null }>();
+    .first<{ id_hash: string; created_at: string; last_seen_at: string; expires_at: string; id: string; email: string; name: string; role: SessionUser["role"]; status: string; access: string | null; role_perms: string | null }>();
   if (!row) return null;
   const t = now();
   const idleExpired = Date.parse(row.last_seen_at) + idleLifetime() * 1000 < Date.parse(t);
@@ -59,7 +60,7 @@ export async function loadSession(c: Context<AppEnv>): Promise<SessionUser | nul
   if (Date.parse(t) - Date.parse(row.last_seen_at) > 5 * 60 * 1000) {
     await c.env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?").bind(t, hash).run();
   }
-  return { id: row.id, email: row.email, name: row.name, role: row.role, perms: effective(row.role, readChanges(row.access)), sessionHash: hash };
+  return { id: row.id, email: row.email, name: row.name, role: row.role, perms: effective(row.role, readChanges(row.access), row.role_perms), sessionHash: hash };
 }
 
 export async function endSession(c: Context<AppEnv>): Promise<void> {

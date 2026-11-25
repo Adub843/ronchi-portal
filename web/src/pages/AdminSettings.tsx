@@ -12,7 +12,7 @@ type Role = PortalSettings["people"]["defaultRole"];
 
 // Plain names for the screen. Kept here (not from the server) so each one is translated.
 const roleName = (r: string) =>
-  ({ manager: t("Manager"), billing: t("Billing"), scheduling: t("Scheduling"), service: t("Service"), sales: t("Sales"), engineering: t("Engineering"), tech: t("Field technician") })[r] ?? r;
+  ({ manager: t("Manager"), billing: t("Billing"), scheduling: t("Scheduling"), service: t("Service"), sales: t("Sales"), engineering: t("Engineering"), tech: t("Field service engineer") })[r] ?? r;
 const sectionName = (s: Section) =>
   ({ chats: t("Chats and boards"), machines: t("Machines"), catalog: t("Parts catalog"), customers: t("Customers and quote requests"), changeParts: t("Change parts"), knowledge: t("Knowledge base") })[s];
 const LOCKED = () => [

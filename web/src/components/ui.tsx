@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { t } from "../i18n";
 import { hrefFor, navigate } from "../router";
+import { hideTip, useTipHidden } from "../tips";
 
 export function Link({ to, children, className, current }: { to: string; children: ReactNode; className?: string; current?: boolean }) {
   return (
@@ -19,12 +20,14 @@ export function Link({ to, children, className, current }: { to: string; childre
   );
 }
 
-export function PageHead({ title, sub, children }: { title: string; sub?: string; children?: ReactNode }) {
+/** `tip` names the subtitle when it's an instruction a person can close with the ×. Subtitles that
+ * show the record's own details (a machine's model, a quote's company) leave `tip` out. */
+export function PageHead({ title, sub, tip, children }: { title: string; sub?: string; tip?: string; children?: ReactNode }) {
   return (
     <div className="row pagehead">
       <div>
         <h1>{title}</h1>
-        {sub && <p className="sub">{sub}</p>}
+        {sub && (tip ? <Tip id={tip} className="sub">{sub}</Tip> : <p className="sub">{sub}</p>)}
       </div>
       <span className="spacer" />
       {children}
@@ -71,4 +74,21 @@ export function toast(message: string) {
   el.hidden = false;
   window.clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => el && (el.hidden = true), 3500);
+}
+
+/** An instruction note with a small × to close it after reading. Closed notes stay closed on every
+ * device for that person until they press Show tips again in Settings. Don't use it for warnings
+ * (customer names, links anyone can use): those must always show. */
+export function Tip({ id, children, className = "muted", as = "p" }: { id: string; children: ReactNode; className?: string; as?: "p" | "span" }) {
+  const hidden = useTipHidden(id);
+  if (hidden) return null;
+  const Tag = as;
+  return (
+    <Tag className={`tip ${className}`} data-tip={id}>
+      <span className="tip-text">{children}</span>
+      <button type="button" className="tip-x" aria-label={t("Hide this tip")} title={t("Hide this tip")} onClick={() => hideTip(id)}>
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+      </button>
+    </Tag>
+  );
 }

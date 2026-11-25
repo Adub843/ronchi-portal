@@ -21,11 +21,16 @@ import { People } from "./pages/People";
 import { Catalog } from "./pages/Catalog";
 import { Customers, Quotes } from "./pages/Customers";
 import { Settings } from "./pages/Settings";
+import { JobList, JobPage, NewJob } from "./pages/Jobs";
+import { WorkOrderPage, WorkOrders } from "./pages/WorkOrders";
+import { roleLabel, useRoleNames } from "./roles";
 
-const NAV: { to: string; label: string; perm?: string; count?: keyof Unread; phone?: boolean }[] = [
+const NAV: { to: string; label: string; perm?: string; count?: keyof Unread; phone?: boolean; workbook?: boolean }[] = [
   { to: "/", label: "Home" },
   { to: "/chats", label: "Chats", perm: "boards.use", count: "chats" },
   { to: "/boards", label: "Boards", perm: "boards.use", count: "boards" },
+  { to: "/jobs", label: "Jobs" },
+  { to: "/work-orders", label: "Work orders", workbook: true },
   { to: "/kb", label: "Knowledge base", perm: "kb.view" },
   { to: "/machines", label: "Machines", perm: "machines.view" },
   { to: "/catalog", label: "Parts catalog", perm: "catalog.view" },
@@ -36,21 +41,24 @@ const NAV: { to: string; label: string; perm?: string; count?: keyof Unread; pho
   { to: "/settings", label: "Settings", phone: false },
 ];
 
-const ROLE_NAMES: Record<string, string> = { admin: "Admin", manager: "Manager", billing: "Billing", scheduling: "Scheduling", service: "Service", sales: "Sales", engineering: "Engineering", tech: "Field technician" };
 export const DEFAULT_PREFS: Prefs = { theme: "ronchi", mode: "auto", layout: "L2", tiles: null, lang: "en", popups: true };
 
 export function App() {
   const path = usePath();
   const lang = useLang();
   const [me, setMe] = useState<Me | null | undefined>(undefined);
+  useRoleNames(me?.id);
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [unread, setUnread] = useState<Unread>({ boards: 0, chats: 0 });
   const [sound, setSoundState] = useState(soundOn);
+  // Whole parts of the portal an admin can switch off (Settings). The Ronchi workbook is on unless switched off.
+  const [switches, setSwitches] = useState<{ workbook: boolean }>({ workbook: true });
 
   const refresh = () => api<{ user: Me | null; settings?: Me["settings"] }>("/auth/me").then((r) => setMe(r.user ? { ...r.user, settings: r.settings } : null), () => setMe(null));
   useEffect(() => void refresh(), []);
   useEffect(() => {
     if (!me) return;
+    api<{ switches: { workbook: boolean } }>("/switches").then((r) => setSwitches(r.switches), () => undefined);
     api<Prefs>("/prefs").then((p) => {
       setPrefs(p);
       applyTheme(p);
@@ -87,14 +95,20 @@ export function App() {
   if (me === undefined) return <div className="boot" aria-busy="true" />;
   if (me === null) return <SignIn onDone={refresh} />;
 
-  const items = NAV.filter((n) => !n.perm || can(me, n.perm));
+  const items = NAV.filter((n) => (!n.perm || can(me, n.perm)) && (!n.workbook || switches.workbook));
   const section = "/" + (path.split("/")[1] ?? "");
   const popups = prefs?.popups !== false;
 
   let page;
-  const m = /^\/(boards|machines|chats|change-parts)\/([A-Za-z0-9_-]+)$/.exec(path);
+  const m = /^\/(boards|machines|chats|change-parts|jobs|work-orders)\/([A-Za-z0-9_-]+)$/.exec(path);
   if (m?.[1] === "boards" || m?.[1] === "chats") page = <BoardPage key={m[2]} id={m[2]!} me={me} />;
   else if (m?.[1] === "machines") page = <MachinePage id={m[2]!} me={me} />;
+  else if (path === "/jobs/new") page = <NewJob me={me} />;
+  else if (m?.[1] === "jobs") page = <JobPage key={m[2]} id={m[2]!} me={me} />;
+  else if (m?.[1] === "work-orders" && switches.workbook) page = <WorkOrderPage key={m[2]} id={m[2]!} me={me} />;
+  else if (m?.[1] === "work-orders") page = <JobPage key={m[2]} id={m[2]!} me={me} />;
+  else if (section === "/jobs") page = <JobList me={me} base="/jobs" title={t("Jobs")} sub={t("Field service visits: who is going where, and when.")} />;
+  else if (section === "/work-orders" && switches.workbook) page = <WorkOrders me={me} />;
   else if (/^\/kb\/[A-Za-z0-9_-]+$/.test(path)) page = <KbArticle key={path} id={path.slice(4)} me={me} />;
   else if (section === "/kb") page = <KnowledgeBase me={me} />;
   else if (section === "/catalog") page = <Catalog me={me} path={path} />;
@@ -106,7 +120,7 @@ export function App() {
   else if (section === "/machines") page = <Machines me={me} />;
   else if (section === "/change-parts") page = <ChangeParts me={me} />;
   else if (section === "/people") page = <People me={me} />;
-  else if (section === "/settings") page = <Settings me={me} admin={path === "/settings/admin"} prefs={prefs} onPrefs={savePrefs} onSignOut={signOut} sound={sound} onSound={(on) => { setSound(on); setSoundState(on); }} onSettings={(s) => setMe({ ...me, settings: s })} />;
+  else if (section === "/settings") page = <Settings me={me} admin={path === "/settings/admin"} prefs={prefs} switches={switches} onSwitches={setSwitches} onPrefs={savePrefs} onSignOut={signOut} sound={sound} onSound={(on) => { setSound(on); setSoundState(on); }} onSettings={(s) => setMe({ ...me, settings: s })} />;
   else page = <Home me={me} unread={unread} />;
 
   const account: MenuItem[] = [
@@ -142,7 +156,7 @@ export function App() {
             trigger={
               <>
                 <span className="avatar person sm" aria-hidden="true">{initials(me.name)}</span>
-                <span className="who-text">{me.name}<small>{t(ROLE_NAMES[me.role] ?? me.role)}</small></span>
+                <span className="who-text">{me.name}<small>{roleLabel(me.role)}</small></span>
                 <Chevron />
               </>
             }

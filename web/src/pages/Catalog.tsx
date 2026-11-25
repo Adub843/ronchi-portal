@@ -9,46 +9,80 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, apiPut, can, fmtTime, type Me } from "../api";
 import { getLang, t } from "../i18n";
-import { Empty, ErrorNote, Link, PageHead, toast, useLoad } from "../components/ui";
+import { Empty, ErrorNote, Link, PageHead, toast, useLoad, Tip } from "../components/ui";
 import { navigate } from "../router";
-import { CatalogTree, type TreeSheet } from "../../catalog/CatalogTree";
+import type { TreeSheet } from "../../catalog/CatalogTree";
+import { CatalogBrowse, Crumbs, levelFrom, SECTION_WORD, Tile, TilePage, type LinkLike } from "../../catalog/Browse";
+import { TILE } from "../../catalog/icons";
 import { SheetView } from "../../catalog/SheetView";
 import type { Row } from "../../catalog/PartsList";
 import { codeOf } from "../../catalog/codes";
+import { w, type Word } from "../../catalog/words";
 import { linkSubAssemblies, readChapter11, type PageText } from "../../../src/shared/catalog/chapter11";
 import { cleanPartCode, type ParsedSheet } from "../../../src/shared/catalog/model";
 import "../../catalog/catalog.css";
 
 export function Catalog({ me, path }: { me: Me; path: string }) {
-  const m = /^\/catalog\/(m|s|p)\/([A-Za-z0-9_-]+)$/.exec(path);
-  if (m?.[1] === "m") return <CatalogMachine key={m[2]} id={m[2]!} me={me} />;
-  if (m?.[1] === "s") return <CatalogSheet key={m[2]} id={m[2]!} me={me} />;
-  if (m?.[1] === "p") return <CatalogPart key={m[2]} code={m[2]!} me={me} />;
+  const parts = path.split("?")[0]!.split("/").filter(Boolean);   // catalog, m, <id>, catalog, <section>, <group>
+  const [kind, id] = [parts[1], parts[2]];
+  if (kind === "m" && id && parts[3] === "catalog") return <CatalogMachineBrowse key={path} id={id} rest={parts.slice(4)} me={me} />;
+  if (kind === "m" && id) return <CatalogMachine key={id} id={id} me={me} />;
+  if (kind === "s" && id) return <CatalogSheet key={id} id={id} me={me} />;
+  if (kind === "p" && id) return <CatalogPart key={id} code={id} me={me} />;
+  if (kind === "c" && id !== undefined) return <CatalogHome key={path} me={me} customer={decodeURIComponent(id)} />;
   return <CatalogHome me={me} />;
 }
 
 const enc = encodeURIComponent;
 
-// ---------- Home: machines and part search ----------
+// ---------- Home: customers, machines and search, as picture tiles like the Mario portal ----------
 
-function CatalogHome({ me }: { me: Me }) {
-  const { data, error } = useLoad(() => api("/catalog/machines"));
+const NO_CUSTOMER = "-";
+
+function CatalogHome({ me, customer }: { me: Me; customer?: string }) {
+  const { data, error, reload } = useLoad(() => api("/catalog/machines"));
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
-  const found = useLoad(() => (query.length >= 2 ? api(`/catalog/search?q=${enc(query)}`) : Promise.resolve({ results: [] })), [query]);
-  const [all, setAll] = useState(false);
-  const machines = (data?.machines ?? []).filter((x: any) => all || x.sheets > 0);
+  const [filter, setFilter] = useState("");
+  const [loading, setLoading] = useState(false);
+  const found = useLoad(() => (query.length >= 2 ? api(`/catalog/search?q=${enc(query)}`) : Promise.resolve({ results: [], machines: [] })), [query]);
+  const all: any[] = data?.machines ?? [];
+  const cust = (m: any) => (m.customer ?? "").trim() || NO_CUSTOMER;
+  const f = filter.trim().toLowerCase();
+  const lang = getLang();
+  const L = Link as LinkLike;
+
+  let tiles: React.ReactNode;
+  if (customer === undefined) {
+    const names = [...new Set(all.map(cust))].sort((a, b) => (a === NO_CUSTOMER ? 1 : b === NO_CUSTOMER ? -1 : a.localeCompare(b)));
+    tiles = names.filter((n) => !f || n.toLowerCase().includes(f) || all.some((m) => cust(m) === n && m.serial.toLowerCase().includes(f))).map((n) => {
+      const ms = all.filter((m) => cust(m) === n);
+      const withCat = ms.filter((m) => m.sheets > 0).length;
+      return <Tile key={n} to={`/catalog/c/${enc(n)}`} L={L} pic={TILE.folder} label={n === NO_CUSTOMER ? t("Customer not set") : n} sub={ms.length === 1 ? (withCat ? t("1 machine, with a catalog") : t("1 machine")) : t("{n} machines, {k} with a catalog", { n: ms.length, k: withCat })} />;
+    });
+  } else {
+    tiles = all.filter((m) => cust(m) === customer && (!f || [m.serial, m.model, m.site].some((v) => v && String(v).toLowerCase().includes(f)))).map((m) => (
+      <Tile key={m.id} to={`/catalog/m/${m.id}`} L={L} pic={TILE.filler} label={m.serial} sub={[m.site, m.sheets ? t("{n} parts lists", { n: m.sheets }) : t("No catalog yet")].filter(Boolean).join(" · ")} />
+    ));
+  }
 
   return (
     <>
-      <PageHead title={t("Parts catalog")} sub={t("Drawings, 3D models and parts lists for every machine, read from each manual's chapter 11.")} />
+      <Crumbs L={L} label={t("Where you are")} items={[{ label: t("All customers"), to: "/catalog" }, ...(customer !== undefined ? [{ label: customer === NO_CUSTOMER ? t("Customer not set") : customer }] : [])]} />
       <form className="row" onSubmit={(e) => { e.preventDefault(); setQuery(q.trim()); }}>
-        <input className="panel" style={{ flex: 1, padding: "10px 12px", font: "inherit" }} value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search all machines by part number or name")} aria-label={t("Search parts")} />
+        <input className="panel" style={{ flex: 1, padding: "8px 12px", font: "inherit" }} value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Machine number, customer, part number or part name")} aria-label={t("Search the catalog")} />
         <button className="btn" type="submit">{t("Search")}</button>
+        {can(me, "catalog.edit") && <button type="button" className="btn" aria-expanded={loading} onClick={() => setLoading(!loading)}>{t("Load parts lists")}</button>}
       </form>
+      {loading && <LoadFiles me={me} machines={all} onDone={() => { setLoading(false); reload(); }} />}
       {query && (
         <div className="panel tbl">
-          {found.data && !found.data.results.length && <Empty>{t("No parts match.")}</Empty>}
+          {found.data && !found.data.results.length && !found.data.machines?.length && <Empty>{t("Nothing matches \"{q}\".", { q: query })}</Empty>}
+          {!!found.data?.machines?.length && (
+            <div className="mv-tiles" style={{ marginBottom: 12 }}>
+              {found.data.machines.map((m: any) => <Tile key={m.id} to={`/catalog/m/${m.id}`} L={L} pic={TILE.filler} label={m.serial} sub={[m.customer, m.sheets ? t("{n} parts lists", { n: m.sheets }) : t("No catalog yet")].filter(Boolean).join(" · ")} />)}
+            </div>
+          )}
           {!!found.data?.results.length && (
             <table>
               <thead><tr><th>{t("Part number")}</th><th>{t("Description")}</th><th>{t("Machine")}</th><th>{t("Drawing")}</th><th>{t("Qty")}</th></tr></thead>
@@ -71,30 +105,10 @@ function CatalogHome({ me }: { me: Me }) {
       {data && !data.partsSite && can(me, "catalog.edit") && (
         <p className="note-inline">{t("The customer parts site isn't connected yet, so catalogs can be built here but not published.")}</p>
       )}
-      <div className="panel tbl">
-        <div className="row">
-          <h2 style={{ margin: 0 }}>{t("Machines")}</h2>
-          <span className="spacer" />
-          <label className="row" style={{ gap: 6 }}><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> {t("Show machines with no catalog yet")}</label>
-        </div>
-        {data && !machines.length && <Empty>{t("No catalogs yet. Open a machine and import chapter 11 of its manual.")}</Empty>}
-        {!!machines.length && (
-          <table>
-            <thead><tr><th>{t("Machine")}</th><th>{t("Model")}</th><th>{t("Drawings")}</th><th>{t("3D")}</th><th>{t("On the parts site")}</th></tr></thead>
-            <tbody>
-              {machines.map((x: any) => (
-                <tr key={x.id}>
-                  <td className="mono"><Link to={`/catalog/m/${x.id}`}>{x.serial}</Link></td>
-                  <td>{x.model ?? "–"}</td>
-                  <td>{x.sheets}</td>
-                  <td>{x.models || "–"}</td>
-                  <td>{x.catalog_published_at ? fmtTime(x.catalog_published_at) : <span className="muted">{t("Not published")}</span>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <TilePage lang={lang} title={customer === undefined ? t("Customers") : customer === NO_CUSTOMER ? t("Customer not set") : customer} filter={filter} onFilter={setFilter}>
+        {tiles}
+        {data && !all.length && <p className="mv-none">{t("No machines yet. Load them on the Machines page with Import CSV.")}</p>}
+      </TilePage>
     </>
   );
 }
@@ -140,30 +154,31 @@ function CatalogMachine({ id, me }: { id: string; me: Me }) {
     }
   }
 
+  const L = Link as LinkLike;
+  const crumbs = [
+    { label: t("All customers"), to: "/catalog" },
+    { label: m.customer || t("Customer not set"), to: `/catalog/c/${enc(m.customer || NO_CUSTOMER)}` },
+    { label: m.serial, to: `/catalog/m/${m.id}` },
+    { label: t("Available content") },
+  ];
   return (
     <>
-      <PageHead title={t("{serial} parts catalog", { serial: m.serial })} sub={[m.model, m.catalog_published_at ? t("On the parts site since {when}", { when: fmtTime(m.catalog_published_at) }) : t("Not on the parts site")].filter(Boolean).join(" · ")}>
-        <Link to={`/machines/${m.id}`} className="btn">{t("Machine page")}</Link>
-        {editor && <button className="btn" onClick={() => setImporting(!importing)}>{importing ? t("Close import") : t("Import from manual")}</button>}
-        {editor && <button className="btn" onClick={() => setAdding(!adding)}>{t("Add a drawing")}</button>}
-        {editor && data.sheets.length > 0 && <button className="btn primary" disabled={!!busy} onClick={publish}>{t("Publish to customers")}</button>}
-        {editor && m.catalog_published_at && <button className="btn danger" disabled={!!busy} onClick={unpublish}>{t("Unpublish")}</button>}
-      </PageHead>
+      <Crumbs L={L} label={t("Where you are")} items={crumbs} />
+      <TilePage lang={getLang()} title={t("Available content")} tools={
+        <span className="row" style={{ gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+          {editor && <button className="btn small" onClick={() => setImporting(!importing)}>{importing ? t("Close import") : t("Import from manual")}</button>}
+          {editor && <button className="btn small" onClick={() => setAdding(!adding)}>{t("Add a drawing")}</button>}
+          {editor && data.sheets.length > 0 && <button className="btn small primary" disabled={!!busy} onClick={publish}>{t("Publish to customers")}</button>}
+          {editor && m.catalog_published_at && <button className="btn small danger" disabled={!!busy} onClick={unpublish}>{t("Unpublish")}</button>}
+        </span>
+      }>
+        <Tile to={`/catalog/m/${m.id}/catalog`} L={L} pic={TILE.catalogue} label={t("Spare parts catalogue")} sub={data.sheets.length ? t("{n} parts lists", { n: data.sheets.length }) : t("No catalog yet")} />
+        <Tile to={`/machines/${m.id}`} L={L} pic={TILE.docs} label={t("Machine page")} sub={[m.model, m.site].filter(Boolean).join(" · ") || undefined} />
+      </TilePage>
+      <p className="muted small">{[m.catalog_published_at ? t("On the parts site since {when}", { when: fmtTime(m.catalog_published_at) }) : t("Not on the parts site"), m.notes].filter(Boolean).join(" · ")}</p>
       {busy && <p className="note-inline" role="status">{busy}</p>}
       {importing && <ImportManual machineId={id} onDone={() => { setImporting(false); reload(); }} />}
       {adding && <AddSheet machineId={id} sheets={data.sheets} onDone={(sid) => navigate(`/catalog/s/${sid}`)} />}
-      <div className="panel">
-        {!data.sheets.length ? (
-          <Empty>{editor ? t("No drawings yet. Use Import from manual to read chapter 11 of this machine's manual.") : t("No drawings yet.")}</Empty>
-        ) : (
-          <CatalogTree
-            sheets={data.sheets as TreeSheet[]}
-            lang={getLang()}
-            link={(s) => <Link to={`/catalog/s/${s.id}`}>{s.title || t("Untitled drawing")}</Link>}
-            badge={(s: any) => (s.source !== "manual" ? <span className="cv-tag ct-3d">{s.source === "cad" ? t("From CAD") : t("Added by hand")}</span> : null)}
-          />
-        )}
-      </div>
       {!!data.imports.length && (
         <div className="panel">
           <h2>{t("Imports")}</h2>
@@ -179,6 +194,75 @@ function CatalogMachine({ id, me }: { id: string; me: Me }) {
         </div>
       )}
     </>
+  );
+}
+
+function CatalogMachineBrowse({ id, rest }: { id: string; rest: string[]; me: Me }) {
+  const { data, error } = useLoad(() => api(`/catalog/machines/${enc(id)}`), [id]);
+  if (error) return <ErrorNote error={error} />;
+  if (!data) return null;
+  const m = data.machine;
+  return (
+    <CatalogBrowse
+      sheets={data.sheets as TreeSheet[]}
+      level={levelFrom(rest)}
+      base={`/catalog/m/${m.id}/catalog`}
+      sheetTo={(s) => `/catalog/s/${s.id}`}
+      thumb={(s) => (s.has_drawing ? `/api/catalog/sheets/${enc(s.id)}/drawing` : null)}
+      L={Link as LinkLike}
+      lang={getLang()}
+      crumbs={[
+        { label: t("All customers"), to: "/catalog" },
+        { label: m.customer || t("Customer not set"), to: `/catalog/c/${enc(m.customer || NO_CUSTOMER)}` },
+        { label: m.serial, to: `/catalog/m/${m.id}` },
+        { label: t("Available content"), to: `/catalog/m/${m.id}` },
+      ]}
+    />
+  );
+}
+
+/**
+ * Load parts lists from files: the JSON files copied from the Ronchi Mario portal (one per machine,
+ * with its machine number inside). A machine that isn't in the registry yet is added first.
+ */
+function LoadFiles({ me, machines, onDone }: { me: Me; machines: any[]; onDone: () => void }) {
+  const [log, setLog] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const say = (x: string) => setLog((l) => [...l, x]);
+  async function run(files: FileList | null) {
+    if (!files?.length) return;
+    setBusy(true);
+    setLog([]);
+    const bySerial = new Map(machines.map((m) => [String(m.serial).toUpperCase(), m.id as string]));
+    for (const file of Array.from(files)) {
+      try {
+        const j = JSON.parse(await file.text());
+        const serial = String(j.serial ?? "").toUpperCase();
+        if (!serial || !Array.isArray(j.sheets)) throw new Error(t("This isn't a parts list file."));
+        let mid = bySerial.get(serial);
+        if (!mid && can(me, "machines.add")) {
+          mid = (await api("/machines", { body: { serial, model: j.type ?? "", customer: j.customer ?? "", site: j.plant ?? "" } })).id as string;
+          bySerial.set(serial, mid);
+        }
+        if (!mid) throw new Error(t("{serial} isn't in the machine list.", { serial }));
+        if (!j.sheets.length) { say(t("{serial}: no parts lists in the file", { serial })); continue; }
+        await api(`/catalog/machines/${enc(mid)}/import`, { body: { fileName: j.fileName || file.name, sheets: j.sheets, warnings: j.skipped?.length ? [t("Codes left out: {list}", { list: j.skipped.slice(0, 40).map((x: any) => (typeof x === "string" ? x : x?.code)).filter(Boolean).join(", ") })] : [] } });
+        say(t("{serial}: {n} parts lists loaded", { serial, n: j.sheets.length }));
+      } catch (e) {
+        say(`${file.name}: ${(e as Error).message}`);
+      }
+    }
+    setBusy(false);
+    toast(t("Done"));
+  }
+  return (
+    <div className="panel stack">
+      <h2>{t("Load parts lists")}</h2>
+      <p className="muted">{t("Choose the parts list files (one per machine, .json). Each one replaces that machine's parts lists that came from a manual or from Mario. Drawings and 3D added by hand are kept.")}</p>
+      <input type="file" accept=".json,application/json" multiple disabled={busy} onChange={(e) => run(e.target.files)} aria-label={t("Parts list files")} />
+      {!!log.length && <ul className="small">{log.map((x, i) => <li key={i}>{x}</li>)}</ul>}
+      {!busy && !!log.length && <div><button className="btn" onClick={onDone}>{t("Close")}</button></div>}
+    </div>
   );
 }
 
@@ -308,7 +392,7 @@ function ImportManual({ machineId, onDone }: { machineId: string; onDone: () => 
   return (
     <div className="panel stack">
       <h2>{t("Import from the manual")}</h2>
-      <p className="muted">{t("Choose the machine's manual PDF (chapter 11, Construction tables). It's read in this browser; only the parts tables and one picture per drawing are saved. Importing again replaces the drawings from the last import, and keeps drawings added by hand or from CAD.")}</p>
+      <Tip id="catalog.import">{t("Choose the machine's manual PDF (chapter 11, Construction tables). It's read in this browser; only the parts tables and one picture per drawing are saved. Importing again replaces the drawings from the last import, and keeps drawings added by hand or from CAD.")}</Tip>
       <div className="row" style={{ flexWrap: "wrap" }}>
         <input type="file" accept="application/pdf,.pdf" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setResult(null); }} aria-label={t("Manual PDF")} />
         <label className="row" style={{ gap: 6 }}>{t("Pages")} <input style={{ width: 70 }} inputMode="numeric" value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} placeholder={t("first")} aria-label={t("First page")} /> – <input style={{ width: 70 }} inputMode="numeric" value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} placeholder={t("last")} aria-label={t("Last page")} /></label>
@@ -355,6 +439,7 @@ function ImportManual({ machineId, onDone }: { machineId: string; onDone: () => 
 
 function CatalogSheet({ id, me }: { id: string; me: Me }) {
   const { data, error, reload } = useLoad(() => api(`/catalog/sheets/${enc(id)}`), [id]);
+  const tree = useLoad(() => (data ? api(`/catalog/machines/${enc(data.machine.id)}`) : Promise.resolve(null)), [data?.machine.id]);
   const [version, setVersion] = useState("");
   const [editing, setEditing] = useState(false);
   const [placing, setPlacing] = useState(false);
@@ -373,16 +458,25 @@ function CatalogSheet({ id, me }: { id: string; me: Me }) {
     }
   }
 
+  const all: TreeSheet[] = tree.data?.sheets ?? [];
+  const grp = (x: { grp?: string | null; group?: string | null }) => (x.grp ?? x.group ?? "").trim() || "-";
+  const siblings = all.filter((x) => x.section === s.section && grp(x) === grp(s)).map((x) => ({ id: x.id, code: x.code, title: x.title }));
+  const mm = data.machine;
+  const base = `/catalog/m/${mm.id}/catalog`;
+  const trail = [
+    { label: t("All customers"), to: "/catalog" },
+    { label: mm.customer || t("Customer not set"), to: `/catalog/c/${enc(mm.customer || NO_CUSTOMER)}` },
+    { label: mm.serial, to: `/catalog/m/${mm.id}` },
+    { label: t("Spare parts catalogue"), to: base },
+    { label: w(getLang(), SECTION_WORD[s.section as keyof typeof SECTION_WORD] as Word), to: `${base}/${s.section}` },
+    ...(s.group ? [{ label: s.group, to: `${base}/${s.section}/${enc(grp(s))}` }] : []),
+    ...s.path.map((p: any) => ({ label: [p.code, p.title].filter(Boolean).join(" - "), to: `/catalog/s/${p.id}` })),
+    { label: [s.code, s.title].filter(Boolean).join(" - ") || t("Untitled drawing") },
+  ];
+
   return (
     <>
-      <nav className="crumbs" aria-label={t("Where this drawing sits")}>
-        <Link to={`/catalog/m/${data.machine.id}`}>{data.machine.serial}</Link>
-        {s.path.map((p: any) => <span key={p.id}> › <Link to={`/catalog/s/${p.id}`}>{p.title}</Link></span>)}
-      </nav>
-      <PageHead title={s.title || t("Untitled drawing")} sub={[s.code, s.titleIt, s.page ? t("Manual page {n}", { n: s.page }) : null].filter(Boolean).join(" · ")}>
-        {editor && <button className="btn" aria-pressed={placing} onClick={() => setPlacing(!placing)}>{placing ? t("Done placing") : t("Place balloons")}</button>}
-        {editor && <button className="btn" onClick={() => setEditing(!editing)}>{editing ? t("Close editing") : t("Edit")}</button>}
-      </PageHead>
+      <Crumbs L={Link as LinkLike} label={t("Where this drawing sits")} items={trail} />
       {placing && <p className="note-inline">{t("Pick a row in the parts list, then click its spot on the drawing. Each click adds a balloon for that row.")}</p>}
       {editing && <SheetEditor sheet={s} rows={rows} machineId={data.machine.id} onSaved={(v) => { if (v) setVersion(v); reload(); }} />}
       <SheetView
@@ -393,8 +487,17 @@ function CatalogSheet({ id, me }: { id: string; me: Me }) {
         fileUrl={(kind) => `/api/catalog/sheets/${enc(id)}/${kind}`}
         onOpenSheet={(sid) => navigate(`/catalog/s/${sid}`)}
         partLink={(code) => <Link to={`/catalog/p/${code}`}>{code}</Link>}
+        whereUsed={(code) => <Link to={`/catalog/p/${code}`}>{t("Show where this part is used")}</Link>}
+        siblings={siblings}
+        subtitle={[s.titleIt, s.page ? t("Manual page {n}", { n: s.page }) : null].filter(Boolean).join(" · ") || undefined}
         extra={(r: any) => (r.notes ? <span className="cv-tag ct-3d" title={t("Staff notes")}>{t("{n} notes", { n: r.notes })}</span> : null)}
         onPlace={placing ? placeBalloon : undefined}
+        tools={editor ? (
+          <>
+            <button className="btn small" aria-pressed={placing} onClick={() => setPlacing(!placing)}>{placing ? t("Done placing") : t("Place balloons")}</button>
+            <button className="btn small" onClick={() => setEditing(!editing)}>{editing ? t("Close editing") : t("Edit")}</button>
+          </>
+        ) : undefined}
       />
     </>
   );
@@ -508,7 +611,7 @@ function SheetEditor({ sheet, rows, machineId, onSaved }: { sheet: any; rows: Ro
       </div>
       {unmapped.length > 0 && (
         <div className="stack">
-          <p className="muted">{t("These 3D part names don't start with a part number. Pick the part each one is, so clicking it in 3D finds it in the list.")}</p>
+          <Tip id="catalog.3d-names">{t("These 3D part names don't start with a part number. Pick the part each one is, so clicking it in 3D finds it in the list.")}</Tip>
           <div className="tbl" style={{ maxHeight: 280, overflow: "auto" }}>
             <table><tbody>
               {unmapped.map((n) => (
@@ -613,7 +716,7 @@ function CatalogPart({ code, me }: { code: string; me: Me }) {
         </div>
         <div className="panel stack">
           <h2>{t("Staff notes")}</h2>
-          <p className="muted">{t("Fix tips, what to watch for, where to buy it. Only staff see these; they're never published.")}</p>
+          <Tip id="catalog.staff-notes">{t("Fix tips, what to watch for, where to buy it. Only staff see these; they're never published.")}</Tip>
           <form className="stack" onSubmit={async (e) => {
             e.preventDefault();
             try {
