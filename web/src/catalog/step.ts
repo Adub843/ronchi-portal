@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import occtimportjs from "occt-import-js";
 import wasmUrl from "occt-import-js/dist/occt-import-js.wasm?url";
+import { readStepTree, regroup } from "../../catalog/steptree";
 
 interface OcctMesh {
   name: string;
@@ -21,7 +22,8 @@ interface OcctNode {
 /** Read a STEP file into a three.js object tree (Y-up), keeping the CAD names on the nodes. */
 export async function stepToObject(file: File): Promise<{ root: THREE.Object3D; parts: number; names: string[]; dispose: () => void }> {
   const occt = await occtimportjs({ locateFile: () => wasmUrl });
-  const res = occt.ReadStepFile(new Uint8Array(await file.arrayBuffer()), {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const res = occt.ReadStepFile(bytes, {
     linearUnit: "millimeter",
     linearDeflectionType: "bounding_box_ratio",
     linearDeflection: 0.0008,
@@ -63,7 +65,9 @@ export async function stepToObject(file: File): Promise<{ root: THREE.Object3D; 
     for (const c of n.children) g.add(build(c));
     return g;
   };
-  const top = build(res.root);
+  // The reader flattens deep assemblies; put their parts back so sub-assemblies keep their names.
+  const stepTree = readStepTree(bytes);
+  const top = build(stepTree ? regroup(res.root, res.meshes.map((m) => m.name), stepTree) : res.root);
   // CAD is Z-up; the viewer is Y-up.
   top.rotation.x = -Math.PI / 2;
   const root = new THREE.Group();
