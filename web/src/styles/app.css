@@ -585,6 +585,26 @@ span.tip{display:inline-flex}
 .sw-links label{font-size:13px;font-weight:600}
 .sw-links textarea{font:12.5px var(--mono);padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--solid);color:var(--ink);width:100%;resize:vertical}
 .sw-dialog{overflow:auto}
+
+/* Shipping and receiving */
+.ship-tiles{grid-template-columns:repeat(4,minmax(0,1fr))}
+.ships td{vertical-align:top}
+table.mini{width:100%;border-collapse:collapse;font-size:14px}
+table.mini th,table.mini td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line,rgba(0,0,0,.08))}
+table.mini th{font-size:12px;color:var(--muted);font-weight:500}
+table.recv td.ok{color:var(--ok,#1b7f3b);font-weight:600}
+table.recv td.part{color:var(--warn,#b26a00);font-weight:600}
+table.recv tr.held td{background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.pkgrow{gap:6px;flex-wrap:wrap}
+.problem{border-left:4px solid var(--accent)}
+.history{margin:0;padding-left:18px;font-size:14px}
+.printdoc .paper{background:#fff;color:#111;padding:28px;border-radius:8px;max-width:900px}
+.printdoc .paper h1{font-size:22px}
+.printdoc .sign{margin-top:36px;gap:24px}
+.printdoc .sign>div{border-top:1px solid #333;padding-top:6px;font-size:12px}
+@media print{.printdoc .noprint{display:none!important}.printdoc .paper{padding:0;max-width:none}main>.back{display:none}}
+@media (max-width:720px){.ship-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.ships th:nth-child(3),.ships td:nth-child(3),.ships th:nth-child(4),.ships td:nth-child(4){display:none}}
 /* Access panel extras (People > Access and Settings > Command center) */
 .btn.tiny{padding:2px 8px;font-size:11.5px}
 .access-group-head{gap:6px;align-items:center}

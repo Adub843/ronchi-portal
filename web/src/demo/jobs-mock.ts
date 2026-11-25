@@ -54,6 +54,9 @@ function seed(c: Ctx) {
   for (const f of files) { f.size = f.blob.size; f.url = URL.createObjectURL(f.blob); }
 }
 
+/** The example jobs, for the shipping preview (Ship parts for this job). */
+export const demoJobs = () => jobs ?? [];
+
 export function resetJobs() {
   jobs = null;
   techs = [];

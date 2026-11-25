@@ -28,6 +28,7 @@ export const SECTIONS = {
   partsOrders: { label: "Parts orders", perms: ["partsorders.view", "partsorders.add", "partsorders.edit", "partsorders.remove", "partsorders.prices", "partsorders.reports", "partsorders.export"] },
   knowledge: { label: "Knowledge base", perms: ["kb.view", "kb.write", "kb.edit_all", "kb.import", "kb.publish"] },
   software: { label: "Software downloads", perms: ["software.view", "software.manage"] },
+  shipping: { label: "Shipping and receiving", perms: ["shipping.view", "shipping.edit"] },
 } as const satisfies Record<string, { label: string; perms: Permission[]; hint?: string }>;
 export type Section = keyof typeof SECTIONS;
 export const SECTION_IDS = Object.keys(SECTIONS) as Section[];

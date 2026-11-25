@@ -5,6 +5,7 @@ import { api, apiForm, can, fmtDate, fmtTime, type Me } from "../api";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad } from "../components/ui";
 import { t } from "../i18n";
 import { navigate } from "../router";
+import { LinkedShipments } from "./Shipping";
 import { ACCEPT, fileProblem, fmtSize } from "../../../src/shared/files";
 import { dayRange, type JobStatus } from "../../../src/shared/jobs";
 
@@ -246,6 +247,7 @@ export function JobPage({ id, me }: { id: string; me: Me }) {
           <h2 style={{ margin: 0 }}>{t("Files")}</h2>
           <JobFiles jobId={j.id} files={data.files} me={me} canRemoveAll={scheduler} onChange={reload} />
         </div>
+        <LinkedShipments me={me} link={{ type: "job", id: j.id }} shipLabel={t("Ship parts for this job")} />
       </div>
     </>
   );

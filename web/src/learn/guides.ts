@@ -101,6 +101,11 @@ export const AREAS: Area[] = [
     title: T("People and access", "Personas y acceso", "Persone e accessi"),
     blurb: T("Adding employees, making roles and deciding what each person can do. Admins only.", "Agregar empleados, crear roles y decidir qué puede hacer cada persona. Solo administradores.", "Aggiungere dipendenti, creare ruoli e decidere cosa può fare ogni persona. Solo amministratori."),
   },
+  {
+    id: "shipping", paths: ["/shipping"],
+    title: T("Shipping and receiving", "Envíos y recepción", "Spedizioni e ricevimento"),
+    blurb: T("Machines, spare parts and change parts going out, and parts from Italy, suppliers and customers coming in.", "Máquinas, repuestos y cambios de formato que salen, y piezas de Italia, proveedores y clientes que entran.", "Macchine, ricambi e cambi formato in uscita, e parti dall'Italia, dai fornitori e dai clienti in entrata."),
+  },
 ];
 
 export const GUIDES: Guide[] = [
@@ -759,6 +764,43 @@ export const GUIDES: Guide[] = [
       T("Open People and scroll to Recent activity (audit log).", "Abra Personas y baje hasta Actividad reciente (registro de auditoría).", "Apri Persone e scorri fino ad Attività recente (registro di controllo)."),
       T("Each line shows when, who, what and from where.", "Cada línea muestra cuándo, quién, qué y desde dónde.", "Ogni riga mostra quando, chi, cosa e da dove."),
     ],
+  },
+  // ---------- Shipping and receiving ----------
+  {
+    id: "track-shipments", area: "shipping", needs: ["shipping.view"],
+    title: T("See what's shipping and track it", "Ver qué se envía y seguirlo", "Vedere cosa parte e seguirlo"),
+    summary: T("Everything going out and coming in, with tracking links to the carrier's own page.", "Todo lo que sale y entra, con enlaces de seguimiento a la página del transportista.", "Tutto ciò che esce ed entra, con link di tracciamento alla pagina del vettore."),
+    steps: [
+      T("Open Shipping. The counters at the top show what's waiting to be packed, on the way, expected in and any problems.", "Abra Envíos. Los contadores de arriba muestran lo que falta empacar, lo que va en camino, lo que se espera y los problemas.", "Apri Spedizioni. I contatori in alto mostrano cosa è da imballare, in viaggio, in arrivo e gli eventuali problemi."),
+      T("Search by shipment number, customer, supplier, machine, PO, tracking number or part number.", "Busque por número de envío, cliente, proveedor, máquina, PO, número de seguimiento o de pieza.", "Cerca per numero di spedizione, cliente, fornitore, macchina, PO, numero di tracciamento o codice ricambio."),
+      T("Press a tracking number to open the carrier's tracking page. For LTL freight the number is copied: paste it on the carrier's page.", "Pulse un número de seguimiento para abrir la página del transportista. Para carga LTL el número se copia: péguelo en la página del transportista.", "Premi un numero di tracciamento per aprire la pagina del vettore. Per il groupage LTL il numero viene copiato: incollalo nella pagina del vettore."),
+      T("Add photos and papers to any shipment, like proof of delivery or damage photos.", "Añada fotos y documentos a cualquier envío, como el comprobante de entrega o fotos de daños.", "Aggiungi foto e documenti a qualsiasi spedizione, come la prova di consegna o le foto dei danni."),
+    ],
+    tip: T("Change-part orders, jobs and machines show their shipments at the bottom of their page.", "Los pedidos de cambio de formato, los trabajos y las máquinas muestran sus envíos al final de su página.", "Ordini cambio formato, lavori e macchine mostrano le loro spedizioni in fondo alla pagina."),
+  },
+  {
+    id: "ship-out", area: "shipping", needs: ["shipping.view", "shipping.edit"],
+    title: T("Ship something out", "Enviar algo", "Spedire qualcosa"),
+    summary: T("Make a shipment, print the packing slip and bill of lading, and mark it shipped.", "Cree un envío, imprima el albarán y el conocimiento de embarque, y márquelo como enviado.", "Crea una spedizione, stampa la distinta di imballo e la lettera di vettura, e segnala come spedita."),
+    steps: [
+      T("On a change-part order or job, press Ship this. Or open Shipping and press New shipment.", "En un pedido de cambio de formato o trabajo, pulse Enviar esto. O abra Envíos y pulse Nuevo envío.", "In un ordine cambio formato o un lavoro, premi Spedisci. Oppure apri Spedizioni e premi Nuova spedizione."),
+      T("Check the customer and address, add the packages (crates, pallets, boxes with weight and size) and what's in it.", "Revise el cliente y la dirección, añada los bultos (cajas, pallets, con peso y medidas) y su contenido.", "Controlla cliente e indirizzo, aggiungi i colli (casse, pallet, scatole con peso e misure) e il contenuto."),
+      T("Press Packing slip or Bill of lading to print them or save them as PDF.", "Pulse Albarán o Conocimiento de embarque para imprimirlos o guardarlos como PDF.", "Premi Distinta di imballo o Lettera di vettura per stamparle o salvarle in PDF."),
+      T("When it leaves, press Mark shipped and type the tracking or PRO numbers. Then Email the customer sends them the tracking.", "Cuando salga, pulse Marcar enviado y escriba los números de seguimiento o PRO. Luego Enviar correo al cliente le manda el seguimiento.", "Quando parte, premi Segna come spedita e scrivi i numeri di tracciamento o PRO. Poi Scrivi al cliente gli manda il tracciamento."),
+    ],
+    tip: T("Shipping a change-part order fills in the order's ship date and moves it to Shipped.", "Enviar un pedido de cambio de formato completa su fecha de envío y lo pasa a Enviado.", "Spedire un ordine cambio formato compila la data di spedizione e lo porta a Spedito."),
+  },
+  {
+    id: "receive", area: "shipping", needs: ["shipping.view", "shipping.edit"],
+    title: T("Check a delivery in", "Recibir una entrega", "Registrare una consegna"),
+    summary: T("Expect a delivery, count what came in (a bit at a time if needed), note where it went and anything wrong.", "Espere una entrega, cuente lo que llegó (por partes si hace falta), anote dónde se guardó y cualquier problema.", "Prevedi una consegna, conta cosa è arrivato (anche a più riprese), annota dove è stato messo e ogni problema."),
+    steps: [
+      T("Open Shipping and press Expect a delivery. Add the supplier or customer, the PO or RMA number and what's coming.", "Abra Envíos y pulse Esperar una entrega. Añada el proveedor o cliente, el número de PO o RMA y lo que viene.", "Apri Spedizioni e premi Prevedi una consegna. Aggiungi fornitore o cliente, numero di PO o RMA e cosa arriva."),
+      T("For shipments from Italy, add how it travels, the vessel or flight, the container and the customs broker.", "Para envíos de Italia, añada cómo viaja, el barco o vuelo, el contenedor y el agente de aduanas.", "Per le spedizioni dall'Italia, aggiungi il mezzo, la nave o il volo, il container e lo spedizioniere doganale."),
+      T("When it arrives, type how many of each item came in and the shelf or bin, then press Check in what I counted. Or press Everything arrived.", "Cuando llegue, escriba cuántas unidades de cada artículo llegaron y el estante o casillero, y pulse Registrar lo que conté. O pulse Llegó todo.", "Quando arriva, scrivi quanti pezzi di ogni articolo sono arrivati e lo scaffale o il contenitore, poi premi Registra quello che ho contato. Oppure premi È arrivato tutto."),
+      T("If something is wrong, pick it under Anything wrong? and add photos. Tick Hold to keep a doubtful part from being used.", "Si algo está mal, elíjalo en ¿Algún problema? y añada fotos. Marque Retener para que una pieza dudosa no se use.", "Se qualcosa non va, sceglilo in Qualche problema? e aggiungi foto. Spunta Blocca per non far usare un pezzo dubbio."),
+    ],
+    tip: T("Receiving a customer's sample bottles for a change-part order fills in its samples received date.", "Recibir las botellas de muestra de un cliente para un pedido de cambio de formato completa su fecha de muestras recibidas.", "Ricevere i flaconi campione di un cliente per un ordine cambio formato compila la data di campioni ricevuti."),
   },
 ];
 

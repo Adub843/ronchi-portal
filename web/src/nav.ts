@@ -25,6 +25,7 @@ export const NAV: NavItem[] = [
   // Sales people and order people both use it, so either permission shows it.
   { to: "/change-parts", label: "Change parts", perm: "orders.view|cpsales.view" },
   { to: "/parts-orders", label: "Parts orders", perm: "partsorders.view" },
+  { to: "/shipping", label: "Shipping", perm: "shipping.view" },
   { to: "/people", label: "People", perm: "users.manage" },
   // On phones Portal training and Settings live in the account menu (top right), so the tab bar keeps room for the rest.
   { to: "/learn", label: "Portal training", phone: false },
