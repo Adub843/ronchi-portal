@@ -85,3 +85,49 @@ describe("per-person access", () => {
     expect(data.groups.flatMap((g: any) => g.perms).filter((p: any) => !p.adjustable).map((p: any) => p.id).sort()).toEqual(["audit.view", "users.manage"]);
   });
 });
+
+describe("manager role and finer page switches", () => {
+  it("a manager can do everything except manage people and read the audit log", async () => {
+    const m = await person("manager");
+    const p = await perms(m);
+    expect(p).not.toContain("users.manage");
+    expect(p).not.toContain("audit.view");
+    for (const x of ["machines.add", "orders.remove", "kb.publish", "customers.invite", "boards.moderate"]) expect(p).toContain(x);
+    expect((await m.fetch("/api/users")).status).toBe(403);
+    expect((await m.fetch("/api/change-parts")).status).toBe(200);
+  });
+
+  it("an admin can make someone a manager, and a manager's access can still be fine-tuned", async () => {
+    const admin = await person("admin");
+    const p = await person("service");
+    expect((await admin.fetch(`/api/users/${p.id}`, { method: "PATCH", body: { role: "manager" } })).status).toBe(200);
+    const again = await person("manager");
+    await admin.json(`/api/users/${again.id}/access`, { method: "PUT", body: { changes: { "orders.remove": false } } });
+    expect(await perms(again)).not.toContain("orders.remove");
+  });
+
+  it("adding, changing and removing orders are separate switches", async () => {
+    const admin = await person("admin");
+    const sales = await person("sales");
+    const { data } = await sales.json("/api/change-parts", { body: { customer: "Acme", machine: "3069MB", part: "Star wheel" } });
+    await admin.json(`/api/users/${sales.id}/access`, { method: "PUT", body: { changes: { "orders.remove": false, "orders.add": false } } });
+    expect((await sales.fetch(`/api/change-parts/${data.id}`, { method: "DELETE" })).status).toBe(403);
+    expect((await sales.fetch("/api/change-parts", { body: { customer: "Acme", machine: "3069MB", part: "Guide" } })).status).toBe(403);
+    const order = (await sales.json(`/api/change-parts/${data.id}`)).data.order;
+    expect((await sales.fetch(`/api/change-parts/${data.id}`, { method: "PATCH", body: { notes: "rush", revision: order.revision } })).status).toBe(200);
+  });
+
+  it("adding machines is its own switch", async () => {
+    const admin = await person("admin");
+    const eng = await person("engineering");
+    await admin.json(`/api/users/${eng.id}/access`, { method: "PUT", body: { changes: { "machines.add": false } } });
+    expect((await eng.fetch("/api/machines", { body: { serial: "4301MB" } })).status).toBe(403);
+  });
+
+  it("knowledge base: import and changing other people's articles are their own switches", async () => {
+    const admin = await person("admin");
+    const svc = await person("service");
+    await admin.json(`/api/users/${svc.id}/access`, { method: "PUT", body: { changes: { "kb.import": false } } });
+    expect((await svc.fetch("/api/kb/import", { body: { documents: [] } })).status).toBe(403);
+  });
+});

@@ -98,7 +98,7 @@ export function ChangeParts({ me }: { me: Me }) {
       <PageHead title={t("Change-part orders")} sub={t("Every change-part job, from quote to shipped.")}>
         <button className="btn" onClick={exportCsv} disabled={!shown.length}>{t("Export CSV")}</button>
         {can(me, "orders.import") && <button className="btn" onClick={() => setPanel(panel === "import" ? null : "import")}>{panel === "import" ? t("Cancel") : t("Import CSV")}</button>}
-        {edit && <button className="btn primary" onClick={() => setPanel(panel === "new" ? null : "new")}>{panel === "new" ? t("Cancel") : t("New order")}</button>}
+        {can(me, "orders.add") && <button className="btn primary" onClick={() => setPanel(panel === "new" ? null : "new")}>{panel === "new" ? t("Cancel") : t("New order")}</button>}
       </PageHead>
       {panel === "new" && <OrderForm onSaved={(id) => navigate(`/change-parts/${id}`)} onCancel={() => setPanel(null)} />}
       {panel === "import" && <ImportPanel onDone={() => { setPanel(null); reload(); }} />}
@@ -311,7 +311,7 @@ export function ChangePartPage({ id, me }: { id: string; me: Me }) {
       <PageHead title={o.customer ?? ""} sub={[o.machine, o.part].filter(Boolean).join(" · ") || undefined}>
         <StatusPill status={o.status} isLate={late(o)} />
         {edit && !editing && <button className="btn" onClick={() => setEditing(true)}>{t("Edit")}</button>}
-        {edit && !editing && <button className="btn danger" onClick={remove}>{sure ? t("Yes, remove") : t("Remove")}</button>}
+        {can(me, "orders.remove") && !editing && <button className="btn danger" onClick={remove}>{sure ? t("Yes, remove") : t("Remove")}</button>}
       </PageHead>
       {editing ? (
         <OrderForm order={o} onSaved={() => { setEditing(false); reload(); toast(t("Saved")); }} onCancel={() => setEditing(false)} />

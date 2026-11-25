@@ -18,3 +18,11 @@ describe("languages", () => {
     }
   });
 });
+
+describe("access screen words", () => {
+  it("every permission name, hint and group is translated", async () => {
+    const { PERMISSION_GROUPS } = await import("../../src/portal/lib/roles");
+    const words = PERMISSION_GROUPS.flatMap((g) => [g.group, ...g.perms.flatMap((p) => [p.label, p.hint])]);
+    expect(words.filter((w) => !DYNAMIC.includes(w) || !ES[w] || !IT[w])).toEqual([]);
+  });
+});

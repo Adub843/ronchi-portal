@@ -122,7 +122,7 @@ kb.get("/:id", async (c) => {
 });
 
 function canEdit(user: SessionUser, a: Pick<Row, "created_by">): boolean {
-  return has(user, "kb.publish") || (has(user, "kb.write") && a.created_by === user.id);
+  return has(user, "kb.edit_all") || (has(user, "kb.write") && a.created_by === user.id);
 }
 
 // ---------- Add and change ----------
@@ -289,7 +289,7 @@ kb.post("/:id/unpublish", async (c) => {
 // ---------- Import the Training Center documents ----------
 
 kb.post("/import", async (c) => {
-  const user = requirePerm(c, "kb.publish");
+  const user = requirePerm(c, "kb.import");
   const b = await body(c);
   const docs = Array.isArray(b.documents) ? b.documents.slice(0, 1000) : fail(400, "Choose the knowledge base JSON file.");
   let added = 0, updated = 0, skipped = 0;
