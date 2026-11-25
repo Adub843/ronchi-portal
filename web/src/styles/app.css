@@ -548,3 +548,14 @@ span.tip{display:inline-flex}
 .sw-folder ul,.sw-loose{list-style:none;margin:6px 0 0;padding:0}
 .sw-fileline{display:flex;gap:10px;align-items:center;padding:3px 0}
 .sw-fileline .sw-path{flex:1}
+.sw-shelf-btns{gap:6px;flex-wrap:wrap}
+.sw-addrow{margin:14px 0}
+.sw-where{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;min-width:0}
+.sw-where legend{font-weight:600;margin-bottom:6px;padding:0}
+.sw-where label:not(.sw-check){display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
+.sw-where select,.sw-where input:not([type=checkbox]){font:inherit;font-weight:400;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--solid);color:var(--ink);min-width:0;width:100%}
+.sw-newpkg{display:flex;flex-direction:column;gap:6px;padding-left:12px;border-left:3px solid var(--accent-soft)}
+.sw-goes{font-weight:600;margin:0}
+.sw-dialog .sw-drop{margin:4px 0}
+.sw-uploads li>*{min-width:0}
+@media (max-width:760px){.sw-uploads li{grid-template-columns:1fr auto}.sw-uploads .sw-path{grid-column:1/-1}}

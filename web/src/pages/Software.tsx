@@ -21,8 +21,9 @@ const fileHref = (f: FileRow) => f.url ?? `/api/software/files/${encodeURICompon
 // ---------- Tiles on the knowledge base page ----------
 
 export function SoftwareShelf({ me }: { me: Me }) {
-  const { data, error } = useLoad<{ packages: Pkg[] }>(() => api("/software"), []);
+  const { data, error, reload } = useLoad<{ packages: Pkg[] }>(() => api("/software"), []);
   const [open, setOpen] = useState<Pkg | null>(null);
+  const [uploading, setUploading] = useState(false);
   if (!can(me, "software.view")) return null;
   const list = data?.packages ?? [];
   if (data && !list.length && !can(me, "software.manage")) return null;
@@ -33,7 +34,12 @@ export function SoftwareShelf({ me }: { me: Me }) {
           <h2 id="sw-h">{t("Software and setup files")}</h2>
           <p className="muted small-note">{t("Installers and program folders for laptops and machines. Open one, tick what you need and download it all at once.")}</p>
         </div>
-        {can(me, "software.manage") && <button className="btn small" onClick={() => navigate("/kb/software")}>{t("Manage software")}</button>}
+        {can(me, "software.manage") && (
+          <div className="row sw-shelf-btns">
+            <button className="btn small primary" onClick={() => setUploading(true)}>{t("Upload")}</button>
+            <button className="btn small" onClick={() => navigate("/kb/software")}>{t("Manage software")}</button>
+          </div>
+        )}
       </div>
       <ErrorNote error={error} />
       {data && !list.length && <Empty>{t("No software yet. Press Manage software to make the first package.")}</Empty>}
@@ -48,6 +54,7 @@ export function SoftwareShelf({ me }: { me: Me }) {
         ))}
       </div>
       {open && <SoftwarePicker pkg={open} onClose={() => setOpen(null)} />}
+      {uploading && <UploadDialog onClose={() => setUploading(false)} onUploaded={reload} />}
     </section>
   );
 }
@@ -333,39 +340,9 @@ export function SoftwareManage({ me }: { me: Me }) {
 
 function PackageEditor({ pkg, onChanged, onRemoved }: { pkg: Pkg; onChanged: () => void; onRemoved: () => void }) {
   const { data, error, reload } = useLoad<{ package: Pkg; files: FileRow[] }>(() => api(`/software/${encodeURIComponent(pkg.id)}`), [pkg.id]);
-  const [uploads, setUploads] = useState<Upload[]>([]);
-  const [into, setInto] = useState("");
   const [sure, setSure] = useState(false);
   const [edit, setEdit] = useState({ name: pkg.name, description: pkg.description, legacy: pkg.legacy });
-  const filesIn = useRef<HTMLInputElement>(null);
-  const folderIn = useRef<HTMLInputElement>(null);
-  const running = uploads.some((u) => u.state === "waiting" || u.state === "sending");
-
-  async function send(list: File[]) {
-    const base = cleanFolder(into);
-    if (base === null) return toast(t("That folder name can't be used."));
-    const jobs = list.map((f, i) => {
-      // A folder upload keeps the folders it came in (webkitRelativePath is "Folder/Sub/file.exe").
-      const rel = (f as any).webkitRelativePath as string | undefined;
-      const sub = rel ? rel.split("/").slice(0, -1).join("/") : "";
-      return { file: f, up: { key: `${Date.now()}-${i}`, name: f.name, folder: [base, sub].filter(Boolean).join("/"), size: f.size, sent: 0, state: "waiting" as const } };
-    });
-    setUploads((u) => [...u, ...jobs.map((j) => j.up)]);
-    const set = (key: string, patch: Partial<Upload>) => setUploads((u) => u.map((x) => (x.key === key ? { ...x, ...patch } : x)));
-    for (const { file, up } of jobs) {
-      set(up.key, { state: "sending" });
-      try {
-        await uploadOne(pkg.id, file, up.folder, (sent) => set(up.key, { sent }));
-        set(up.key, { state: "done", sent: file.size });
-      } catch (e) {
-        set(up.key, { state: "failed", error: (e as Error).message });
-      }
-    }
-    reload();
-    onChanged();
-    if (filesIn.current) filesIn.current.value = "";
-    if (folderIn.current) folderIn.current.value = "";
-  }
+  const [uploading, setUploading] = useState(false);
 
   async function save() {
     try {
@@ -409,35 +386,10 @@ function PackageEditor({ pkg, onChanged, onRemoved }: { pkg: Pkg; onChanged: () 
         </div>
       </div>
 
-      <div
-        className="sw-drop"
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => { e.preventDefault(); if (!running) send([...e.dataTransfer.files]); }}
-      >
-        <h3>{t("Add files")}</h3>
-        <label>{t("Put them in this folder (optional)")}<input value={into} onChange={(e) => setInto(e.target.value)} placeholder={t("For example: Studio 5000 v33")} /></label>
-        <div className="row">
-          <button className="btn primary" disabled={running} onClick={() => filesIn.current?.click()}>{t("Upload files")}</button>
-          <button className="btn" disabled={running} onClick={() => folderIn.current?.click()}>{t("Upload a whole folder")}</button>
-          <input ref={filesIn} type="file" multiple hidden onChange={(e) => send([...(e.target.files ?? [])])} />
-          <input ref={folderIn} type="file" multiple hidden {...({ webkitdirectory: "", directory: "" } as any)} onChange={(e) => send([...(e.target.files ?? [])])} />
-        </div>
-        <p className="muted small-note">{t("Any kind of file, up to 50 GB each. A whole folder keeps its folders. Big installers go up in 50 MB pieces, so keep this page open until they finish. A setup folder with thousands of small files downloads faster as one zip.")}</p>
+      <div className="row sw-addrow">
+        <button className="btn primary" onClick={() => setUploading(true)}>{t("Upload files or a folder")}</button>
       </div>
-
-      {uploads.length > 0 && (
-        <ul className="sw-uploads">
-          {uploads.map((u) => (
-            <li key={u.key}>
-              <span className="mono sw-path">{u.folder ? `${u.folder}/` : ""}{u.name}</span>
-              <progress max={u.size || 1} value={u.sent} />
-              <span className={`small-note ${u.state === "failed" ? "sw-bad" : "muted"}`}>
-                {u.state === "done" ? t("Uploaded") : u.state === "failed" ? u.error : u.state === "waiting" ? t("Waiting") : `${fmtBytes(u.sent)} / ${fmtBytes(u.size)}`}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      {uploading && <UploadDialog startPkg={pkg.id} onClose={() => setUploading(false)} onUploaded={() => { reload(); onChanged(); }} />}
 
       <h3>{t("In this package")}</h3>
       <ErrorNote error={error} />
@@ -450,6 +402,159 @@ function PackageEditor({ pkg, onChanged, onRemoved }: { pkg: Pkg; onChanged: () 
       ))}
       {g.loose.length > 0 && <ul className="sw-loose">{g.loose.map((f) => <FileLine key={f.id} f={f} onRemove={() => removeFile(f)} />)}</ul>}
     </>
+  );
+}
+
+// ---------- The upload pop-up: choose where the files go, then send them ----------
+// (Aaron, 2026-11-25: "when uploading a file you should be able to choose where the file is uploaded to
+// like software and setup files".) Software and setup files is the only place that takes files today;
+// the list is ready for more places later.
+
+const NEW = "__new__";
+const PLACES = [{ id: "software", label: "Software and setup files" }];
+
+export function UploadDialog({ startPkg, onClose, onUploaded }: { startPkg?: string; onClose: () => void; onUploaded: () => void }) {
+  const pkgs = useLoad<{ packages: Pkg[] }>(() => api("/software"), []);
+  const [place, setPlace] = useState(PLACES[0]!.id);
+  const [pkgId, setPkgId] = useState(startPkg ?? "");
+  const [newPkg, setNewPkg] = useState({ name: "", legacy: false });
+  const [folder, setFolder] = useState("");
+  const [newFolder, setNewFolder] = useState("");
+  const [chosen, setChosen] = useState<File[]>([]);
+  const [uploads, setUploads] = useState<Upload[]>([]);
+  const filesIn = useRef<HTMLInputElement>(null);
+  const folderIn = useRef<HTMLInputElement>(null);
+  const list = pkgs.data?.packages ?? [];
+  const pick = pkgId || (list[0]?.id ?? NEW);
+  const contents = useLoad<{ files: FileRow[] } | null>(() => (pick && pick !== NEW ? api(`/software/${encodeURIComponent(pick)}`) : Promise.resolve(null)), [pick]);
+  const folders = [...new Set((contents.data?.files ?? []).flatMap((f) => f.folder.split("/").map((_, i, a) => a.slice(0, i + 1).join("/"))).filter(Boolean))].sort();
+  const running = uploads.some((u) => u.state === "waiting" || u.state === "sending");
+  const finished = uploads.length > 0 && !running;
+  const chosenBytes = chosen.reduce((n, f) => n + f.size, 0);
+
+  function add(files: File[]) {
+    if (files.length) setChosen((c) => [...c, ...files]);
+    if (filesIn.current) filesIn.current.value = "";
+    if (folderIn.current) folderIn.current.value = "";
+  }
+
+  async function start() {
+    const base = folder === NEW ? cleanFolder(newFolder) : folder;
+    if (base === null || (folder === NEW && !base)) return toast(t("That folder name can't be used."));
+    let target = pick;
+    if (target === NEW) {
+      if (!newPkg.name.trim()) return toast(t("Give the new package a name."));
+      try {
+        target = (await api<{ id: string }>("/software", { body: { name: newPkg.name, legacy: newPkg.legacy } })).id;
+        setPkgId(target);
+      } catch (e) {
+        return toast((e as Error).message);
+      }
+    }
+    const jobs = chosen.map((f, i) => {
+      // A folder upload keeps the folders it came in (webkitRelativePath is "Folder/Sub/file.exe").
+      const rel = (f as any).webkitRelativePath as string | undefined;
+      const sub = rel ? rel.split("/").slice(0, -1).join("/") : "";
+      return { file: f, up: { key: `${Date.now()}-${i}`, name: f.name, folder: [base, sub].filter(Boolean).join("/"), size: f.size, sent: 0, state: "waiting" as const } };
+    });
+    setUploads(jobs.map((j) => j.up));
+    setChosen([]);
+    const set = (key: string, patch: Partial<Upload>) => setUploads((u) => u.map((x) => (x.key === key ? { ...x, ...patch } : x)));
+    for (const { file, up } of jobs) {
+      set(up.key, { state: "sending" });
+      try {
+        await uploadOne(target, file, up.folder, (sent) => set(up.key, { sent }));
+        set(up.key, { state: "done", sent: file.size });
+      } catch (e) {
+        set(up.key, { state: "failed", error: (e as Error).message });
+      }
+    }
+    onUploaded();
+  }
+
+  const pkgName = pick === NEW ? newPkg.name : list.find((p) => p.id === pick)?.name ?? "";
+  const where = [t(PLACES.find((x) => x.id === place)!.label), pkgName, folder === NEW ? newFolder : folder].filter(Boolean).join(" › ");
+
+  return createPortal(
+    <div className="sw-overlay" onClick={() => !running && onClose()}>
+      <div className="sw-dialog panel" role="dialog" aria-modal="true" aria-labelledby="up-title" onClick={(e) => e.stopPropagation()}>
+        <div className="sw-dialog-head">
+          <h2 id="up-title">{t("Upload")}</h2>
+          <button className="iconbtn" aria-label={t("Close")} disabled={running} onClick={onClose}>✕</button>
+        </div>
+
+        {!uploads.length && (
+          <>
+            <fieldset className="sw-where">
+              <legend>{t("Where should the files go?")}</legend>
+              <label>{t("Upload to")}
+                <select id="up-place" value={place} onChange={(e) => setPlace(e.target.value)}>
+                  {PLACES.map((x) => <option key={x.id} value={x.id}>{t(x.label)}</option>)}
+                </select>
+              </label>
+              <label>{t("Package")}
+                <select id="up-pkg" value={pick} onChange={(e) => { setPkgId(e.target.value); setFolder(""); }}>
+                  {list.map((p) => <option key={p.id} value={p.id}>{p.name}{p.legacy && !/legacy/i.test(p.name) ? ` (${t("Legacy")})` : ""}</option>)}
+                  <option value={NEW}>{t("New package…")}</option>
+                </select>
+              </label>
+              {pick === NEW && (
+                <div className="sw-newpkg">
+                  <input id="up-newpkg" value={newPkg.name} maxLength={120} placeholder={t("For example: New laptop setup")} aria-label={t("New package name")} onChange={(e) => setNewPkg({ ...newPkg, name: e.target.value })} />
+                  <label className="sw-check"><input type="checkbox" checked={newPkg.legacy} onChange={(e) => setNewPkg({ ...newPkg, legacy: e.target.checked })} /> {t("Legacy software (older machines)")}</label>
+                </div>
+              )}
+              <label>{t("Folder")}
+                <select id="up-folder" value={folder} onChange={(e) => setFolder(e.target.value)}>
+                  <option value="">{t("No folder (top of the package)")}</option>
+                  {folders.map((f) => <option key={f} value={f}>{f.split("/").join(" › ")}</option>)}
+                  <option value={NEW}>{t("New folder…")}</option>
+                </select>
+              </label>
+              {folder === NEW && <input id="up-newfolder" value={newFolder} maxLength={200} placeholder={t("For example: Studio 5000 v33")} aria-label={t("New folder name")} onChange={(e) => setNewFolder(e.target.value)} />}
+            </fieldset>
+
+            <div className="sw-drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); add([...e.dataTransfer.files]); }}>
+              <div className="row">
+                <button className="btn" onClick={() => filesIn.current?.click()}>{t("Choose files")}</button>
+                <button className="btn" onClick={() => folderIn.current?.click()}>{t("Choose a whole folder")}</button>
+                <input ref={filesIn} type="file" multiple hidden onChange={(e) => add([...(e.target.files ?? [])])} />
+                <input ref={folderIn} type="file" multiple hidden {...({ webkitdirectory: "", directory: "" } as any)} onChange={(e) => add([...(e.target.files ?? [])])} />
+              </div>
+              <p className="muted small-note">{chosen.length ? `${nFiles(chosen.length)} · ${fmtBytes(chosenBytes)}` : t("Or drag files here. Any kind of file, up to 50 GB each. A whole folder keeps its folders.")}</p>
+            </div>
+            {chosen.length > 0 && <p className="small-note sw-goes">{t("Goes to: {where}", { where })}</p>}
+            <div className="row sw-foot">
+              <button className="btn" onClick={onClose}>{t("Cancel")}</button>
+              <button className="btn primary" disabled={!chosen.length} onClick={start}>{t("Upload")}</button>
+            </div>
+          </>
+        )}
+
+        {uploads.length > 0 && (
+          <>
+            <p className="small-note sw-goes">{t("Goes to: {where}", { where })}</p>
+            <ul className="sw-uploads">
+              {uploads.map((u) => (
+                <li key={u.key}>
+                  <span className="mono sw-path">{u.folder ? `${u.folder}/` : ""}{u.name}</span>
+                  <progress max={u.size || 1} value={u.sent} />
+                  <span className={`small-note ${u.state === "failed" ? "sw-bad" : "muted"}`}>
+                    {u.state === "done" ? t("Uploaded") : u.state === "failed" ? u.error : u.state === "waiting" ? t("Waiting") : `${fmtBytes(u.sent)} / ${fmtBytes(u.size)}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="muted small-note">{running ? t("Big installers go up in 50 MB pieces. Keep this page open until every file says Uploaded.") : ""}</p>
+            <div className="row sw-foot">
+              {finished && <button className="btn" onClick={() => setUploads([])}>{t("Upload more")}</button>}
+              <button className="btn primary" disabled={running} onClick={onClose}>{t("Done")}</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>,
+    document.body,
   );
 }
 
