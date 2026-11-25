@@ -41,7 +41,15 @@ describe("filling in a work order", () => {
     expect(wb.data.hours).toHaveLength(1);
     expect(wb.data.hours[0]).toMatchObject({ regular: 8, overtime: 3, travel_wd: 0, miles: 40 });
     // S job numbers are billable by default (the old workbook's rule).
-    expect(wb.data.expenses[0]).toMatchObject({ type: "Hotel", amount_cents: 12900, billable: "Y", pay: "Credit" });
+    expect(wb.data.expenses[0]).toMatchObject({ type: "Hotel", billable: "Y", pay: "Credit", description: "Hampton Inn" });
+    // Field service engineers never see a dollar amount, not even their own (Aaron, 2026-11-25).
+    expect(wb.data.money).toBe(false);
+    expect(wb.data.expenses[0].amount_cents).toBeUndefined();
+    expect(JSON.stringify(wb.data)).not.toContain("12900");
+    // The scheduler and billing do see it.
+    const sched = await meagan.json(w);
+    expect(sched.data.money).toBe(true);
+    expect(sched.data.expenses[0]).toMatchObject({ amount_cents: 12900 });
   });
 
   it("an expense receipt stays out of the job's files and photos, and only people who see expenses can open it", async () => {
@@ -59,8 +67,11 @@ describe("filling in a work order", () => {
     expect(job.data.files.map((f: any) => f.id)).not.toContain(receipt);
     expect((await viewer.json(`/api/workbook/${id}`)).data.photos.map((p: any) => p.id)).not.toContain(receipt);
     expect((await viewer.fetch(`/api/jobs/files/${receipt}`)).status).toBe(404);
-    expect((await aaron.fetch(`/api/jobs/files/${receipt}`)).status).toBe(200);
+    // A receipt shows the amount, so not even the engineer who added it can open it afterwards.
+    expect((await aaron.fetch(`/api/jobs/files/${receipt}`)).status).toBe(404);
     expect((await meagan.fetch(`/api/jobs/files/${receipt}`)).status).toBe(200);
+    const lola = await person("billing");
+    expect((await lola.fetch(`/api/jobs/files/${receipt}`)).status).toBe(200);
   });
 
   it("nothing can be added to the log, hours or expenses once the report is submitted", async () => {
@@ -179,6 +190,30 @@ describe("Submit", () => {
     expect((await aaron.json(`${w}/submit`, { body: {} })).status).toBe(200);
     expect(sent.find((m) => m.to === lola.email).text).toContain("Total expenses: 129.00");
     expect(sent.find((m) => m.to === sam.email).text).not.toContain("129.00");
+  });
+
+  it("never sends dollar amounts to a field service engineer, even one on the job", async () => {
+    e.EMAIL = { send: async (m: any) => { sent.push(m); return { messageId: "m1" }; } };
+    e.MAIL_FROM = "workbook@ronchi.test";
+    const admin = await person("admin");
+    const meagan = await person("scheduling");
+    const aaron = await person("tech");
+    const steve = await person("tech");
+    expect((await admin.json("/api/workbook/settings/recipients", { method: "PUT", body: { userIds: [steve.id] } })).status).toBe(200);
+    const id = await jobWith(meagan, [aaron.id, steve.id]);
+    const w = `/api/workbook/${id}`;
+    await aaron.json(`${w}/entries`, { body: { day: "2026-11-23", description: "Work" } });
+    await aaron.json(`${w}/hours`, { method: "PUT", body: { day: "2026-11-23", regular: 8 } });
+    await aaron.json(`${w}/expenses`, { body: { day: "2026-11-23", type: "Hotel", amount: "129.00", description: "Hampton Inn" } });
+    const s = await aaron.json(`${w}/submit`, { body: {} });
+    expect(s.status).toBe(200);
+    // What comes back to the engineer who pressed Submit (to send from their own email) has no money either.
+    expect(s.data.text).not.toContain("129");
+    expect(s.data.text).toContain("Hotel");
+    expect(s.data.text).toContain("Total billable hours: 8");
+    const mail = sent.find((m) => m.to === steve.email && m.subject.startsWith("Service report"));
+    expect(mail.text).not.toContain("129");
+    expect(mail.text).toContain("Hotel");
   });
 });
 

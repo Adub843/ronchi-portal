@@ -206,6 +206,9 @@ export function resetWorkbook() {
   recipients = [];
 }
 
+// Same rule as the server: only schedulers and billing see dollar amounts.
+const seesMoney = (c: Ctx) => can(c, "jobs.schedule") || can(c, "workbook.billing");
+
 export function workbookRoute(method: string, seg: string[], q: URLSearchParams, body: any, c: Ctx): unknown {
   if (!jobs) seed(c);
   if (!workbook) throw new JobsFail(404, "Not found.");
@@ -239,15 +242,17 @@ export function workbookRoute(method: string, seg: string[], q: URLSearchParams,
   const who = (wanted: unknown) => (typeof wanted === "string" && wanted && can(c, "jobs.schedule") ? wanted : c.me.id);
 
   if (!seg[2]) {
-    const money = fill || can(c, "workbook.billing");
+    const crew = fill || can(c, "workbook.billing");
+    const money = seesMoney(c);
     const receipts = new Set([...books.values()].flatMap((x) => x.expenses.map((e) => e.receipt_file)).filter(Boolean));
     const photos = files.filter((f) => f.job_id === j.id && !f.deleted && isPhoto(f.ext) && !receipts.has(f.id)).map((f) => ({ id: f.id, name: f.name, ext: f.ext, created_at: f.created_at, url: f.url, ...(b.photos[f.id] ?? { caption: null, recipe_screen: null }) }));
     return {
       report: { ...b.report, submitted_by_name: b.report.submitted_by ? nameOf(c, b.report.submitted_by) : null },
       entries: b.entries.filter((e) => !e.removed).map((e) => ({ ...e, who: nameOf(c, e.user_id) })),
       photos,
-      hours: money ? b.hours.map((h) => ({ ...h, who: nameOf(c, h.user_id) })) : null,
-      expenses: money ? b.expenses.map((x) => ({ ...x, who: nameOf(c, x.user_id) })) : null,
+      hours: crew ? b.hours.map((h) => ({ ...h, who: nameOf(c, h.user_id) })) : null,
+      expenses: crew ? b.expenses.map(({ amount_cents, ...x }) => ({ ...x, ...(money ? { amount_cents } : {}), who: nameOf(c, x.user_id) })) : null,
+      money,
       recipients: recipients.map((id) => ({ id, name: nameOf(c, id) })),
       chat: null, canFill: fill, canSchedule: can(c, "jobs.schedule"), billable: billableFor(j.job_number),
       lists: { scopes: SCOPES, pct: PCT, expenseTypes: EXPENSE_TYPES, pay: PAY },
@@ -282,8 +287,8 @@ export function workbookRoute(method: string, seg: string[], q: URLSearchParams,
     b.report = { ...b.report, status: "submitted", submitted_by: c.me.id, submitted_at: now, revision: b.report.revision + 1 };
     const mail = reportText({
       job: j, report: b.report, entries, hours: b.hours.map((h) => ({ ...h, who: nameOf(c, h.user_id) })),
-      expenses: b.expenses.map((x) => ({ ...x, who: nameOf(c, x.user_id) })), photos: files.filter((f) => f.job_id === j.id && !f.deleted && isPhoto(f.ext)).length,
-      by: c.me.name, link: jobLink(location.origin, j.id, true),
+      expenses: b.expenses.map((x) => ({ ...x, who: nameOf(c, x.user_id) })), photos: files.filter((f) => f.job_id === j.id && !f.deleted && isPhoto(f.ext) && !isReceipt(f.id)).length,
+      by: c.me.name, link: jobLink(location.origin, j.id, true), amounts: seesMoney(c),
     });
     return { ok: true, notes: [], sent: recipients.map((id) => ({ name: nameOf(c, id), to: null, status: "not_configured" })), subject: mail.subject, text: mail.text };
   }
