@@ -98,9 +98,9 @@ describe("customer parts site wall", () => {
     for (const id of idsOf(partsConfig)) expect(others.has(id), `parts-db id ${id} is also used by another Worker`).toBe(false);
   });
 
-  it("the portal reaches the parts site only through its service binding, never the other way", () => {
+  it("the portal reaches the two customer sites only through their service bindings, never the other way", () => {
     for (const e of envsOf(portalConfig)) {
-      for (const s of e.services ?? []) expect(s.service).toBe("ronchi-parts");
+      expect((e.services ?? []).map((s: any) => `${s.binding}=${s.service}`).sort()).toEqual(["HELP=ronchi-help", "PARTS=ronchi-parts"]);
     }
     for (const e of envsOf(helpConfig)) expect(e.services).toBeUndefined();
   });

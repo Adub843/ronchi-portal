@@ -14,6 +14,8 @@ declare global {
       TEST_PARTS_DB: D1Database;
       TEST_PARTS_FILES: R2Bucket;
       TEST_PARTS_MIGRATIONS: D1Migration[];
+      TEST_HELP_DB: D1Database;
+      TEST_HELP_MIGRATIONS: D1Migration[];
     }
   }
 }

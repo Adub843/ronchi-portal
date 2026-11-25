@@ -13,8 +13,8 @@ import { randomId } from "../../shared/crypto";
 import { cleanName, fileInfo, fileProblem, MAX_FILES_PER_MESSAGE, MAX_MESSAGE_BYTES } from "../../shared/files";
 import type { AppEnv, SessionUser } from "../env";
 import { audit, now } from "../lib/db";
-import { body, fail, mustStr, requirePerm, str } from "../lib/http";
-import { can, isRole } from "../lib/roles";
+import { body, fail, mustStr, requirePerm, str, has } from "../lib/http";
+import { isRole } from "../lib/roles";
 
 export const boards = new Hono<AppEnv>();
 
@@ -51,7 +51,7 @@ export async function loadBoard(db: D1Database, user: SessionUser, id: string): 
 /** Board: the creator or a moderator. Chat: whoever started it. */
 function moderates(u: SessionUser, b: BoardRow): boolean {
   if (b.kind === "chat") return b.created_by === u.id;
-  return can(u.role, "boards.moderate") || b.created_by === u.id;
+  return has(u, "boards.moderate") || b.created_by === u.id;
 }
 
 function canPost(u: SessionUser, b: BoardRow): boolean {
@@ -145,6 +145,7 @@ boards.post("/read-all", async (c) => {
 
 boards.post("/", async (c) => {
   const u = requirePerm(c, "boards.use");
+  if (!has(u, "boards.create")) fail(403, "You can't start new boards. Ask an admin.");
   const b = await body(c);
   const name = mustStr(b.name, 80, "Board name");
   const description = str(b.description, 500);
@@ -181,6 +182,7 @@ async function activeUsers(db: D1Database, ids: unknown): Promise<string[]> {
 /** Start a private chat. A one-to-one chat that already exists is reopened instead of doubled. */
 boards.post("/chats", async (c) => {
   const u = requirePerm(c, "boards.use");
+  if (!has(u, "chats.start")) fail(403, "You can't start new chats. Ask an admin.");
   const b = await body(c);
   const others = (await activeUsers(c.env.DB, b.userIds)).filter((x) => x !== u.id);
   if (!others.length) fail(400, "Pick who to chat with.");
@@ -426,6 +428,7 @@ boards.post("/:id/posts", async (c) => {
   if (!canPost(u, board)) fail(403, "Only the board's creator and moderators can post here.");
   const { text, parentId, files } = await readMessage(c);
   if (!text && !files.length) fail(400, "Message is required.");
+  if (files.length && !has(u, "files.send")) fail(403, "You can't send photos or files. Ask an admin.");
   if (files.length > MAX_FILES_PER_MESSAGE) fail(400, `Send up to ${MAX_FILES_PER_MESSAGE} files at a time.`);
   if (files.reduce((n, f) => n + f.size, 0) > MAX_MESSAGE_BYTES) fail(400, "Those files are too big to send together. Send them in two messages.");
   for (const f of files) {
