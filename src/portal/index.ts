@@ -7,7 +7,7 @@
 //   4. each /api/... path goes to its file in routes/; anything else is the staff app from web/dist
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { PORTAL_CSP, securityHeaders, withHeaders } from "../shared/security-headers";
+import { PORTAL_CSP, securityHeaders, WORKBOOK_CSP, withHeaders } from "../shared/security-headers";
 import type { AppEnv } from "./env";
 import { fail } from "./lib/http";
 import { loadSession } from "./lib/session";
@@ -45,6 +45,10 @@ app.use("*", async (c, next) => {
   const own = fileRoute ? c.res.headers.get("Content-Security-Policy") : null;
   c.res = withHeaders(c.res, HEADERS);
   if (own) c.res.headers.set("Content-Security-Policy", own);
+  if (isWorkbookPage(c.req.path)) {
+    c.res.headers.set("Content-Security-Policy", WORKBOOK_CSP);
+    c.res.headers.set("X-Frame-Options", "SAMEORIGIN");
+  }
 });
 
 app.use("/api/*", async (c, next) => {
@@ -86,6 +90,21 @@ app.route("/api/shipping", shipping);
 app.route("/api/workbook", workbook);
 
 app.all("/api/*", () => fail(404, "Not found."));
+
+// Aaron's original Field Service Workbook, unchanged (web/public/field-service-workbook.html).
+// Signed-in staff only, like the rest of the portal; the Work order tab shows it in a frame.
+function isWorkbookPage(path: string) {
+  return path === "/field-service-workbook" || path === "/field-service-workbook.html";
+}
+app.get("/field-service-workbook*", async (c, next) => {
+  if (!isWorkbookPage(c.req.path)) return next();
+  await loadSettings(c.env.DB);
+  if (!(await loadSession(c))) return c.redirect("/", 302);
+  const res = await c.env.ASSETS.fetch(new Request(new URL("/field-service-workbook", c.req.url), c.req.raw));
+  const out = new Response(res.body, res);
+  out.headers.set("Cache-Control", "no-store");
+  return out;
+});
 
 // Everything else is the staff app (the single-page app in web/dist).
 app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
