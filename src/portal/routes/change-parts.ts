@@ -4,11 +4,12 @@
 // page shows that history. Two people editing at once can't overwrite each other: each save
 // sends the revision it started from, and a stale one is refused.
 import { Hono } from "hono";
-import { CP_FIELDS, CP_LABELS, CP_MAX, FOLDER_LINK, isOpen, readOrdersCsv, type CpField, type CpOrderInput } from "../../shared/change-parts";
+import { CP_FIELDS, CP_LABELS, CP_MAX, CP_SALE_FIELDS, FOLDER_LINK, isOpen, isSaleOpen, readOrdersCsv, type CpField, type CpOrderInput } from "../../shared/change-parts";
 import { randomId } from "../../shared/crypto";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
-import { body, fail, requirePerm } from "../lib/http";
+import { body, fail, has, requirePerm, requireUser } from "../lib/http";
+import type { Permission } from "../lib/roles";
 
 export const changeParts = new Hono<AppEnv>();
 
@@ -36,19 +37,88 @@ function changes(before: Record<string, unknown>, after: CpOrderInput) {
   return diff;
 }
 
+/** One phase's list: orders, or sales not yet sold. */
+async function list(db: D1Database, phase: "sale" | "order") {
+  const { results } = await db.prepare(
+    `SELECT o.id, ${CP_FIELDS.map((f) => "o." + f).join(", ")}, o.phase, o.revision, o.updated_at, o.sold_at, m.id AS machine_id
+       FROM cp_orders o LEFT JOIN machines m ON m.serial = o.machine
+      WHERE o.removed_at IS NULL AND o.phase = ? ORDER BY o.updated_at DESC LIMIT 5000`,
+  ).bind(phase).all<Record<string, string | null>>();
+  return results.map((o) => ({ ...o, open: phase === "sale" ? isSaleOpen(o.status) : isOpen(o.status) }));
+}
+
+/** Who may do what depends on the row's phase: sales use cpsales.*, orders use orders.*. */
+const PHASE_PERM: Record<"sale" | "order", Record<"view" | "edit" | "remove", Permission>> = {
+  sale: { view: "cpsales.view", edit: "cpsales.edit", remove: "cpsales.edit" },
+  order: { view: "orders.view", edit: "orders.edit", remove: "orders.remove" },
+};
+async function rowFor(c: Parameters<typeof requireUser>[0], id: string, action: "view" | "edit" | "remove") {
+  const u = requireUser(c);
+  const row = await c.env.DB.prepare("SELECT * FROM cp_orders WHERE id = ? AND removed_at IS NULL").bind(id).first<Record<string, unknown>>();
+  // Someone who can't see this phase gets the same answer as for a row that doesn't exist.
+  if (!row || !has(u, PHASE_PERM[row.phase as "sale" | "order"].view)) {
+    if (!has(u, "orders.view") && !has(u, "cpsales.view")) fail(403, "Your role doesn't allow this.");
+    fail(404, "Not found.");
+  }
+  if (!has(u, PHASE_PERM[row.phase as "sale" | "order"][action])) fail(403, "Your role doesn't allow this.");
+  return { u, row };
+}
+
 changeParts.get("/", async (c) => {
   requirePerm(c, "orders.view");
-  const { results } = await c.env.DB.prepare(
-    `SELECT o.id, ${CP_FIELDS.map((f) => "o." + f).join(", ")}, o.revision, o.updated_at, m.id AS machine_id
-       FROM cp_orders o LEFT JOIN machines m ON m.serial = o.machine
-      WHERE o.removed_at IS NULL ORDER BY o.updated_at DESC LIMIT 5000`,
-  ).all<Record<string, string | null>>();
-  return c.json({ orders: results.map((o) => ({ ...o, open: isOpen(o.status) })) });
+  return c.json({ orders: await list(c.env.DB, "order") });
+});
+
+changeParts.get("/sales", async (c) => {
+  requirePerm(c, "cpsales.view");
+  return c.json({ sales: await list(c.env.DB, "sale") });
+});
+
+/** Start a sale. It's an order only once someone marks it sold. */
+changeParts.post("/sales", async (c) => {
+  const u = requirePerm(c, "cpsales.edit");
+  const b = await body(c);
+  const f = clean(Object.fromEntries(Object.entries(b).filter(([k]) => (CP_SALE_FIELDS as string[]).includes(k))));
+  if (!f.customer) fail(400, "Customer is required.");
+  f.status ||= "New request";
+  f.salesperson ||= u.name;
+  const id = randomId();
+  const t = now();
+  await c.env.DB.prepare(`INSERT INTO cp_orders (id, ${COLS}, phase, created_by, updated_by, created_at, updated_at) VALUES (?, ${CP_FIELDS.map(() => "?").join(", ")}, 'sale', ?, ?, ?, ?)`)
+    .bind(id, ...CP_FIELDS.map((k) => f[k] ?? null), u.id, u.id, t, t)
+    .run();
+  await audit(c.env.DB, { userId: u.id, action: "cp_sale.create", targetType: "cp_order", targetId: id, detail: { changes: changes({}, f) }, ip: c.get("ip") });
+  return c.json({ id });
+});
+
+/**
+ * Sold: the sale becomes a change-part order, tracked like any other. Needs the customer's PO
+ * (the sheet's "PO Received"), unless one is already on the sale. Status starts at "Open".
+ */
+changeParts.post("/:id/sold", async (c) => {
+  const id = c.req.param("id");
+  const { u, row } = await rowFor(c, id, "edit");
+  if (row.phase !== "sale") fail(409, "This is already an order.");
+  if (!has(u, "orders.add")) fail(403, "Your role doesn't allow this.");
+  const b = await body(c);
+  if (typeof b.revision !== "number" || b.revision !== row.revision) fail(409, "Someone else changed this sale while you were working on it. Reload to see their changes.");
+  const f = clean({ customer_po: b.customer_po ?? row.customer_po, status: b.status || "Open", aa: b.aa, ra_po: b.ra_po, ship_date: b.ship_date });
+  for (const k of ["aa", "ra_po", "ship_date"] as const) if (!f[k]) delete f[k];
+  if (!f.customer_po) fail(400, "Add the customer's PO to mark it sold.");
+  const diff = changes(row, f);
+  const keys = Object.keys(f) as CpField[];
+  const t = now();
+  const r = await c.env.DB.prepare(
+    `UPDATE cp_orders SET ${keys.map((k) => `${k} = ?`).join(", ")}, phase = 'order', sold_at = ?, follow_up = NULL, revision = revision + 1, updated_by = ?, updated_at = ? WHERE id = ? AND revision = ?`,
+  ).bind(...keys.map((k) => f[k] ?? null), t, u.id, t, id, row.revision).run();
+  if (!r.meta.changes) fail(409, "Someone else changed this sale while you were working on it. Reload to see their changes.");
+  await audit(c.env.DB, { userId: u.id, action: "cp_sale.sold", targetType: "cp_order", targetId: id, detail: { changes: diff }, ip: c.get("ip") });
+  return c.json({ ok: true, id });
 });
 
 changeParts.get("/:id", async (c) => {
-  requirePerm(c, "orders.view");
   const id = c.req.param("id");
+  await rowFor(c, id, "view");
   const order = await c.env.DB.prepare(
     `SELECT o.*, m.id AS machine_id, cu.name AS created_by_name, uu.name AS updated_by_name
        FROM cp_orders o LEFT JOIN machines m ON m.serial = o.machine
@@ -61,7 +131,8 @@ changeParts.get("/:id", async (c) => {
       WHERE a.target_type = 'cp_order' AND a.target_id = ? ORDER BY a.at DESC LIMIT 200`,
   ).bind(id).all<{ at: string; action: string; detail: string | null; who: string | null }>();
   const history = results.map((h) => ({ at: h.at, action: h.action, who: h.who, changes: h.detail ? (JSON.parse(h.detail).changes ?? null) : null }));
-  return c.json({ order: { ...order, open: isOpen(order.status as string | null) }, history });
+  const open = order.phase === "sale" ? isSaleOpen(order.status as string | null) : isOpen(order.status as string | null);
+  return c.json({ order: { ...order, open }, history });
 });
 
 changeParts.post("/", async (c) => {
@@ -78,11 +149,9 @@ changeParts.post("/", async (c) => {
 });
 
 changeParts.patch("/:id", async (c) => {
-  const u = requirePerm(c, "orders.edit");
   const id = c.req.param("id");
+  const { u, row: before } = await rowFor(c, id, "edit");
   const b = await body(c);
-  const before = await c.env.DB.prepare("SELECT * FROM cp_orders WHERE id = ? AND removed_at IS NULL").bind(id).first<Record<string, unknown>>();
-  if (!before) fail(404, "Not found.");
   if (typeof b.revision !== "number" || b.revision !== before.revision) fail(409, "Someone else changed this order while you were editing. Reload to see their changes.");
   const f = clean(b);
   if ("customer" in f && !f.customer) fail(400, "Customer is required.");
@@ -93,16 +162,16 @@ changeParts.patch("/:id", async (c) => {
     `UPDATE cp_orders SET ${keys.map((k) => `${k} = ?`).join(", ")}, revision = revision + 1, updated_by = ?, updated_at = ? WHERE id = ? AND revision = ?`,
   ).bind(...keys.map((k) => f[k] ?? null), u.id, now(), id, before.revision).run();
   if (!r.meta.changes) fail(409, "Someone else changed this order while you were editing. Reload to see their changes.");
-  await audit(c.env.DB, { userId: u.id, action: "cp_order.update", targetType: "cp_order", targetId: id, detail: { changes: diff }, ip: c.get("ip") });
+  await audit(c.env.DB, { userId: u.id, action: before.phase === "sale" ? "cp_sale.update" : "cp_order.update", targetType: "cp_order", targetId: id, detail: { changes: diff }, ip: c.get("ip") });
   return c.json({ ok: true, revision: (before.revision as number) + 1 });
 });
 
 changeParts.delete("/:id", async (c) => {
-  const u = requirePerm(c, "orders.remove");
   const id = c.req.param("id");
+  const { u, row } = await rowFor(c, id, "remove");
   const r = await c.env.DB.prepare("UPDATE cp_orders SET removed_at = ?, updated_by = ? WHERE id = ? AND removed_at IS NULL").bind(now(), u.id, id).run();
   if (!r.meta.changes) fail(404, "Not found.");
-  await audit(c.env.DB, { userId: u.id, action: "cp_order.remove", targetType: "cp_order", targetId: id, ip: c.get("ip") });
+  await audit(c.env.DB, { userId: u.id, action: row.phase === "sale" ? "cp_sale.remove" : "cp_order.remove", targetType: "cp_order", targetId: id, ip: c.get("ip") });
   return c.json({ ok: true });
 });
 

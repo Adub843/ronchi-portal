@@ -125,7 +125,7 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
           </div>
           {data.orders && (
             <div className="panel" style={{ gridColumn: "1 / -1" }}>
-              <h2>{t("Change-part orders")}</h2>
+              <h2>{t("Change parts")}</h2>
               {data.orders.length ? (
                 <div className="tbl">
                   <table>

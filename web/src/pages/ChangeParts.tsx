@@ -1,14 +1,15 @@
-// Change-part orders: the sales side's tracker (replaces the old Change Parts Console).
-// List with search, filters and export; one page per order with its history; CSV import.
+// Change parts: the sales side (a request Andrew or Michele is working, up to the customer's PO) and
+// the orders it turns into (replaces the old Change Parts Console). Lists with search, filters and
+// export; one page per sale or order with its history; CSV import for orders.
 import { useMemo, useState } from "react";
-import { CP_FIELDS, CP_LABELS, CP_STATUSES, normalDate, type CpField } from "../../../src/shared/change-parts";
+import { CP_FIELDS, CP_LABELS, CP_SALE_FIELDS, CP_SALE_STAGES, CP_STATUSES, normalDate, type CpField } from "../../../src/shared/change-parts";
 import { toCsv } from "../../../src/shared/csv";
 import { api, can, fmtTime, type Me } from "../api";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad, Tip } from "../components/ui";
 import { loc, t } from "../i18n";
 import { navigate } from "../router";
 
-type Order = Record<CpField, string | null> & { id: string; open: boolean; revision: number; updated_at: string; machine_id?: string | null };
+type Order = Record<CpField, string | null> & { id: string; open: boolean; revision: number; updated_at: string; machine_id?: string | null; phase?: "sale" | "order"; sold_at?: string | null };
 
 const today = () => new Date().toISOString().slice(0, 10);
 const inDays = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
@@ -25,7 +26,7 @@ const soon = (o: Order) => { const d = shipDay(o); return o.open && !!d && d >= 
 
 export function StatusPill({ status, isLate }: { status: string | null; isLate?: boolean }) {
   const s = (status ?? "").toLowerCase();
-  const cls = isLate ? "p-acc" : /^shipped|^delivered|^closed|^complete/.test(s) ? "p-ok" : /^on hold|^cancel|^waiting/.test(s) ? "p-warn" : "p-info";
+  const cls = isLate ? "p-acc" : /^shipped|^delivered|^closed|^complete/.test(s) ? "p-ok" : /^on hold|^cancel|^waiting|^lost/.test(s) ? "p-warn" : "p-info";
   return <span className={`pill ${cls}`}>{status ? t(status) : t("No status")}{isLate ? ` · ${t("Late")}` : ""}</span>;
 }
 
@@ -37,7 +38,23 @@ type View = "open" | "late" | "soon" | "done" | "folder" | "all";
 /** Jobs found only as a SharePoint project folder, not on the master sheet. Kept apart until someone checks them. */
 const folderOnly = (o: Order) => (o.status ?? "").toLowerCase() === "folder only";
 
-export function ChangeParts({ me }: { me: Me }) {
+/** The two halves of the page. Sales come first because that's where a job starts. */
+function Tabs({ me, on }: { me: Me; on: "sales" | "orders" }) {
+  if (!can(me, "cpsales.view") || !can(me, "orders.view")) return null;
+  return (
+    <div className="row cp-tabs" role="tablist">
+      <Link to="/change-parts/sales" className={`btn${on === "sales" ? " primary" : ""}`} aria-current={on === "sales" ? "page" : undefined}>{t("Sales")}</Link>
+      <Link to="/change-parts" className={`btn${on === "orders" ? " primary" : ""}`} aria-current={on === "orders" ? "page" : undefined}>{t("Orders")}</Link>
+    </div>
+  );
+}
+
+export function ChangeParts({ me, tab }: { me: Me; tab?: "sales" | "orders" }) {
+  const on = tab ?? (can(me, "orders.view") ? "orders" : "sales");
+  return on === "sales" ? <SaleList me={me} /> : <OrderList me={me} />;
+}
+
+function OrderList({ me }: { me: Me }) {
   const { data, error, reload } = useLoad<{ orders: Order[] }>(() => api("/change-parts"));
   const [view, setView] = useState<View>("open");
   const [status, setStatus] = useState("");
@@ -95,11 +112,12 @@ export function ChangeParts({ me }: { me: Me }) {
 
   return (
     <>
-      <PageHead title={t("Change-part orders")} sub={t("Every change-part job, from quote to shipped.")} tip="change-parts.head">
+      <PageHead title={t("Change parts")} sub={t("Every change-part job, from the first request to shipped.")} tip="change-parts.head">
         <button className="btn" onClick={exportCsv} disabled={!shown.length}>{t("Export CSV")}</button>
         {can(me, "orders.import") && <button className="btn" onClick={() => setPanel(panel === "import" ? null : "import")}>{panel === "import" ? t("Cancel") : t("Import CSV")}</button>}
         {can(me, "orders.add") && <button className="btn primary" onClick={() => setPanel(panel === "new" ? null : "new")}>{panel === "new" ? t("Cancel") : t("New order")}</button>}
       </PageHead>
+      <Tabs me={me} on="orders" />
       {panel === "new" && <OrderForm onSaved={(id) => navigate(`/change-parts/${id}`)} onCancel={() => setPanel(null)} />}
       {panel === "import" && <ImportPanel onDone={() => { setPanel(null); reload(); }} />}
       <ErrorNote error={error} />
@@ -195,6 +213,7 @@ function OrderForm({ order, onSaved, onCancel }: { order?: Order; onSaved: (id: 
         <datalist id="cp-statuses">{CP_STATUSES.map((s) => <option key={s} value={s} />)}</datalist>
       </div>
       {input("salesperson")}
+      {input("contact")}
       {input("quote")}
       {input("customer_po")}
       {input("ra_po")}
@@ -274,25 +293,235 @@ function ImportPanel({ onDone }: { onDone: () => void }) {
   );
 }
 
+// ---------- the sales side ----------
+
+/** A follow-up date that has come (or passed) on a sale that's still being worked. */
+const followDay = (o: Order) => normalDate(o.follow_up);
+const due = (o: Order) => { const d = followDay(o); return o.open && !!d && d <= today(); };
+
+type SaleView = "open" | "due" | "quoted" | "lost" | "all";
+
+function SaleList({ me }: { me: Me }) {
+  const { data, error } = useLoad<{ sales: Order[] }>(() => api("/change-parts/sales"));
+  const [view, setView] = useState<SaleView>("open");
+  const [who, setWho] = useState("");
+  const [q, setQ] = useState("");
+  const [adding, setAdding] = useState(false);
+  const all = data?.sales ?? [];
+  const people = useMemo(() => [...new Set(all.map((o) => o.salesperson ?? "").filter(Boolean))].sort(), [all]);
+  const mine = (o: Order) => !who || (o.salesperson ?? "") === who;
+  const counts = useMemo(() => ({
+    open: all.filter((o) => o.open && mine(o)).length,
+    due: all.filter((o) => due(o) && mine(o)).length,
+    quoted: all.filter((o) => o.open && (o.status ?? "").toLowerCase() === "quote sent" && mine(o)).length,
+    lost: all.filter((o) => !o.open && mine(o)).length,
+  }), [all, who]);
+  const shown = useMemo(() => {
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    return all.filter((o) => {
+      if (!mine(o)) return false;
+      if (view === "open" && !o.open) return false;
+      if (view === "due" && !due(o)) return false;
+      if (view === "quoted" && !(o.open && (o.status ?? "").toLowerCase() === "quote sent")) return false;
+      if (view === "lost" && o.open) return false;
+      if (!words.length) return true;
+      const text = CP_FIELDS.map((f) => o[f] ?? "").join(" ").toLowerCase();
+      return words.every((w) => text.includes(w));
+    });
+  }, [all, view, who, q]);
+
+  const tiles: { v: SaleView; n: number; l: string }[] = [
+    { v: "open", n: counts.open, l: t("Open sales") },
+    { v: "due", n: counts.due, l: t("Follow up due") },
+    { v: "quoted", n: counts.quoted, l: t("Quote sent") },
+    { v: "lost", n: counts.lost, l: t("Lost") },
+  ];
+
+  return (
+    <>
+      <PageHead title={t("Change parts")} sub={t("Change-part sales. When the customer's PO comes in, mark it sold and it becomes an order.")} tip="change-parts.sales">
+        {can(me, "cpsales.edit") && <button className="btn primary" onClick={() => setAdding(!adding)}>{adding ? t("Cancel") : t("New sale")}</button>}
+      </PageHead>
+      <Tabs me={me} on="sales" />
+      {adding && <SaleForm me={me} onSaved={(id) => navigate(`/change-parts/${id}`)} onCancel={() => setAdding(false)} />}
+      <ErrorNote error={error} />
+      <div className="cp-tiles">
+        {tiles.map((x) => (
+          <button key={x.v} type="button" className={`panel cp-tile${view === x.v ? " on" : ""}${x.v === "due" && x.n ? " warn" : ""}`} aria-pressed={view === x.v} onClick={() => setView(view === x.v ? "all" : x.v)}>
+            <span className="n">{data ? x.n : "–"}</span><span className="l">{x.l}</span>
+          </button>
+        ))}
+      </div>
+      <div className="row cp-filters">
+        <input className="panel" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search customer, machine, part, quote or notes")} aria-label={t("Search sales")} />
+        <select className="panel" value={who} onChange={(e) => setWho(e.target.value)} aria-label={label("salesperson")}>
+          <option value="">{t("Everyone")}</option>
+          {people.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <button type="button" className={`btn${view === "all" ? " primary" : ""}`} onClick={() => setView("all")}>{t("All {n}", { n: all.filter(mine).length })}</button>
+      </div>
+      <div className="panel tbl">
+        {data && !all.length && <Empty>{t("No sales yet. When a customer asks for change parts, start a sale here.")}</Empty>}
+        {data && !!all.length && !shown.length && <Empty>{t("No sales match.")}</Empty>}
+        {!!shown.length && (
+          <table className="cp-table">
+            <thead>
+              <tr><th>{label("customer")}</th><th>{label("machine")}</th><th>{label("part")}</th><th>{t("Stage")}</th><th>{label("salesperson")}</th><th>{label("quote")}</th><th>{label("follow_up")}</th></tr>
+            </thead>
+            <tbody>
+              {shown.map((o) => (
+                <tr key={o.id}>
+                  <td><Link to={`/change-parts/${o.id}`}>{o.customer}</Link></td>
+                  <td className="mono">{o.machine ?? "–"}</td>
+                  <td>{o.part ?? "–"}</td>
+                  <td><StatusPill status={o.status} /></td>
+                  <td>{o.salesperson ?? "–"}</td>
+                  <td className="mono nowrap">{o.quote ?? "–"}</td>
+                  <td>{due(o) ? <span className="pill p-acc">{shortDate(followDay(o))}</span> : followDay(o) ? shortDate(followDay(o)) : o.follow_up ?? "–"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** Start or edit a sale: only what's known before the customer's PO. */
+function SaleForm({ me, sale, onSaved, onCancel }: { me: Me; sale?: Order; onSaved: (id: string) => void; onCancel: () => void }) {
+  const [f, setF] = useState<Record<string, string>>(() => Object.fromEntries(CP_SALE_FIELDS.map((k) => [k, sale?.[k] ?? (k === "salesperson" ? me.name : k === "status" ? CP_SALE_STAGES[0] : "")])));
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      if (sale) {
+        await api(`/change-parts/${encodeURIComponent(sale.id)}`, { method: "PATCH", body: { ...f, revision: sale.revision } });
+        onSaved(sale.id);
+      } else {
+        const r = await api<{ id: string }>("/change-parts/sales", { body: f });
+        onSaved(r.id);
+      }
+    } catch (x) {
+      setErr((x as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const input = (k: CpField, extra: Partial<React.InputHTMLAttributes<HTMLInputElement>> = {}) => (
+    <div className="field" key={k}>
+      <label htmlFor={`cs-${k}`}>{label(k)}</label>
+      <input id={`cs-${k}`} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} type="text" {...extra} />
+    </div>
+  );
+  return (
+    <form className="panel grid g2 cp-form" onSubmit={save}>
+      {input("customer", { required: true, autoFocus: !sale })}
+      {input("contact", { placeholder: t("Name, email or phone") })}
+      {input("machine", { placeholder: "3069MB" })}
+      {input("part", { placeholder: t("e.g. 500 ml round bottle set") })}
+      <div className="field">
+        <label htmlFor="cs-status">{t("Stage")}</label>
+        <input id="cs-status" list="cs-stages" value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })} placeholder={t("Pick or type")} />
+        <datalist id="cs-stages">{CP_SALE_STAGES.map((s) => <option key={s} value={s} />)}</datalist>
+      </div>
+      {input("salesperson")}
+      {input("quote")}
+      {input("follow_up", { type: "date" })}
+      {input("folder_url", { placeholder: "https://…sharepoint.com/…", type: "url" })}
+      <div className="field" style={{ gridColumn: "1 / -1" }}>
+        <label htmlFor="cs-notes">{label("notes")}</label>
+        <textarea id="cs-notes" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
+      </div>
+      <ErrorNote error={err} />
+      <div className="row" style={{ gridColumn: "1 / -1" }}>
+        <button className="btn primary" type="submit" disabled={busy}>{sale ? t("Save") : t("Start sale")}</button>
+        <button className="btn" type="button" onClick={onCancel}>{t("Cancel")}</button>
+      </div>
+    </form>
+  );
+}
+
+/** Mark a sale sold: the customer's PO turns it into a change-part order. */
+function SoldForm({ sale, onDone, onCancel }: { sale: Order; onDone: () => void; onCancel: () => void }) {
+  const [f, setF] = useState({ customer_po: sale.customer_po ?? "", status: "Open", aa: "", ra_po: "", ship_date: "" });
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      await api(`/change-parts/${encodeURIComponent(sale.id)}/sold`, { body: { ...f, revision: sale.revision } });
+      toast(t("Sold. It's now a change-part order."));
+      onDone();
+    } catch (x) {
+      setErr((x as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const input = (k: "customer_po" | "aa" | "ra_po" | "ship_date", extra: Partial<React.InputHTMLAttributes<HTMLInputElement>> = {}) => (
+    <div className="field" key={k}>
+      <label htmlFor={`sold-${k}`}>{label(k)}</label>
+      <input id={`sold-${k}`} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} type="text" {...extra} />
+    </div>
+  );
+  return (
+    <form className="panel grid g2 cp-form" onSubmit={save}>
+      <p style={{ gridColumn: "1 / -1", margin: 0 }}>{t("Add the customer's PO. The sale moves to Orders with everything typed so far, and its history comes along.")}</p>
+      {input("customer_po", { required: true, autoFocus: true })}
+      <div className="field">
+        <label htmlFor="sold-status">{t("Order status")}</label>
+        <input id="sold-status" list="cp-statuses-sold" value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })} />
+        <datalist id="cp-statuses-sold">{CP_STATUSES.map((s) => <option key={s} value={s} />)}</datalist>
+      </div>
+      {input("aa")}
+      {input("ra_po")}
+      {input("ship_date", { placeholder: t("e.g. 12/11/2026 or Mid Nov 2026") })}
+      <ErrorNote error={err} />
+      <div className="row" style={{ gridColumn: "1 / -1" }}>
+        <button className="btn primary" type="submit" disabled={busy}>{t("Mark sold")}</button>
+        <button className="btn" type="button" onClick={onCancel}>{t("Cancel")}</button>
+      </div>
+    </form>
+  );
+}
+
+/** What each history line says. */
+const HISTORY: Record<string, string> = {
+  "cp_order.create": "added this order",
+  "cp_order.remove": "removed this order",
+  "cp_sale.create": "started this sale",
+  "cp_sale.sold": "marked it sold",
+  "cp_sale.remove": "removed this sale",
+};
+
 export function ChangePartPage({ id, me }: { id: string; me: Me }) {
   const { data, error, reload } = useLoad<{ order: Order & Record<string, any>; history: any[] }>(() => api(`/change-parts/${encodeURIComponent(id)}`), [id]);
   const [editing, setEditing] = useState(false);
+  const [selling, setSelling] = useState(false);
   const [sure, setSure] = useState(false);
   if (error) return <ErrorNote error={error} />;
   if (!data) return null;
   const o = data.order;
-  const edit = can(me, "orders.edit");
+  const sale = o.phase === "sale";
+  const edit = can(me, sale ? "cpsales.edit" : "orders.edit");
+  const canSell = sale && can(me, "cpsales.edit") && can(me, "orders.add");
 
   async function remove() {
     if (!sure) {
       setSure(true);
-      toast(t("Press Remove again to remove this order. It stays in the record but is no longer listed."));
+      toast(sale ? t("Press Remove again to remove this sale. It stays in the record but is no longer listed.") : t("Press Remove again to remove this order. It stays in the record but is no longer listed."));
       return;
     }
     try {
       await api(`/change-parts/${encodeURIComponent(id)}`, { method: "DELETE" });
-      toast(t("Order removed"));
-      navigate("/change-parts");
+      toast(sale ? t("Sale removed") : t("Order removed"));
+      navigate(sale ? "/change-parts/sales" : "/change-parts");
     } catch (x) {
       toast((x as Error).message);
     }
@@ -308,19 +537,43 @@ export function ChangePartPage({ id, me }: { id: string; me: Me }) {
 
   return (
     <>
-      <PageHead title={o.customer ?? ""} sub={[o.machine, o.part].filter(Boolean).join(" · ") || undefined}>
-        <StatusPill status={o.status} isLate={late(o)} />
-        {edit && !editing && <button className="btn" onClick={() => setEditing(true)}>{t("Edit")}</button>}
-        {can(me, "orders.remove") && !editing && <button className="btn danger" onClick={remove}>{sure ? t("Yes, remove") : t("Remove")}</button>}
+      <PageHead title={o.customer ?? ""} sub={[sale ? t("Sale") : t("Order"), o.machine, o.part].filter(Boolean).join(" · ")}>
+        <StatusPill status={o.status} isLate={!sale && late(o)} />
+        {canSell && !editing && !selling && o.open && <button className="btn primary" onClick={() => setSelling(true)}>{t("Mark sold")}</button>}
+        {edit && !editing && !selling && <button className="btn" onClick={() => setEditing(true)}>{t("Edit")}</button>}
+        {can(me, sale ? "cpsales.edit" : "orders.remove") && !editing && !selling && <button className="btn danger" onClick={remove}>{sure ? t("Yes, remove") : t("Remove")}</button>}
       </PageHead>
-      {editing ? (
+      {o.sold_at && <p className="muted">{t("Sold on {when}", { when: fmtTime(o.sold_at) })}</p>}
+      {selling ? (
+        <SoldForm sale={o} onDone={() => { setSelling(false); reload(); }} onCancel={() => setSelling(false)} />
+      ) : editing && sale ? (
+        <SaleForm me={me} sale={o} onSaved={() => { setEditing(false); reload(); toast(t("Saved")); }} onCancel={() => setEditing(false)} />
+      ) : editing ? (
         <OrderForm order={o} onSaved={() => { setEditing(false); reload(); toast(t("Saved")); }} onCancel={() => setEditing(false)} />
+      ) : sale ? (
+        <div className="grid g2">
+          <div className="panel">
+            <h2>{t("Sale")}</h2>
+            <dl className="cp-dl">
+              {(["salesperson", "contact", "quote", "follow_up", "machine", "part", "folder_url"] as CpField[]).map((k) => <div key={k}><dt>{label(k)}</dt><dd>{show(k)}</dd></div>)}
+              <div><dt>{t("Stage")}</dt><dd>{o.status ? t(o.status) : "–"}</dd></div>
+            </dl>
+          </div>
+          <div className="panel">
+            <h2>{t("Next")}</h2>
+            <p>{o.open ? t("When the customer's PO comes in, press Mark sold. It becomes an order with samples, fill test and shipping to track.") : t("This sale was lost. Change its stage to pick it up again.")}</p>
+          </div>
+          <div className="panel" style={{ gridColumn: "1 / -1" }}>
+            <h2>{label("notes")}</h2>
+            <p style={{ whiteSpace: "pre-wrap" }}>{o.notes || <span className="muted">{t("No notes yet.")}</span>}</p>
+          </div>
+        </div>
       ) : (
         <div className="grid g2">
           <div className="panel">
             <h2>{t("Order")}</h2>
             <dl className="cp-dl">
-              {(["salesperson", "quote", "customer_po", "ra_po", "aa", "machine", "part", "status"] as CpField[]).map((k) => <div key={k}><dt>{label(k)}</dt><dd>{show(k)}</dd></div>)}
+              {(["salesperson", "contact", "quote", "customer_po", "ra_po", "aa", "machine", "part", "status"] as CpField[]).map((k) => <div key={k}><dt>{label(k)}</dt><dd>{show(k)}</dd></div>)}
             </dl>
           </div>
           <div className="panel">
@@ -342,8 +595,8 @@ export function ChangePartPage({ id, me }: { id: string; me: Me }) {
           {data.history.map((h, i) => (
             <li key={i}>
               <span className="muted">{fmtTime(h.at)}</span> <strong>{h.who ?? t("Someone")}</strong>{" "}
-              {h.action === "cp_order.create" ? t("added this order") : h.action === "cp_order.remove" ? t("removed this order") : t("changed")}
-              {h.action === "cp_order.update" && h.changes && (
+              {HISTORY[h.action] ? t(HISTORY[h.action]!) : t("changed")}
+              {(h.action === "cp_order.update" || h.action === "cp_sale.update" || h.action === "cp_sale.sold") && h.changes && (
                 <ul>
                   {Object.entries(h.changes as Record<string, [string | null, string | null]>).map(([k, [a, b]]) => (
                     <li key={k}>{label(k as CpField)}: <s className="muted">{a || "–"}</s> → {b || "–"}</li>

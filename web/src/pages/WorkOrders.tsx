@@ -75,7 +75,7 @@ export function WorkOrderPage({ id, me }: { id: string; me: Me }) {
           )}
           {data.orders.length > 0 && (
             <div>
-              <div className="wo-l">{t("Change-part orders")}</div>
+              <div className="wo-l">{t("Change parts")}</div>
               <ul className="filelist">{data.orders.map((o: any) => <li key={o.id}><Link to={`/change-parts/${o.id}`}>{o.part || t("Order")}</Link> <span className="muted">· {o.status ?? ""}</span></li>)}</ul>
             </div>
           )}
