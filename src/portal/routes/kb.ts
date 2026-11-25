@@ -4,7 +4,7 @@
 import { Hono, type Context } from "hono";
 import { randomId } from "../../shared/crypto";
 import {
-  cleanContent, CONFIRMABLE, contentText, FIRST_TEAM_NUMBER, guessCategory, HELP_KIND, isKbKind, isMachineNumber, KB_CATEGORIES, KB_CODE, KB_KINDS,
+  cleanContent, CONFIRMABLE, contentText, FIRST_TEAM_NUMBER, guessCategory, HELP_KIND, isKbKind, isMachineNumber, machineTypesFor, KB_CATEGORIES, KB_CODE, KB_KINDS,
   KIND_FROM_CODE, scanForCustomerData, toFtsQuery, type KbContent, type KbKind, type PrivateTerms,
 } from "../../shared/kb";
 import type { AppEnv } from "../env";
@@ -36,38 +36,57 @@ kb.get("/", async (c) => {
   }
   const serial = (c.req.query("serial") ?? "").trim().toUpperCase().slice(0, 12);
 
-  // A machine number typed in the box is a machine filter, not a word search.
+  // A machine number, or a customer's company or site name, in the box searches by machine:
+  // that machine's notes first, then anything that names it, then every document for its machine type.
   let words = q.trim();
-  let bySerial = serial;
-  if (!bySerial && isMachineNumber(words)) { bySerial = words.toUpperCase().replace("-", ""); words = ""; }
-
-  // A customer's company or site name finds the notes from that customer's machines.
+  const wanted = serial || (isMachineNumber(words) ? words.toUpperCase().replace("-", "") : "");
   let customer: { name: string; serials: string[] } | null = null;
-  let serials: Set<string> | null = bySerial ? new Set([bySerial]) : null;
-  if (!serials && words.length >= 3) {
-    const { results: ms } = await c.env.DB.prepare(
-      `SELECT serial, customer, site FROM machines
+  let machines: { serial: string; model: string | null; customer: string | null; site: string | null }[] = [];
+  if (wanted) {
+    machines = (await c.env.DB.prepare("SELECT serial, model, customer, site FROM machines WHERE upper(serial) = ?").bind(wanted).all<typeof machines[number]>()).results;
+    if (!machines.length) machines = [{ serial: wanted, model: null, customer: null, site: null }];
+    if (!serial) words = "";
+  } else if (words.length >= 3) {
+    machines = (await c.env.DB.prepare(
+      `SELECT serial, model, customer, site FROM machines
         WHERE lower(trim(customer)) = lower(?1) OR lower(trim(site)) = lower(?1) OR (length(?1) >= 4 AND lower(customer) LIKE lower(?2) ESCAPE '\\')
         ORDER BY serial LIMIT 200`,
-    ).bind(words, `${words.replace(/[%_\\]/g, (m) => "\\" + m)}%`).all<{ serial: string; customer: string | null; site: string | null }>();
-    if (ms.length) {
-      const name = (ms.find((m) => m.customer?.trim().toLowerCase() === words.toLowerCase()) ?? ms.find((m) => m.customer) ?? ms[0]!)?.customer?.trim() ?? ms[0]!.site!.trim();
-      customer = { name, serials: ms.map((m) => m.serial.toUpperCase()) };
-      serials = new Set(customer.serials);
+    ).bind(words, `${words.replace(/[%_\\]/g, (m) => "\\" + m)}%`).all<typeof machines[number]>()).results;
+    if (machines.length) {
+      const name = (machines.find((m) => m.customer?.trim().toLowerCase() === words.toLowerCase()) ?? machines.find((m) => m.customer) ?? machines[0]!)?.customer?.trim() ?? machines[0]!.site!.trim();
+      customer = { name, serials: machines.map((m) => m.serial.toUpperCase()) };
       words = "";
     }
   }
 
-  const fts = toFtsQuery(words);
-  const { results: rows } = fts
-    ? await c.env.DB.prepare(
-        `SELECT ${LIST_FIELDS} FROM kb_fts f JOIN kb_articles a ON a.rowid = f.rowid
-          WHERE kb_fts MATCH ? AND a.archived_at IS NULL
-          ORDER BY bm25(kb_fts, 4.0, 6.0, 3.0, 3.0, 3.0, 1.0, 4.0) LIMIT 1000`,
-      ).bind(fts).all<Row>()
-    : await c.env.DB.prepare(`SELECT ${LIST_FIELDS} FROM kb_articles a WHERE a.archived_at IS NULL ORDER BY a.updated_at DESC LIMIT 1000`).all<Row>();
-
-  const base = serials ? rows.filter((r) => serials!.has((r.serial ?? "").toUpperCase())) : rows;
+  let rows: Row[];
+  let machine: { serials: string[]; types: string[] } | null = null;
+  if (machines.length) {
+    const serials = new Set(machines.map((m) => m.serial.toUpperCase()));
+    const types = [...new Set(machines.flatMap((m) => machineTypesFor(m.model)))];
+    machine = { serials: [...serials], types };
+    // Articles whose text names one of the machine numbers.
+    const named = new Set<string>();
+    for (const s of serials) {
+      const { results } = await c.env.DB.prepare("SELECT a.id FROM kb_fts f JOIN kb_articles a ON a.rowid = f.rowid WHERE kb_fts MATCH ? AND a.archived_at IS NULL LIMIT 500")
+        .bind(`"${s.toLowerCase()}"`).all<{ id: string }>();
+      for (const r of results) named.add(r.id);
+    }
+    const all = (await c.env.DB.prepare(`SELECT ${LIST_FIELDS} FROM kb_articles a WHERE a.archived_at IS NULL ORDER BY a.updated_at DESC LIMIT 5000`).all<Row>()).results;
+    const rank = (r: Row) => (serials.has((r.serial ?? "").toUpperCase()) ? 0 : named.has(r.id) ? 1 : r.machine_type && types.includes(r.machine_type) ? 2 : 9);
+    rows = all.filter((r) => rank(r) < 9).sort((a, b) => rank(a) - rank(b) || types.indexOf(a.machine_type ?? "") - types.indexOf(b.machine_type ?? ""));
+  } else {
+    // Any of the words counts; articles with more of them, in the title or the issue, come first.
+    const fts = toFtsQuery(words).split(" ").filter(Boolean).join(" OR ");
+    rows = (fts
+      ? await c.env.DB.prepare(
+          `SELECT ${LIST_FIELDS} FROM kb_fts f JOIN kb_articles a ON a.rowid = f.rowid
+            WHERE kb_fts MATCH ? AND a.archived_at IS NULL
+            ORDER BY bm25(kb_fts, 4.0, 6.0, 3.0, 3.0, 3.0, 1.0, 4.0) LIMIT 1000`,
+        ).bind(fts).all<Row>()
+      : await c.env.DB.prepare(`SELECT ${LIST_FIELDS} FROM kb_articles a WHERE a.archived_at IS NULL ORDER BY a.updated_at DESC LIMIT 1000`).all<Row>()).results;
+  }
+  const base = rows;
   const keep = (r: Row, skip?: string) => Object.entries(want).every(([k, v]) => k === skip || String((r as any)[k] ?? "") === v);
 
   // Each filter counts what you'd see if you picked it, keeping the other filters you already picked.
@@ -78,7 +97,7 @@ kb.get("/", async (c) => {
     facets[f] = counts;
   }
   const results = base.filter((r) => keep(r)).slice(0, 200).map((r) => ({ ...r, issue: r.issue.slice(0, 240), fix: r.fix.slice(0, 240), summary: r.summary.slice(0, 240) }));
-  return c.json({ results, total: base.filter((r) => keep(r)).length, facets, serial: bySerial || null, customer });
+  return c.json({ results, total: base.filter((r) => keep(r)).length, facets, serial: wanted || null, customer, machine });
 });
 
 // ---------- One article ----------

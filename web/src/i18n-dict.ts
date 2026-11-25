@@ -117,6 +117,11 @@ export const DYNAMIC: string[] = [
 ];
 
 export const ES: Record<string, string> = {
+ "Everything for {name}'s machines ({list}): their notes first, then anything that names them, then documents for their machine types.": "Todo para las máquinas de {name} ({list}): primero sus notas, luego lo que las nombra y luego los documentos de sus tipos de máquina.",
+ "Everything for machine {serial}: its notes first, then anything that names it, then documents for its machine type.": "Todo para la máquina {serial}: primero sus notas, luego lo que la nombra y luego los documentos de su tipo de máquina.",
+ "Machine types: {types}.": "Tipos de máquina: {types}.",
+ "Its model isn't in the machine list yet, so documents for its machine type can't be added. Add the model on the machine's page.": "Su modelo aún no está en la lista de máquinas, así que no se pueden agregar los documentos de su tipo. Agregue el modelo en la página de la máquina.",
+ "Type any words, a machine number like 3979MB, or a customer name": "Escriba cualquier palabra, un número de máquina como 3979MB o un nombre de cliente",
  "One Point Lessons, how-tos, known issues and quick notes. Search by the problem or the machine.": "Lecciones de un punto, instructivos, problemas conocidos y notas rápidas. Busque por el problema o la máquina.",
  "Workbook Submit, service report filing, schedule and remote support arrive in the next steps.": "El envío del cuaderno de servicio, el archivo de informes de servicio, la agenda y el soporte remoto llegan en los próximos pasos.",
  "A short Issue and Fix from the field, so the next tech who hits it finds the answer.": "Un Problema y Solución breve desde el campo, para que el próximo técnico que lo encuentre tenga la respuesta.",
@@ -152,8 +157,6 @@ export const ES: Record<string, string> = {
  "Save article": "Guardar artículo",
  "Save quick note": "Guardar nota rápida",
  "Search the knowledge base": "Buscar en la base de conocimientos",
- "Showing notes from machine {serial}": "Mostrando notas de la máquina {serial}",
- "Showing notes from {name}'s machines: {list}": "Mostrando notas de las máquinas de {name}: {list}",
  "Staff only. Never shown to customers.": "Solo personal. Nunca se muestra a los clientes.",
  "Summary": "Resumen",
  "Take off help center": "Quitar del centro de ayuda",
@@ -167,7 +170,6 @@ export const ES: Record<string, string> = {
  "Who sees it": "Quién lo ve",
  "Written by {who}": "Escrito por {who}",
  "for example: Starwheel jams after a size change": "por ejemplo: la estrella se atasca después de un cambio de formato",
- "for example: capper torque drifting, 3979MB or a customer name": "por ejemplo: torque de la tapadora variando, 3979MB o un nombre de cliente",
  "must be taken out": "debe quitarse",
  "not a customer detail": "no es un dato de cliente",
  "{a} added, {u} updated, {s} skipped": "{a} agregados, {u} actualizados, {s} omitidos",
@@ -718,6 +720,11 @@ export const ES: Record<string, string> = {
 };
 
 export const IT: Record<string, string> = {
+ "Everything for {name}'s machines ({list}): their notes first, then anything that names them, then documents for their machine types.": "Tutto per le macchine di {name} ({list}): prima le loro note, poi ciò che le nomina, poi i documenti per i loro tipi di macchina.",
+ "Everything for machine {serial}: its notes first, then anything that names it, then documents for its machine type.": "Tutto per la macchina {serial}: prima le sue note, poi ciò che la nomina, poi i documenti per il suo tipo di macchina.",
+ "Machine types: {types}.": "Tipi di macchina: {types}.",
+ "Its model isn't in the machine list yet, so documents for its machine type can't be added. Add the model on the machine's page.": "Il suo modello non è ancora nell'elenco macchine, quindi i documenti per il suo tipo non si possono aggiungere. Aggiungi il modello nella pagina della macchina.",
+ "Type any words, a machine number like 3979MB, or a customer name": "Scrivi qualsiasi parola, un numero macchina come 3979MB o il nome di un cliente",
  "One Point Lessons, how-tos, known issues and quick notes. Search by the problem or the machine.": "One Point Lesson, istruzioni, problemi noti e note rapide. Cerca per problema o per macchina.",
  "Workbook Submit, service report filing, schedule and remote support arrive in the next steps.": "L'invio del quaderno di servizio, l'archiviazione dei rapporti di servizio, la pianificazione e l'assistenza remota arrivano nei prossimi passi.",
  "A short Issue and Fix from the field, so the next tech who hits it finds the answer.": "Un breve Problema e Soluzione dal campo, così il prossimo tecnico che lo incontra trova la risposta.",
@@ -753,8 +760,6 @@ export const IT: Record<string, string> = {
  "Save article": "Salva articolo",
  "Save quick note": "Salva nota rapida",
  "Search the knowledge base": "Cerca nella base di conoscenza",
- "Showing notes from machine {serial}": "Note della macchina {serial}",
- "Showing notes from {name}'s machines: {list}": "Note delle macchine di {name}: {list}",
  "Staff only. Never shown to customers.": "Solo personale. Mai mostrato ai clienti.",
  "Summary": "Riepilogo",
  "Take off help center": "Togli dal centro assistenza",
@@ -768,7 +773,6 @@ export const IT: Record<string, string> = {
  "Who sees it": "Chi lo vede",
  "Written by {who}": "Scritto da {who}",
  "for example: Starwheel jams after a size change": "per esempio: la stella si inceppa dopo un cambio formato",
- "for example: capper torque drifting, 3979MB or a customer name": "per esempio: coppia della tappatrice che varia, 3979MB o il nome di un cliente",
  "must be taken out": "va tolto",
  "not a customer detail": "non è un dato di cliente",
  "{a} added, {u} updated, {s} skipped": "{a} aggiunti, {u} aggiornati, {s} saltati",

@@ -1,7 +1,7 @@
 // DEMO ONLY. The knowledge base in the preview: the 128 Training Center documents, a few example
 // quick notes, and Publish that runs the same customer-data scan as the real portal.
 import docs from "./kb-docs.json";
-import { cleanContent, CONFIRMABLE, contentText, FIRST_TEAM_NUMBER, guessCategory, isMachineNumber, KB_KINDS, KIND_FROM_CODE, scanForCustomerData, type KbKind } from "../../../src/shared/kb";
+import { cleanContent, CONFIRMABLE, contentText, FIRST_TEAM_NUMBER, guessCategory, isMachineNumber, KB_KINDS, machineTypesFor, KIND_FROM_CODE, scanForCustomerData, type KbKind } from "../../../src/shared/kb";
 
 export class KbFail extends Error {
   constructor(public status: number, message: string) {
@@ -15,7 +15,7 @@ interface Article {
   created_by: string | null; updated_by: string | null; created_at: string; updated_at: string; archived_at: string | null;
 }
 
-interface Ctx { me: { id: string; role: string }; perms: Set<string>; machines: { serial: string; customer: string | null; site: string | null }[]; nameOf: (id: string | null) => string | null; newId: () => string }
+interface Ctx { me: { id: string; role: string }; perms: Set<string>; machines: { serial: string; model: string | null; customer: string | null; site: string | null }[]; nameOf: (id: string | null) => string | null; newId: () => string }
 
 let store: Article[] | null = null;
 
@@ -74,21 +74,34 @@ export function kbRoute(method: string, seg: string[], q: URLSearchParams, body:
   if (seg.length === 1 && method === "GET") {
     need("kb.view");
     let text = (q.get("q") ?? "").trim();
-    let serials: Set<string> | null = q.get("serial") ? new Set([q.get("serial")!.toUpperCase()]) : null;
-    let serial: string | null = q.get("serial")?.toUpperCase() ?? null;
+    const asked = q.get("serial")?.toUpperCase() || (isMachineNumber(text) ? text.toUpperCase() : "");
     let customer: { name: string; serials: string[] } | null = null;
-    if (isMachineNumber(text)) { serial = text.toUpperCase(); serials = new Set([serial]); text = ""; }
-    if (!serials && text.length >= 3) {
-      const ms = ctx.machines.filter((m) => m.customer?.toLowerCase() === text.toLowerCase() || m.site?.toLowerCase() === text.toLowerCase());
-      if (ms.length) { customer = { name: ms[0]!.customer ?? ms[0]!.site!, serials: ms.map((m) => m.serial) }; serials = new Set(customer.serials); text = ""; }
+    let ms = asked ? ctx.machines.filter((m) => m.serial.toUpperCase() === asked) : [];
+    if (asked) { if (!ms.length) ms = [{ serial: asked, model: null, customer: null, site: null }]; text = ""; }
+    else if (text.length >= 3) {
+      ms = ctx.machines.filter((m) => m.customer?.toLowerCase() === text.toLowerCase() || m.site?.toLowerCase() === text.toLowerCase() || (text.length >= 4 && !!m.customer?.toLowerCase().startsWith(text.toLowerCase())));
+      if (ms.length) { customer = { name: ms[0]!.customer ?? ms[0]!.site!, serials: ms.map((m) => m.serial) }; text = ""; }
     }
-    const w = words(text);
-    let rows = live().filter((a) => {
-      const hay = `${a.code} ${a.title} ${a.summary} ${a.issue} ${a.fix} ${a.body_text} ${a.serial ?? ""}`.toLowerCase();
-      return w.every((x) => new RegExp(`(^|[^\\p{L}\\p{N}])${x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "u").test(hay) || hay.includes(x.replace(/(ing|es|s|ed)$/, "")));
-    });
-    if (serials) rows = rows.filter((a) => serials!.has((a.serial ?? "").toUpperCase()));
-    if (!w.length) rows.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    let rows: Article[];
+    let machine: { serials: string[]; types: string[] } | null = null;
+    if (ms.length) {
+      const serials = new Set(ms.map((m) => m.serial.toUpperCase()));
+      const types = [...new Set(ms.flatMap((m) => machineTypesFor(m.model)))];
+      machine = { serials: [...serials], types };
+      const rank = (a: Article) => serials.has((a.serial ?? "").toUpperCase()) ? 0
+        : [...serials].some((s) => `${a.title} ${a.summary} ${a.issue} ${a.fix} ${a.body_text}`.toUpperCase().includes(s)) ? 1
+        : a.machine_type && types.includes(a.machine_type) ? 2 : 9;
+      rows = live().filter((a) => rank(a) < 9).sort((a, b) => rank(a) - rank(b) || types.indexOf(a.machine_type ?? "") - types.indexOf(b.machine_type ?? ""));
+    } else {
+      // Any of the words counts; articles with more of them, and in the title, come first.
+      const w = words(text);
+      const score = (a: Article) => {
+        const title = a.title.toLowerCase();
+        const hay = `${a.code} ${a.summary} ${a.issue} ${a.fix} ${a.body_text}`.toLowerCase();
+        return w.reduce((n, x) => { const stem = x.replace(/(ing|es|s|ed)$/, ""); return n + (title.includes(stem) ? 3 : 0) + (hay.includes(stem) ? 1 : 0); }, 0);
+      };
+      rows = w.length ? live().map((a) => [a, score(a)] as const).filter(([, n]) => n > 0).sort((x, y) => y[1] - x[1]).map(([a]) => a) : [...live()].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    }
     const want: Record<string, string> = {};
     for (const f of ["kind", "machine_type", "category", "audience"]) if (q.get(f)) want[f] = q.get(f)!;
     const keep = (r: any, skip?: string) => Object.entries(want).every(([k, v]) => k === skip || String(r[k] ?? "") === v);
@@ -99,7 +112,7 @@ export function kbRoute(method: string, seg: string[], q: URLSearchParams, body:
       facets[f] = c;
     }
     const results = rows.filter((r) => keep(r));
-    return { results: results.slice(0, 200).map(({ content: _c, body_text: _b, ...r }) => r), total: results.length, facets, serial: customer ? null : serial, customer };
+    return { results: results.slice(0, 200).map(({ content: _c, body_text: _b, ...r }) => r), total: results.length, facets, serial: asked || null, customer, machine };
   }
 
   if (seg[1] === "import" && method === "POST") {
