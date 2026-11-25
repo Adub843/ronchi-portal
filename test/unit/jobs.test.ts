@@ -50,7 +50,7 @@ describe("the email to a tech", () => {
     location: "1 Main St, Pottstown, PA", contact_name: "Dana Smith", contact_phone: "555-0100", contact_email: "dana@acme.test",
     work_days: ["2026-12-01", "2026-12-02"], notes: "Bring the 38mm change parts.\n<b>not html</b>",
   };
-  const mail = jobEmail(job, { link: jobLink("https://portal.example", "abc123", true), techName: "Elim", by: "Meagan Hooper" });
+  const mail = jobEmail(job, { link: jobLink("https://portal.example", "abc123", true), name: "Elim", by: "Meagan Hooper" });
   it("has the job number, customer and days in the subject", () => {
     expect(mail.subject).toBe("Scheduled: job J-1042, Acme Bottling, Dec 1 – Dec 2, 2026 (2 days)");
   });
@@ -63,6 +63,11 @@ describe("the email to a tech", () => {
     for (const s of ["1 Main St, Pottstown, PA", "Dana Smith", "555-0100", "dana@acme.test", "4110MB", "Bring the 38mm change parts.", "Meagan Hooper"]) expect(mail.text).toContain(s);
     expect(mail.html).toContain("https://waze.com/ul?q=");
     expect(mail.html).toContain("https://maps.apple.com/?daddr=");
+  });
+  it("says when a job was changed", () => {
+    const m = jobEmail(job, { link: "https://portal.example/jobs/abc123", name: "Elim", by: "Meagan Hooper", updated: true });
+    expect(m.subject.startsWith("Changed: job J-1042")).toBe(true);
+    expect(m.text).toContain("Meagan Hooper changed job J-1042.");
   });
   it("never lets typed text become HTML", () => {
     expect(mail.html).not.toContain("<b>not html</b>");

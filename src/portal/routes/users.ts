@@ -1,10 +1,10 @@
 // People: invites, roles, disabling, and signing out devices.
-import { isEmail } from "../lib/mail";
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
 import { body, fail, mustStr, requirePerm, requireUser } from "../lib/http";
 import { createInvite } from "../lib/invites";
+import { isEmail } from "../lib/mail";
 import { adjustable, effective, isPermission, isRole, PERMISSION_GROUPS, PERMISSIONS, readChanges, ROLES, VIEW_PERMS, type AccessChanges, type Role } from "../lib/roles";
 import { endAllSessions } from "../lib/session";
 import { loginId } from "../../shared/login";

@@ -5,7 +5,7 @@ export const SWITCHES = {
   // The Ronchi workbook: the Work orders pages (each job's work order with the log of past work orders
   // and the machine's history). Off = Ronchi keeps using its Excel sheets; scheduling, the job emails
   // and job files still work.
-  workbook: { label: "Ronchi workbook (Work orders)", default: true },
+  workbook: { default: true },
 } as const;
 export type SwitchName = keyof typeof SWITCHES;
 export const isSwitch = (v: unknown): v is SwitchName => typeof v === "string" && Object.prototype.hasOwnProperty.call(SWITCHES, v);

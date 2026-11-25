@@ -58,7 +58,8 @@ const VIEWS = [
 ] as const;
 
 export function JobList({ me, base, title, sub }: { me: Me; base: "/jobs" | "/work-orders"; title: string; sub: string }) {
-  const [view, setView] = useState<string>(can(me, "jobs.schedule") ? "upcoming" : "mine");
+  // Work orders open on the whole log; Jobs open on what's coming up (or your own jobs).
+  const [view, setView] = useState<string>(base === "/work-orders" ? "all" : can(me, "jobs.schedule") ? "upcoming" : "mine");
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
   const { data, error } = useLoad(() => api(`/jobs?view=${view}&q=${encodeURIComponent(query)}`), [view, query]);
@@ -185,7 +186,7 @@ export function JobFiles({ jobId, files, me, canRemoveAll, onChange }: { jobId: 
 
 // ---- One job ----
 
-export function JobPage({ id, me, workbook }: { id: string; me: Me; workbook: boolean }) {
+export function JobPage({ id, me }: { id: string; me: Me }) {
   const { data, error, reload } = useLoad(() => api(`/jobs/${encodeURIComponent(id)}`), [id]);
   const [editing, setEditing] = useState(false);
   const [emails, setEmails] = useState<EmailResult[]>(() => {
@@ -246,7 +247,6 @@ export function JobPage({ id, me, workbook }: { id: string; me: Me; workbook: bo
           <JobFiles jobId={j.id} files={data.files} me={me} canRemoveAll={scheduler} onChange={reload} />
         </div>
       </div>
-      {!workbook && <p className="muted">{t("The Ronchi workbook is switched off, so this job has no work order page.")}</p>}
     </>
   );
 }

@@ -97,9 +97,9 @@ export function App() {
   if (m?.[1] === "boards" || m?.[1] === "chats") page = <BoardPage key={m[2]} id={m[2]!} me={me} />;
   else if (m?.[1] === "machines") page = <MachinePage id={m[2]!} me={me} />;
   else if (path === "/jobs/new") page = <NewJob me={me} />;
-  else if (m?.[1] === "jobs") page = <JobPage key={m[2]} id={m[2]!} me={me} workbook={switches.workbook} />;
+  else if (m?.[1] === "jobs") page = <JobPage key={m[2]} id={m[2]!} me={me} />;
   else if (m?.[1] === "work-orders" && switches.workbook) page = <WorkOrderPage key={m[2]} id={m[2]!} me={me} />;
-  else if (m?.[1] === "work-orders") page = <JobPage key={m[2]} id={m[2]!} me={me} workbook={false} />;
+  else if (m?.[1] === "work-orders") page = <JobPage key={m[2]} id={m[2]!} me={me} />;
   else if (section === "/jobs") page = <JobList me={me} base="/jobs" title={t("Jobs")} sub={t("Field service visits: who is going where, and when.")} />;
   else if (section === "/work-orders" && switches.workbook) page = <WorkOrders me={me} />;
   else if (/^\/kb\/[A-Za-z0-9_-]+$/.test(path)) page = <KbArticle key={path} id={path.slice(4)} me={me} />;

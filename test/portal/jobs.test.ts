@@ -118,17 +118,43 @@ describe("tech jobs", () => {
     expect((await tech.fetch(`/api/jobs/files/${pdf.id}`, { method: "DELETE" })).status).toBe(200);
   });
 
-  it("someone with job access switched off sees only jobs they're on", async () => {
+  it("someone with job access switched off sees no jobs, even ones they're on (deny by default)", async () => {
     const admin = await person("admin");
     const m = await person("scheduling");
     const tech = await person("tech");
-    expect((await admin.json(`/api/users/${tech.id}/access`, { method: "PUT", body: { changes: { "jobs.view": false } } })).status).toBe(200);
     const mine = await m.json("/api/jobs", { body: jobBody({ techIds: [tech.id] }) });
-    const other = await m.json("/api/jobs", { body: jobBody() });
-    expect((await tech.json(`/api/jobs/${mine.data.id}`)).status).toBe(200);
-    expect((await tech.json(`/api/jobs/${other.data.id}`)).status).toBe(404);
-    const list = await tech.json("/api/jobs?view=all");
-    expect(list.data.jobs.map((j: any) => j.id)).toEqual([mine.data.id]);
+    expect((await admin.json(`/api/users/${tech.id}/access`, { method: "PUT", body: { changes: { "jobs.view": false } } })).status).toBe(200);
+    expect((await tech.json(`/api/jobs/${mine.data.id}`)).status).toBe(403);
+    expect((await tech.json(`/api/jobs/${mine.data.id}/workbook`)).status).toBe(403);
+    expect((await tech.json("/api/jobs?view=mine")).status).toBe(403);
+  });
+
+  it("a repeated job number on a change is refused, not a crash", async () => {
+    const m = await person("scheduling");
+    const a = await m.json("/api/jobs", { body: jobBody() });
+    const b = await m.json("/api/jobs", { body: jobBody() });
+    const job = (await m.json(`/api/jobs/${b.data.id}`)).data.job;
+    const r = await m.json(`/api/jobs/${b.data.id}`, { method: "PATCH", body: { revision: job.revision, job_number: (await m.json(`/api/jobs/${a.data.id}`)).data.job.job_number } });
+    expect(r.status).toBe(409);
+  });
+
+  it("keeps one-line fields on one line", async () => {
+    const m = await person("scheduling");
+    const r = await m.json("/api/jobs", { body: jobBody({ customer: "Acme\nBottling" }) });
+    expect((await m.json(`/api/jobs/${r.data.id}`)).data.job.customer).toBe("Acme Bottling");
+  });
+
+  it("tells the engineers already on a job when its days change", async () => {
+    emailOn();
+    const m = await person("scheduling");
+    const t1 = await person("tech");
+    const r = await m.json("/api/jobs", { body: jobBody({ techIds: [t1.id] }) });
+    const job = (await m.json(`/api/jobs/${r.data.id}`)).data.job;
+    await m.json(`/api/jobs/${r.data.id}`, { method: "PATCH", body: { revision: job.revision, notes: "only notes" } });
+    expect(sent).toHaveLength(1);
+    await m.json(`/api/jobs/${r.data.id}`, { method: "PATCH", body: { revision: job.revision + 1, work_days: ["2026-12-09"] } });
+    expect(sent).toHaveLength(2);
+    expect(sent[1].subject).toMatch(/^Changed: job/);
   });
 
   it("lists my jobs and upcoming jobs", async () => {

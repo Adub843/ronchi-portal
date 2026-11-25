@@ -80,7 +80,7 @@ export function jobsRoute(method: string, seg: string[], q: URLSearchParams, bod
     const status = to ? "not_set_up" : "no_address";
     const t = techs.find((x) => x.job_id === j.id && x.user_id === uid);
     if (t) { t.email_status = status; t.emailed_at = null; }
-    const m = jobEmail(j, { link: jobLink(location.origin, j.id, workbook), techName: u.name.split(" ")[0]!, by: c.me.name });
+    const m = jobEmail(j, { link: jobLink(location.origin, j.id, workbook), name: u.name.split(" ")[0]!, by: c.me.name });
     return { userId: uid, name: u.name, status, to, subject: m.subject, text: m.text };
   });
   const clean = (b: any, j: any) => {
@@ -102,7 +102,7 @@ export function jobsRoute(method: string, seg: string[], q: URLSearchParams, bod
       if (!can(c, "users.manage")) throw new JobsFail(403, "Your role doesn't allow this.");
       workbook = body.on === true;
     }
-    return { switches: { workbook }, labels: { workbook: "Ronchi workbook (Work orders)" } };
+    return { switches: { workbook } };
   }
 
   // seg[0] === "jobs"
@@ -170,5 +170,5 @@ export function jobsRoute(method: string, seg: string[], q: URLSearchParams, bod
     return { ok: true, revision: j.revision, emails: email(j, added) };
   }
   const machine = c.machines.find((m) => m.serial === j.machine);
-  return { job: j, techs: techsOf(j.id), files: filesOf(j.id), machine: machine ? { id: machine.id, serial: machine.serial } : null, maps: j.location ? mapLinks(j.location) : null, history: [], workbook };
+  return { job: j, techs: techsOf(j.id), files: filesOf(j.id), machine: machine ? { id: machine.id, serial: machine.serial } : null, maps: j.location ? mapLinks(j.location) : null, workbook };
 }

@@ -99,13 +99,17 @@ export interface JobForEmail {
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-/** The email a tech gets when they're put on a job: plain text and a simple HTML version. */
 /** The page a job's email links to: its work order in the Ronchi workbook, or the plain job page when the workbook is switched off. */
 export function jobLink(origin: string, id: string, workbook: boolean): string {
   return `${origin}/${workbook ? "work-orders" : "jobs"}/${encodeURIComponent(id)}`;
 }
 
-export function jobEmail(job: JobForEmail, opts: { link: string; techName: string; by: string }): { subject: string; text: string; html: string } {
+/**
+ * The email a field service engineer gets when they're put on a job (or when its days, place or
+ * contact change, with `updated`): plain text and a simple HTML version.
+ */
+export function jobEmail(job: JobForEmail, opts: { link: string; name: string; by: string; updated?: boolean }): { subject: string; text: string; html: string } {
+  const did = opts.updated ? "changed" : "scheduled you for";
   const link = opts.link;
   const days = daysLabel(job.work_days);
   const maps = job.location ? mapLinks(job.location) : null;
@@ -119,11 +123,11 @@ export function jobEmail(job: JobForEmail, opts: { link: string; techName: strin
     ["Point of contact", contact],
   ].filter((r): r is [string, string] => !!r[1]);
 
-  const subject = `Scheduled: job ${job.job_number}, ${job.customer}, ${days}`;
+  const subject = `${opts.updated ? "Changed" : "Scheduled"}: job ${job.job_number}, ${job.customer}, ${days}`;
   const text = [
-    `Hi ${opts.techName},`,
+    `Hi ${opts.name},`,
     "",
-    `${opts.by} scheduled you for job ${job.job_number}.`,
+    `${opts.by} ${did} job ${job.job_number}.`,
     "",
     ...rows.map(([k, v]) => `${k}: ${v}`),
     ...(maps ? ["", `Google Maps: ${maps.google}`, `Waze: ${maps.waze}`, `Apple Maps: ${maps.apple}`] : []),
@@ -136,8 +140,8 @@ export function jobEmail(job: JobForEmail, opts: { link: string; techName: strin
 
   const td = "padding:4px 12px 4px 0;vertical-align:top";
   const html = `<!doctype html><html><body style="font-family:Arial,Helvetica,sans-serif;color:#1d1d1f;font-size:15px;line-height:1.45">
-<p>Hi ${esc(opts.techName)},</p>
-<p>${esc(opts.by)} scheduled you for job <b>${esc(job.job_number)}</b>.</p>
+<p>Hi ${esc(opts.name)},</p>
+<p>${esc(opts.by)} ${did} job <b>${esc(job.job_number)}</b>.</p>
 <table style="border-collapse:collapse">${rows.map(([k, v]) => `<tr><td style="${td};color:#666">${esc(k)}</td><td style="${td};white-space:pre-wrap">${esc(v)}</td></tr>`).join("")}</table>
 ${maps ? `<p>Open the location in <a href="${esc(maps.google)}">Google Maps</a> · <a href="${esc(maps.waze)}">Waze</a> · <a href="${esc(maps.apple)}">Apple Maps</a></p>` : ""}
 ${job.notes ? `<p style="color:#666;margin-bottom:2px">Other information</p><p style="white-space:pre-wrap;margin-top:0">${esc(job.notes)}</p>` : ""}
