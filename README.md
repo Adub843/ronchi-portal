@@ -203,7 +203,7 @@ the wall fails the build.
 - **Jobs** (`/jobs`): a scheduled field service visit. Job number, customer, machine, the customer's
   location (opens in Google Maps, Waze or Apple Maps), point of contact, days of work, the field service
   engineers going, a free text box, and files. Schedulers (`jobs.schedule`: scheduling, service, admins)
-  make and change jobs. Everyone with `jobs.view` sees them; the engineers on a job always see it.
+  make and change jobs. Everyone with `jobs.view` sees them (every staff role has it by default), and can add files to a job.
   Code: `src/portal/routes/jobs.ts`, `src/shared/jobs.ts`, `web/src/pages/Jobs.tsx`. Files go in R2 under `jobs/<id>`.
 - **Work orders** (`/work-orders/<job>`): the Ronchi workbook page. The current work order on top, then the
   log of past work orders for the same machine with their notes and files, and the machine's record.

@@ -145,7 +145,7 @@ function OrderList({ me }: { me: Me }) {
         {data && !all.length && <Empty>{edit ? t("No orders yet. Add one, or import the master sheet as a CSV file.") : t("No orders yet.")}</Empty>}
         {data && !!all.length && !shown.length && <Empty>{t("No orders match.")}</Empty>}
         {!!shown.length && (
-          <table className="cp-table">
+          <table className="cp-table stack-sm">
             <thead>
               <tr><th>{label("customer")}</th><th>{label("machine")}</th><th>{label("part")}</th><th>{label("status")}</th><th>{label("salesperson")}</th><th>{label("aa")}</th><th>{label("ship_date")}</th></tr>
             </thead>
@@ -153,12 +153,12 @@ function OrderList({ me }: { me: Me }) {
               {shown.map((o) => (
                 <tr key={o.id}>
                   <td><Link to={`/change-parts/${o.id}`}>{o.customer}</Link></td>
-                  <td className="mono">{o.machine ?? "–"}</td>
-                  <td>{o.part ?? "–"}</td>
-                  <td><StatusPill status={o.status} isLate={late(o)} /></td>
-                  <td>{o.salesperson ?? "–"}</td>
-                  <td className="mono nowrap">{o.aa ?? "–"}</td>
-                  <td>{shipDay(o) ? shortDate(shipDay(o)) : o.ship_date ?? "–"}</td>
+                  <td className="mono" data-l={label("machine")}>{o.machine ?? "–"}</td>
+                  <td data-l={label("part")}>{o.part ?? "–"}</td>
+                  <td data-l={label("status")}><StatusPill status={o.status} isLate={late(o)} /></td>
+                  <td data-l={label("salesperson")}>{o.salesperson ?? "–"}</td>
+                  <td className="mono nowrap" data-l={label("aa")}>{o.aa ?? "–"}</td>
+                  <td data-l={label("ship_date")}>{shipDay(o) ? shortDate(shipDay(o)) : o.ship_date ?? "–"}</td>
                 </tr>
               ))}
             </tbody>
@@ -364,7 +364,7 @@ function SaleList({ me }: { me: Me }) {
         {data && !all.length && <Empty>{t("No sales yet. When a customer asks for change parts, start a sale here.")}</Empty>}
         {data && !!all.length && !shown.length && <Empty>{t("No sales match.")}</Empty>}
         {!!shown.length && (
-          <table className="cp-table">
+          <table className="cp-table stack-sm">
             <thead>
               <tr><th>{label("customer")}</th><th>{label("machine")}</th><th>{label("part")}</th><th>{t("Stage")}</th><th>{label("salesperson")}</th><th>{label("quote")}</th><th>{label("follow_up")}</th></tr>
             </thead>
@@ -372,12 +372,12 @@ function SaleList({ me }: { me: Me }) {
               {shown.map((o) => (
                 <tr key={o.id}>
                   <td><Link to={`/change-parts/${o.id}`}>{o.customer}</Link></td>
-                  <td className="mono">{o.machine ?? "–"}</td>
-                  <td>{o.part ?? "–"}</td>
-                  <td><StatusPill status={o.status} /></td>
-                  <td>{o.salesperson ?? "–"}</td>
-                  <td className="mono nowrap">{o.quote ?? "–"}</td>
-                  <td>{due(o) ? <span className="pill p-acc">{shortDate(followDay(o))}</span> : followDay(o) ? shortDate(followDay(o)) : o.follow_up ?? "–"}</td>
+                  <td className="mono" data-l={label("machine")}>{o.machine ?? "–"}</td>
+                  <td data-l={label("part")}>{o.part ?? "–"}</td>
+                  <td data-l={t("Stage")}><StatusPill status={o.status} /></td>
+                  <td data-l={label("salesperson")}>{o.salesperson ?? "–"}</td>
+                  <td className="mono nowrap" data-l={label("quote")}>{o.quote ?? "–"}</td>
+                  <td data-l={label("follow_up")}>{due(o) ? <span className="pill p-acc">{shortDate(followDay(o))}</span> : followDay(o) ? shortDate(followDay(o)) : o.follow_up ?? "–"}</td>
                 </tr>
               ))}
             </tbody>

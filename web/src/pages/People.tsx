@@ -1,4 +1,5 @@
 // Aaron's page: add and remove employees, make roles, set what each person can do, cut off access.
+import { AUDIT_LABELS } from "../audit-labels";
 import { Fragment, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { api, fmtTime, type Me } from "../api";
@@ -121,7 +122,7 @@ export function People({ me }: { me: Me }) {
       )}
       <ErrorNote error={error} />
       <div className="panel tbl">
-        <table>
+        <table className="stack-sm">
           <thead><tr><th>{t("Name")}</th><th>{t("Role")}</th><th>{t("Status")}</th><th>{t("Devices")}</th><th /></tr></thead>
           <tbody>
             {current.map((u: any) => {
@@ -144,14 +145,14 @@ export function People({ me }: { me: Me }) {
                     </button>
                   )}
                 </td>
-                <td>
+                <td data-l={t("Role")}>
                   <select value={u.role} onChange={(e) => update(u.id, { role: e.target.value })} disabled={u.id === me.id} aria-label={t("Role for {name}", { name: u.name })}>
                     {(u.role === "admin" ? Object.entries(roleNames) : pickable).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                   {changed > 0 && <div className="access-note">{changed === 1 ? t("1 change from the role") : t("{n} changes from the role", { n: changed })}</div>}
                 </td>
-                <td><span className={`pill ${u.status === "active" ? "p-ok" : "p-acc"}`}>{u.status === "active" ? t("active") : t("disabled")}</span></td>
-                <td className="muted">{t("{p} passkey(s), {s} signed in", { p: u.passkeys, s: u.sessions })}</td>
+                <td data-l={t("Status")}><span className={`pill ${u.status === "active" ? "p-ok" : "p-acc"}`}>{u.status === "active" ? t("active") : t("disabled")}</span></td>
+                <td className="muted" data-l={t("Devices")}>{t("{p} passkey(s), {s} signed in", { p: u.passkeys, s: u.sessions })}</td>
                 <td><div className="acts">
                   {adjustable && <button className={`btn small${open === u.id ? " on" : ""}`} aria-expanded={open === u.id} onClick={() => setOpen(open === u.id ? null : u.id)}>{t("Access")}</button>}
                   <button className="btn small" onClick={() => signOutAll(u.id)}>{t("Sign out everywhere")}</button>
@@ -215,7 +216,7 @@ export function People({ me }: { me: Me }) {
           <thead><tr><th>{t("When")}</th><th>{t("Who")}</th><th>{t("What")}</th><th>{t("From")}</th></tr></thead>
           <tbody>
             {audit.data?.entries.slice(0, 50).map((a: any, i: number) => (
-              <tr key={i}><td>{fmtTime(a.at)}</td><td>{a.who ?? "–"}</td><td className="mono">{a.action}</td><td className="mono muted">{a.ip}</td></tr>
+              <tr key={i}><td>{fmtTime(a.at)}</td><td>{a.who ?? "–"}</td><td className={AUDIT_LABELS[a.action] ? "" : "mono"}>{AUDIT_LABELS[a.action] ? t(AUDIT_LABELS[a.action]!) : a.action}</td><td className="mono muted">{a.ip}</td></tr>
             ))}
           </tbody>
         </table>

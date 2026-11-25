@@ -34,6 +34,12 @@ export function Home({ me, unread }: { me: Me; unread: Unread }) {
             </span>
           </Link>
         )}
+        {can(me, "jobs.view") && (
+          <Link to="/jobs" className="panel tile">
+            <h2>{t("Jobs")}</h2>
+            <span className="muted">{t("Field service visits: who is going where, and when. Each job opens its work order.")}</span>
+          </Link>
+        )}
         {can(me, "kb.view") && (
           <Link to="/kb" className="panel tile">
             <h2>{t("Knowledge base")}</h2>
@@ -50,7 +56,7 @@ export function Home({ me, unread }: { me: Me; unread: Unread }) {
           <Link to={can(me, "orders.view") ? "/change-parts" : "/change-parts/sales"} className="panel tile">
             <h2>{t("Change parts")}</h2>
             {can(me, "cpsales.view") && <span className="stat"><span className="n">{sales.data ? sales.data.sales.filter((o: any) => o.open).length : "–"}</span><span className="l">{t("Open sales")}</span></span>}
-            {can(me, "orders.view") && <span className="stat"><span className="n">{orders.data ? orders.data.orders.filter((o: any) => o.open && o.status !== "Folder only").length : "–"}</span><span className="l">{t("Open jobs")}</span></span>}
+            {can(me, "orders.view") && <span className="stat"><span className="n">{orders.data ? orders.data.orders.filter((o: any) => o.open && o.status !== "Folder only").length : "–"}</span><span className="l">{t("Open orders")}</span></span>}
             <span className="muted">{t("Every change-part job, from the first request to shipped.")}</span>
           </Link>
         )}
@@ -58,10 +64,6 @@ export function Home({ me, unread }: { me: Me; unread: Unread }) {
           <h2>{t("Portal training")}</h2>
           <span className="muted">{t("Step-by-step guides for everything your access allows, by job and by page.")}</span>
         </Link>
-        <div className="panel tile">
-          <h2>{t("Coming next")}</h2>
-          <span className="muted">{t("Workbook Submit, service report filing, schedule and remote support arrive in the next steps.")}</span>
-        </div>
       </div>
     </>
   );

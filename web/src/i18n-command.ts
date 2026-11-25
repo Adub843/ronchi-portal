@@ -28,6 +28,8 @@ export const COMMAND_DYNAMIC: string[] = [
 ];
 
 export const COMMAND_ES: Record<string, string> = {
+  "Open orders": "Pedidos abiertos",
+  "Field service visits: who is going where, and when. Each job opens its work order.": "Visitas de servicio de campo: quién va adónde y cuándo. Cada trabajo abre su orden de trabajo.",
   "Command center": "Centro de mando",
   "Parts orders": "Pedidos de piezas",
   "Shipping and receiving": "Envíos y recepción",
@@ -78,6 +80,8 @@ export const COMMAND_ES: Record<string, string> = {
 };
 
 export const COMMAND_IT: Record<string, string> = {
+  "Open orders": "Ordini aperti",
+  "Field service visits: who is going where, and when. Each job opens its work order.": "Interventi di assistenza: chi va dove e quando. Ogni intervento apre il suo ordine di lavoro.",
   "Command center": "Centro di comando",
   "Parts orders": "Ordini ricambi",
   "Shipping and receiving": "Spedizioni e ricevimento",

@@ -6,7 +6,8 @@ const dir = "web/dist-demo";
 const html = readFileSync(join(dir, "index.html"), "utf8");
 const css = [...html.matchAll(/<link rel="stylesheet"[^>]*href="\.\/([^"]+)"[^>]*>/g)].map((m) => readFileSync(join(dir, m[1]), "utf8")).join("\n");
 const js = [...html.matchAll(/<script type="module"[^>]*src="\.\/([^"]+)"[^>]*><\/script>/g)].map((m) => readFileSync(join(dir, m[1]), "utf8")).join("\n");
-const out = `<title>Ronchi Portal</title>
+const out = `<meta charset="utf-8">
+<title>Ronchi Portal</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>${css}</style>
 <div id="root"></div>

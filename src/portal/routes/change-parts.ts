@@ -204,7 +204,7 @@ changeParts.post("/import", async (c) => {
     found: read.orders.length, adding: fresh.length, duplicates: read.orders.length - fresh.length, skipped: read.skipped,
     matched: read.matched, extra: read.extra, problems: read.problems, sample: fresh.slice(0, 5),
   };
-  if (b.confirm !== true) return c.json(summary);
+  if (b.confirm !== true) return c.json(summary, 200, { "x-live": "quiet" }); // only a preview: nothing changed
   const t = now();
   const stmt = c.env.DB.prepare(`INSERT INTO cp_orders (id, ${COLS}, created_by, updated_by, created_at, updated_at) VALUES (?, ${CP_FIELDS.map(() => "?").join(", ")}, ?, ?, ?, ?)`);
   for (let i = 0; i < fresh.length; i += 50) {

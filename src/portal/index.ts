@@ -62,7 +62,9 @@ app.use("/api/*", async (c, next) => {
   await next();
   // Live updates: a change that worked tells everyone's open pages to reload that area (lib/live.ts).
   if (!SAFE_METHODS.has(c.req.method) && c.res.status < 400) {
-    const topic = topicFor(c.req.path);
+    // A route marks a call that changed nothing (an import preview) with "x-live: quiet".
+    const topic = topicFor(c.req.path, c.res.headers.get("x-live") === "quiet");
+    try { c.res.headers.delete("x-live"); } catch { /* read-only headers: nothing to strip */ }
     if (topic) {
       const done = bump(c.env.DB, topic).catch(() => undefined);
       try { c.executionCtx.waitUntil(done); } catch { await done; }

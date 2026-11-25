@@ -4,6 +4,7 @@
 import { ADMIN_ES, ADMIN_IT } from "./i18n-admin";
 import { SOFTWARE_DYNAMIC, SOFTWARE_ES, SOFTWARE_IT } from "./i18n-software";
 import { THEME_ES, THEME_IT } from "./i18n-themes";
+import { AUDIT_ES, AUDIT_IT, AUDIT_LABELS } from "./audit-labels";
 import { COMMAND_DYNAMIC, COMMAND_ES, COMMAND_IT } from "./i18n-command";
 import { SALES_DYNAMIC, SALES_ES, SALES_IT } from "./i18n-sales";
 import { SHIPPING_DYNAMIC, SHIPPING_ES, SHIPPING_IT } from "./i18n-shipping";
@@ -2055,7 +2056,7 @@ DYNAMIC.push(...THEMES.map((th) => th.blurb));
 // Command center, parts orders, shipping and receiving, the workbook's time sheets and reports, and 3D (one file each).
 // Words already translated above keep their translation, so the same word reads the same everywhere.
 const addNew = (into: Record<string, string>, from: Record<string, string>) => { for (const [k, v] of Object.entries(from)) if (!(k in into)) into[k] = v; };
-for (const [es, it, dyn] of [[COMMAND_ES, COMMAND_IT, COMMAND_DYNAMIC], [SALES_ES, SALES_IT, SALES_DYNAMIC], [SHIPPING_ES, SHIPPING_IT, SHIPPING_DYNAMIC], [WORKBOOK_ES, WORKBOOK_IT, WORKBOOK_DYNAMIC], [CATALOG3D_ES, CATALOG3D_IT, CATALOG3D_DYNAMIC]] as const) {
+for (const [es, it, dyn] of [[COMMAND_ES, COMMAND_IT, COMMAND_DYNAMIC], [SALES_ES, SALES_IT, SALES_DYNAMIC], [SHIPPING_ES, SHIPPING_IT, SHIPPING_DYNAMIC], [WORKBOOK_ES, WORKBOOK_IT, WORKBOOK_DYNAMIC], [CATALOG3D_ES, CATALOG3D_IT, CATALOG3D_DYNAMIC], [AUDIT_ES, AUDIT_IT, Object.values(AUDIT_LABELS)]] as const) {
   addNew(ES, es);
   addNew(IT, it);
   DYNAMIC.push(...dyn.filter((w) => !DYNAMIC.includes(w)));

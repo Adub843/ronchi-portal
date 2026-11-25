@@ -108,3 +108,23 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 }
 @media (max-width:520px){.g2,.g3,.g4{grid-template-columns:1fr}.roles{margin-left:0}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* The menu keeps every page in view (audit 2026-11-25: items were hidden past the right edge with no cue).
+   Computers: it wraps onto a second line. Phones: it scrolls, with a fade showing there's more, and the
+   current page is scrolled into view (App.tsx). */
+@media (min-width:641px){nav.side{flex-wrap:wrap;overflow-x:visible}}
+@media (max-width:640px){nav.side{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}}
+
+/* Tables marked stack-sm turn into one card per row on phones, each value under its column name
+   (td data-l="..."), so nothing sits off-screen to the right (audit 2026-11-25). */
+@media (max-width:640px){
+  table.stack-sm, table.stack-sm tbody, table.stack-sm tr, table.stack-sm td{display:block;width:100%}
+  table.stack-sm thead{display:none}
+  table.stack-sm tr{padding:10px 0;border-bottom:1px solid var(--line)}
+  table.stack-sm tr:last-child{border-bottom:0}
+  table.stack-sm td{border:0;padding:3px 0}
+  table.stack-sm td[data-l]::before{content:attr(data-l);display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  table.stack-sm td.nowrap{white-space:normal}
+  table.stack-sm .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  table.stack-sm select{max-width:100%}
+}

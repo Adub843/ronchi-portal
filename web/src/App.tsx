@@ -71,6 +71,11 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me?.id]);
 
+  // Keep the current page's menu item in view when the menu scrolls sideways (phones).
+  useEffect(() => {
+    document.querySelector('nav.side [aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [path]);
+
   async function savePrefs(next: Partial<Prefs> | { reset: true }) {
     try {
       const p = await api<Prefs>("/prefs", { method: "PUT", body: "reset" in next ? next : { ...(prefs ?? DEFAULT_PREFS), ...next } });

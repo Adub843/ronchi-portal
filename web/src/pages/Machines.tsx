@@ -92,7 +92,7 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
       <PageHead title={m.serial} sub={[m.model, m.customer, m.site].filter(Boolean).join(" · ") || undefined}>
         <Link to="/machines" className="btn">{t("All machines")}</Link>
         {can(me, "machines.edit") && !edit && (
-          <button className="btn" onClick={() => setEdit({ model: m.model ?? "", customer: m.customer ?? "", site: m.site ?? "", notes: m.notes ?? "", sharepointUrl: m.sharepoint_url ?? "" })}>{t("Edit")}</button>
+          <button className="btn" onClick={() => setEdit({ model: m.model ?? "", customer: m.customer ?? "", site: m.site ?? "", notes: m.notes ?? "", sharepointUrl: m.sharepoint_url ?? "", updated_at: m.updated_at })}>{t("Edit")}</button>
         )}
       </PageHead>
       {edit ? (

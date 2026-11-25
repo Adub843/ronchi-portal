@@ -73,10 +73,19 @@ machines.patch("/:id", async (c) => {
   const id = c.req.param("id");
   const before = await c.env.DB.prepare("SELECT * FROM machines WHERE id = ?").bind(id).first();
   if (!before) fail(404, "Not found.");
-  const f = fields(await body(c));
-  await c.env.DB.prepare("UPDATE machines SET model = ?, customer = ?, site = ?, notes = ?, sharepoint_url = ?, updated_at = ? WHERE id = ?")
-    .bind(f.model, f.customer, f.site, f.notes, f.sharepoint_url, now(), id)
-    .run();
+  const b = await body(c);
+  // Someone else saved this machine after this person opened it: don't overwrite their change.
+  if (typeof b.updated_at === "string" && b.updated_at !== before.updated_at) fail(409, "Someone else changed this machine while you were editing. Reload to see their change, then edit again.");
+  const all = fields(b);
+  // Only the fields that were sent change; a field left out keeps what it had.
+  const sent: Record<string, string> = { model: "model", customer: "customer", site: "site", notes: "notes", sharepointUrl: "sharepoint_url" };
+  const f = Object.fromEntries(Object.entries(sent).filter(([k]) => k in b).map(([, col]) => [col, all[col as keyof typeof all]]));
+  const cols = Object.keys(f);
+  if (cols.length) {
+    await c.env.DB.prepare(`UPDATE machines SET ${cols.map((k) => `${k} = ?`).join(", ")}, updated_at = ? WHERE id = ?`)
+      .bind(...cols.map((k) => f[k] ?? null), now(), id)
+      .run();
+  }
   await audit(c.env.DB, { userId: u.id, action: "machine.update", targetType: "machine", targetId: id, detail: { before, after: f }, ip: c.get("ip") });
   return c.json({ ok: true });
 });
@@ -118,7 +127,7 @@ machines.post("/import", async (c) => {
   const list = [...rows.values()];
   const adding = list.filter((r) => !known.has(r.serial));
   const summary = { found: list.length, adding: adding.length, updating: list.length - adding.length, notMachines: bad.slice(0, 30) };
-  if (b.confirm !== true) return c.json(summary);
+  if (b.confirm !== true) return c.json(summary, 200, { "x-live": "quiet" }); // only a preview: nothing changed
   const t = now();
   const ins = c.env.DB.prepare("INSERT INTO machines (id, serial, model, customer, site, notes, sharepoint_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)");
   const fill = c.env.DB.prepare(
