@@ -100,6 +100,7 @@ export function App() {
   else if (section === "/catalog") page = <Catalog me={me} path={path} />;
   else if (section === "/customers") page = <Customers me={me} />;
   else if (section === "/quotes") page = <Quotes key={path} id={/^\/quotes\/([A-Za-z0-9_-]+)$/.exec(path)?.[1]} />;
+  else if (m?.[1] === "change-parts" && m[2] === "sales") page = <ChangeParts me={me} tab="sales" />;
   else if (m?.[1] === "change-parts") page = <ChangePartPage key={m[2]} id={m[2]!} me={me} />;
   else if (section === "/chats") page = <Chats me={me} />;
   else if (section === "/boards") page = <Boards me={me} />;
