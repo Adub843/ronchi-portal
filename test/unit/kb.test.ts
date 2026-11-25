@@ -73,4 +73,11 @@ describe("the customer copy hides customer names and sites", () => {
     expect(r.fields.body).toBe("Methods differ; the UN-capper; Visual Pakistan");
     expect(r.hidden).toEqual([]);
   });
+  it("never hides machine-list placeholders that are not names (UNI, UPGRADE, Stock, Ronchi's own stock)", () => {
+    const list = { customers: ["UPGRADE", "Ronchi America stock", "Henkel"], sites: ["UNI", "Stock", "STOCK EXACTA", "UNI-NC"], serials: [] };
+    const r = hideCustomerNames({ body: "UNI capper upgrade from stock; Stock Exacta parts; Henkel at UNI-NC" }, list);
+    expect(r.fields.body).toBe("UNI capper upgrade from stock; Stock Exacta parts; [customer] at [site]");
+    expect(r.hidden.sort()).toEqual(["Henkel", "UNI-NC"]);
+    expect(scanForCustomerData({ body: "UNI capper upgrade from stock" }, list)).toEqual([]);
+  });
 });

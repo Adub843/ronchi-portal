@@ -153,7 +153,17 @@ export const HIDDEN_SITE = "[site]";
  * whatever its capitals or spacing, longest names first so "Visual Pak Companies" goes whole.
  * Returns the new fields and the names that were hidden. The staff article is never changed.
  */
+/** Entries in the machine list's Customer and Site columns that are not anyone's name: a site short code (UNI),
+ *  a job tag (UPGRADE) or Ronchi's own stock. Customers may read these words, so they are never hidden or flagged. */
+const NOT_A_NAME = new Set(["uni", "upgrade", "stock", "stock exacta", "ronchi america stock", "ronchi america", "ronchi"]);
+
+function namesOnly(terms: PrivateTerms): PrivateTerms {
+  const keep = (xs: string[]) => xs.filter((x) => !NOT_A_NAME.has(x.trim().replace(/\s+/g, " ").toLowerCase()));
+  return { ...terms, customers: keep(terms.customers), sites: keep(terms.sites) };
+}
+
 export function hideCustomerNames<F extends Record<string, string>>(fields: F, terms: PrivateTerms): { fields: F; hidden: string[] } {
+  terms = namesOnly(terms);
   const words = [
     ...terms.customers.map((w) => ({ w: w.trim(), put: HIDDEN_CUSTOMER })),
     ...terms.sites.map((w) => ({ w: w.trim(), put: HIDDEN_SITE })),
@@ -197,6 +207,7 @@ const WHAT: Record<PrivacyFinding["kind"], string> = { customer: "Customer or si
  * Returns every hit; publish is refused while any is left.
  */
 export function scanForCustomerData(fields: Record<string, string>, terms: PrivateTerms): ScanHit[] {
+  terms = namesOnly(terms);
   const hits: ScanHit[] = [];
   const seen = new Set<string>();
   const add = (what: string, found: string, field: string) => {
