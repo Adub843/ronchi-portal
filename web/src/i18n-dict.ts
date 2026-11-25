@@ -212,7 +212,13 @@ export const DYNAMIC: string[] = [
  "removed this sale",
  "Add the customer's PO to mark it sold.",
  "This is already an order.",
- "Someone else changed this sale while you were working on it. Reload to see their changes."
+ "Someone else changed this sale while you were working on it. Reload to see their changes.",
+ "Waiting on customer approval",
+ "Being built",
+ "Shipping",
+ "Shipped to customer",
+ "Dry fit test",
+ "Trial completed"
 ];
 
 export const ES: Record<string, string> = {
@@ -1129,7 +1135,16 @@ export const ES: Record<string, string> = {
   "removed this sale": "quitó esta venta",
   "Add the customer's PO to mark it sold.": "Agregue la orden de compra del cliente para marcarla vendida.",
   "This is already an order.": "Esto ya es un pedido.",
-  "Someone else changed this sale while you were working on it. Reload to see their changes.": "Otra persona cambió esta venta mientras usted trabajaba en ella. Recargue para ver sus cambios."
+  "Someone else changed this sale while you were working on it. Reload to see their changes.": "Otra persona cambió esta venta mientras usted trabajaba en ella. Recargue para ver sus cambios.",
+  "Shipped, waiting on customer approval": "Enviado, esperando la aprobación del cliente",
+  "Mark completed": "Marcar completado",
+  "Marked completed": "Marcado como completado",
+  "Waiting on customer approval": "Esperando la aprobación del cliente",
+  "Being built": "En fabricación",
+  "Shipping": "En envío",
+  "Shipped to customer": "Enviado al cliente",
+  "Dry fit test": "Prueba de montaje en seco",
+  "Trial completed": "Prueba completada"
 };
 
 export const IT: Record<string, string> = {
@@ -2046,7 +2061,16 @@ export const IT: Record<string, string> = {
   "removed this sale": "ha rimosso questa vendita",
   "Add the customer's PO to mark it sold.": "Aggiungi l'ordine d'acquisto del cliente per segnarla venduta.",
   "This is already an order.": "Questo è già un ordine.",
-  "Someone else changed this sale while you were working on it. Reload to see their changes.": "Qualcun altro ha cambiato questa vendita mentre ci lavoravi. Ricarica per vedere le modifiche."
+  "Someone else changed this sale while you were working on it. Reload to see their changes.": "Qualcun altro ha cambiato questa vendita mentre ci lavoravi. Ricarica per vedere le modifiche.",
+  "Shipped, waiting on customer approval": "Spedito, in attesa dell'approvazione del cliente",
+  "Mark completed": "Segna completato",
+  "Marked completed": "Segnato come completato",
+  "Waiting on customer approval": "In attesa dell'approvazione del cliente",
+  "Being built": "In costruzione",
+  "Shipping": "In spedizione",
+  "Shipped to customer": "Spedito al cliente",
+  "Dry fit test": "Prova di montaggio a secco",
+  "Trial completed": "Prova completata"
 };
 
 // Settings > Command center (i18n-admin.ts).
