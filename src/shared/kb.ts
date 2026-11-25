@@ -138,9 +138,40 @@ export function toFtsQuery(input: string): string {
 
 export interface ScanHit { what: string; found: string; field: string }
 
-/** Hits a publisher may confirm are not a customer's details (a customer named "Method", Ronchi's own service line).
- *  A machine number or a password can never be waved through. */
-export const CONFIRMABLE = new Set(["Customer or site", "Email address", "Phone number"]);
+/** Hits a publisher may confirm are not a customer's details (Ronchi's own service line and email).
+ *  A machine number or a password can never be waved through. Customer and site names are never
+ *  confirmed either: hideCustomerNames() takes them out of the customer copy instead. */
+export const CONFIRMABLE = new Set(["Email address", "Phone number"]);
+
+/** What a customer sees in place of a customer's name or site. */
+export const HIDDEN_CUSTOMER = "[customer]";
+export const HIDDEN_SITE = "[site]";
+
+/**
+ * The customer copy of an article (Aaron, 2026-11-25: staff see everything; "if its seen from a
+ * customers side sensor the names"). Every customer name and site the portal knows is replaced,
+ * whatever its capitals or spacing, longest names first so "Visual Pak Companies" goes whole.
+ * Returns the new fields and the names that were hidden. The staff article is never changed.
+ */
+export function hideCustomerNames<F extends Record<string, string>>(fields: F, terms: PrivateTerms): { fields: F; hidden: string[] } {
+  const words = [
+    ...terms.customers.map((w) => ({ w: w.trim(), put: HIDDEN_CUSTOMER })),
+    ...terms.sites.map((w) => ({ w: w.trim(), put: HIDDEN_SITE })),
+  ].filter((x) => x.w.length >= 3).sort((a, b) => b.w.length - a.w.length);
+  const hidden = new Set<string>();
+  const out = { ...fields };
+  for (const key of Object.keys(out) as (keyof F)[]) {
+    let text = out[key] as string;
+    if (!text) continue;
+    for (const { w, put } of words) {
+      const pattern = w.split(/\s+/).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+");
+      const re = new RegExp(`(^|[^\\p{L}\\p{N}])${pattern}(?=$|[^\\p{L}\\p{N}])`, "giu");
+      text = text.replace(re, (_m, before: string) => { hidden.add(w); return before + put; });
+    }
+    out[key] = text as F[keyof F];
+  }
+  return { fields: out, hidden: [...hidden] };
+}
 
 /** Units that follow a 4-digit number in manuals ("2400RPM", "1500V"). Privacy's generic machine-number rule
  *  (four digits then letters) would otherwise refuse them, and a machine number can never be waved through. */

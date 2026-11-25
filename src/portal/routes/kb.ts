@@ -5,7 +5,7 @@ import { Hono, type Context } from "hono";
 import { randomId } from "../../shared/crypto";
 import {
   cleanContent, CONFIRMABLE, contentText, FIRST_TEAM_NUMBER, guessCategory, HELP_KIND, isKbKind, isMachineNumber, machineTypesFor, KB_CATEGORIES, KB_CODE, KB_KINDS,
-  KIND_FROM_CODE, scanForCustomerData, toFtsQuery, type KbContent, type KbKind, type PrivateTerms,
+  KIND_FROM_CODE, hideCustomerNames, scanForCustomerData, toFtsQuery, type KbContent, type KbKind, type PrivateTerms,
 } from "../../shared/kb";
 import type { AppEnv, SessionUser } from "../env";
 import { audit, now } from "../lib/db";
@@ -233,21 +233,29 @@ async function knownTerms(db: D1Database): Promise<PrivateTerms> {
   return { customers: list(results.map((m) => m.customer)), sites: list(results.map((m) => m.site)), serials: list(results.map((m) => (/[A-Z]/i.test(m.serial) ? m.serial : null))) };
 }
 
-/** The scan, less anything a publisher already confirmed for this article. */
-async function scan(db: D1Database, a: Row, confirmed: string[]) {
+/**
+ * What customers would get: the article's public fields with every customer name and site hidden,
+ * the names hidden, and what still stops publishing (machine numbers, passwords, and emails or phone
+ * numbers a publisher hasn't confirmed for this article).
+ */
+async function customerCopy(db: D1Database, a: Row, confirmed: string[]) {
+  const terms = await knownTerms(db);
+  const { fields, hidden } = hideCustomerNames(publicFields(a), terms);
   const ok = new Set(confirmed.map((w) => w.toLowerCase()));
-  return scanForCustomerData(publicFields(a), await knownTerms(db))
+  const hits = scanForCustomerData(fields, terms)
     .filter((h) => !(CONFIRMABLE.has(h.what) && ok.has(h.found.toLowerCase())))
     .map((h) => ({ ...h, canConfirm: CONFIRMABLE.has(h.what) }));
+  return { fields, hidden, hits };
 }
 
 kb.post("/:id/scan", async (c) => {
   requirePerm(c, "kb.view");
   const a = await load(c, c.req.param("id"));
-  return c.json({ hits: await scan(c.env.DB, a, JSON.parse(a.scan_ok || "[]")) });
+  const { hits, hidden } = await customerCopy(c.env.DB, a, JSON.parse(a.scan_ok || "[]"));
+  return c.json({ hits, hidden });
 });
 
-/** Exactly what the help center receives. The machine number and who wrote it never leave the portal. */
+/** Exactly what the help center receives, before names are hidden. The machine number and who wrote it never leave the portal. */
 function publicFields(a: Row) {
   return { title: a.title, summary: a.summary, issue: a.issue, fix: a.fix, body: a.body_text, machine_type: a.machine_type ?? "", category: a.category ?? "" };
 }
@@ -256,16 +264,15 @@ kb.post("/:id/publish", async (c) => {
   const user = requirePerm(c, "kb.publish");
   const a = await load(c, c.req.param("id"));
   if (a.audience !== "customer") fail(400, "This article is staff only. Mark it for customers first.");
-  const pub = publicFields(a);
-  // "notCustomer": words the publisher looked at and confirmed are not customer details, for this article only.
+  // "notCustomer": emails or phone numbers the publisher looked at and confirmed are Ronchi's own, for this article only.
   const b = await body(c);
   const confirmed = [...new Set([
     ...(JSON.parse(a.scan_ok || "[]") as string[]),
     ...(Array.isArray(b.notCustomer) ? b.notCustomer.filter((w): w is string => typeof w === "string" && w.length <= 200).slice(0, 50) : []),
   ])];
-  const hits = await scan(c.env.DB, a, confirmed);
+  const { fields: pub, hidden, hits } = await customerCopy(c.env.DB, a, confirmed);
   if (hits.length) {
-    return c.json({ error: "Take out the customer details below, then publish again.", hits }, 409);
+    return c.json({ error: "Take out the customer details below, then publish again.", hits, hidden }, 409);
   }
   await helpCall(c.env, a.code, {
     kind: HELP_KIND[a.kind], title: pub.title, machine_type: pub.machine_type || null, category: pub.category || null,
@@ -273,8 +280,8 @@ kb.post("/:id/publish", async (c) => {
   });
   const at = now();
   await c.env.DB.prepare("UPDATE kb_articles SET published_at = ?, scan_ok = ? WHERE id = ?").bind(at, JSON.stringify(confirmed), a.id).run();
-  await audit(c.env.DB, { userId: user.id, action: "kb.publish", targetType: "kb", targetId: a.code, detail: confirmed.length ? { confirmedNotCustomer: confirmed } : undefined, ip: c.get("ip") });
-  return c.json({ ok: true, published_at: at });
+  await audit(c.env.DB, { userId: user.id, action: "kb.publish", targetType: "kb", targetId: a.code, detail: confirmed.length || hidden.length ? { confirmedNotCustomer: confirmed, hiddenFromCustomers: hidden } : undefined, ip: c.get("ip") });
+  return c.json({ ok: true, published_at: at, hidden });
 });
 
 kb.post("/:id/unpublish", async (c) => {

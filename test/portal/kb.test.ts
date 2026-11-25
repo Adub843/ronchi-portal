@@ -101,34 +101,43 @@ describe("knowledge base", () => {
     expect(read.data.article.fix).toBe("Clean the sensor lens with a dry cloth");
   });
 
-  it("publishing to customers is refused while the article names a customer, site or machine", async () => {
+  it("customers never see a customer's name or site: the help center copy has them hidden, staff still see them", async () => {
+    // Aaron, 2026-11-25: "if its seen from a customers side sensor the names".
     connectHelpSite();
+    await env.DB.prepare("INSERT INTO machines (id, serial, customer, site, created_at, updated_at) VALUES ('m-henkel', '3981MB', 'Henkel', 'Chattanooga', '2026-01-01', '2026-01-01')").run();
     const service = await person("service");
-    const a = await service.json("/api/kb", { body: { kind: "known_issue", audience: "customer", title: "Torque drift on the ECAM", issue: "Seen at Henkel on 3979MB", fix: "Re-grease the clutch", serial: "3979MB" } });
+    const a = await service.json("/api/kb", { body: { kind: "known_issue", audience: "customer", title: "Torque drift on the ECAM at Henkel", issue: "Seen at HENKEL in Chattanooga", fix: "Re-grease the clutch" } });
     const pub = await service.json(`/api/kb/${a.data.id}/publish`, { body: {} });
-    expect(pub.status).toBe(409);
-    expect(pub.data.hits.map((h: any) => h.found).sort()).toEqual(["3979MB", "Henkel"]);
-    expect(await helpPage(`/a/${a.data.code}`)).toContain("Article not found");
-    // A machine number can't be waved through, even by an editor.
-    expect((await service.json(`/api/kb/${a.data.id}/publish`, { body: { notCustomer: ["Henkel", "3979MB"] } })).data.hits.map((h: any) => h.found)).toEqual(["3979MB"]);
+    expect(pub.status).toBe(200);
+    expect(pub.data.hidden.sort()).toEqual(["Chattanooga", "Henkel"]);
+    const html = await helpPage(`/a/${a.data.code}`);
+    expect(html).toContain("Torque drift on the ECAM at [customer]");
+    expect(html).toContain("Seen at [customer] in [site]");
+    expect(html).not.toMatch(/henkel|chattanooga/i);
+    expect(await helpPage("/?q=henkel")).not.toContain(a.data.code);
+    // Staff keep the whole article.
+    expect((await service.json(`/api/kb/${a.data.id}`)).data.article.issue).toBe("Seen at HENKEL in Chattanooga");
+    // Saying a name "isn't a customer" no longer lets it through to customers.
+    await service.json(`/api/kb/${a.data.id}/publish`, { body: { notCustomer: ["Henkel"] } });
+    expect(await helpPage(`/a/${a.data.code}`)).not.toMatch(/henkel/i);
   });
 
-  it("an editor can confirm a word is not a customer (a customer called Method, the word method)", async () => {
+  it("a machine number still stops publishing, even when an editor says it's fine", async () => {
     connectHelpSite();
-    await env.DB.prepare("INSERT INTO machines (id, serial, customer, created_at, updated_at) VALUES ('m-method', '4100TP', 'Method', '2026-01-01', '2026-01-01')").run();
     const service = await person("service");
-    const a = await service.json("/api/kb", { body: { kind: "howto", audience: "customer", title: "Back up the HMI", body: "Method 1: copy the project to a USB stick." } });
-    const first = await service.json(`/api/kb/${a.data.id}/publish`, { body: {} });
-    expect(first.data.hits).toEqual([{ what: "Customer or site", found: "Method", field: "body", canConfirm: true }]);
-    expect((await service.json(`/api/kb/${a.data.id}/publish`, { body: { notCustomer: ["Method"] } })).status).toBe(200);
-    expect(await helpPage(`/a/${a.data.code}`)).toContain("copy the project to a USB stick");
+    const a = await service.json("/api/kb", { body: { kind: "known_issue", audience: "customer", title: "Torque drift on the ECAM", issue: "Seen on 3979MB", fix: "Re-grease the clutch", serial: "3979MB" } });
+    const pub = await service.json(`/api/kb/${a.data.id}/publish`, { body: { notCustomer: ["3979MB"] } });
+    expect(pub.status).toBe(409);
+    expect(pub.data.hits.map((h: any) => h.found)).toEqual(["3979MB"]);
+    expect(await helpPage(`/a/${a.data.code}`)).toContain("Article not found");
   });
 
   it("checks the machine type too, and a re-import that makes a document staff only takes it off the help center", async () => {
     connectHelpSite();
     const admin = await person("admin");
     const a = await admin.json("/api/kb", { body: { kind: "howto", audience: "customer", title: "Clean the cap chute", machine_type: "Henkel capper", fix: "Wipe the rails" } });
-    expect((await admin.json(`/api/kb/${a.data.id}/publish`, { body: {} })).data.hits).toEqual([{ what: "Customer or site", found: "Henkel", field: "machine_type", canConfirm: true }]);
+    expect((await admin.json(`/api/kb/${a.data.id}/publish`, { body: {} })).data.hidden).toEqual(["Henkel"]);
+    expect(await helpPage(`/a/${a.data.code}`)).not.toMatch(/henkel/i);
 
     const doc = { ...SPEC, code: "RA-HOW-040", type: "HOW", title: "Set the infeed scroll height", issue: "", fix: "Raise the scroll to the bottle shoulder", meta: {} };
     await admin.json("/api/kb/import", { body: { documents: [doc] } });

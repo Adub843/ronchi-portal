@@ -196,6 +196,10 @@ export const DYNAMIC: string[] = [
 ];
 
 export const ES: Record<string, string> = {
+  "Published to the customer help center. Customer names hidden: {n}": "Publicado en el centro de ayuda para clientes. Nombres de clientes ocultos: {n}",
+  "Customers see [customer] or [site] in place of these names: {names}. Staff see the whole article.": "Los clientes ven [customer] o [site] en lugar de estos nombres: {names}. El personal ve el artículo completo.",
+  "Machine numbers and passwords must come out before customers can see this. Tick an email address or phone number only if it is Ronchi's own.": "Los números de máquina y las contraseñas deben quitarse antes de que los clientes puedan verlo. Marque un correo o un teléfono solo si es de Ronchi.",
+  "Ronchi's own, OK to show": "Es de Ronchi, se puede mostrar",
  "Everything for {name}'s machines ({list}): their notes first, then anything that names them, then documents for their machine types.": "Todo para las máquinas de {name} ({list}): primero sus notas, luego lo que las nombra y luego los documentos de sus tipos de máquina.",
  "Everything for machine {serial}: its notes first, then anything that names it, then documents for its machine type.": "Todo para la máquina {serial}: primero sus notas, luego lo que la nombra y luego los documentos de su tipo de máquina.",
  "Machine types: {types}.": "Tipos de máquina: {types}.",
@@ -1062,6 +1066,10 @@ export const ES: Record<string, string> = {
 };
 
 export const IT: Record<string, string> = {
+  "Published to the customer help center. Customer names hidden: {n}": "Pubblicato nel centro assistenza clienti. Nomi di clienti nascosti: {n}",
+  "Customers see [customer] or [site] in place of these names: {names}. Staff see the whole article.": "I clienti vedono [customer] o [site] al posto di questi nomi: {names}. Il personale vede l'articolo completo.",
+  "Machine numbers and passwords must come out before customers can see this. Tick an email address or phone number only if it is Ronchi's own.": "Numeri macchina e password vanno tolti prima che i clienti possano vederlo. Spunta un'email o un numero di telefono solo se è di Ronchi.",
+  "Ronchi's own, OK to show": "È di Ronchi, si può mostrare",
  "Everything for {name}'s machines ({list}): their notes first, then anything that names them, then documents for their machine types.": "Tutto per le macchine di {name} ({list}): prima le loro note, poi ciò che le nomina, poi i documenti per i loro tipi di macchina.",
  "Everything for machine {serial}: its notes first, then anything that names it, then documents for its machine type.": "Tutto per la macchina {serial}: prima le sue note, poi ciò che la nomina, poi i documenti per il suo tipo di macchina.",
  "Machine types: {types}.": "Tipi di macchina: {types}.",
