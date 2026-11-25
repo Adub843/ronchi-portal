@@ -81,6 +81,17 @@ describe("removing employees", () => {
     expect(back).toMatchObject({ status: "active", removed_at: null });
   });
 
+  it("a removed person only comes back through Restore, not by switching them on or changing their role", async () => {
+    const admin = await person("admin");
+    const ann = await person("sales", { name: "Ann" });
+    expect((await admin.json(`/api/users/${ann.id}/remove`, { body: {} })).status).toBe(200);
+    expect((await admin.json(`/api/users/${ann.id}`, { method: "PATCH", body: { status: "active" } })).status).toBe(409);
+    expect((await admin.json(`/api/users/${ann.id}`, { method: "PATCH", body: { role: "tech" } })).status).toBe(409);
+    const row = (await admin.json("/api/users")).data.users.find((u: any) => u.id === ann.id);
+    expect(row).toMatchObject({ status: "disabled", role: "sales" });
+    expect(row.removed_at).toBeTruthy();
+  });
+
   it("restores into a new role when the old one was deleted", async () => {
     const admin = await person("admin");
     const { data } = await admin.json("/api/users/roles", { body: { name: `Temp ${crypto.randomUUID().slice(0, 4)}` } });

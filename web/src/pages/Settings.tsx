@@ -137,7 +137,7 @@ function MySettings({ me, tabs, prefs, onPrefs, onSignOut, sound, onSound, switc
             <button key={th.id} className="swatch" aria-pressed={prefs?.theme === th.id} onClick={() => onPrefs({ theme: th.id })}>
               <span className="bar">{swatch(th).map((c, i) => <i key={i} style={{ background: c }} />)}</span>
               <b>{th.name}</b>
-              <small>{th.blurb}</small>
+              <small>{t(th.blurb)}</small>
             </button>
           ))}
         </div>

@@ -75,6 +75,24 @@ describe("change-part orders", () => {
     expect((await (await person("tech")).fetch("/api/change-parts/import", { body: { csv } })).status).toBe(403);
   });
 
+  it("imports separate jobs on the same machine (different AA, RA PO or quote) instead of dropping them as copies", async () => {
+    // The real master sheet has several "Change parts" folders for one machine with no customer PO,
+    // each its own project with its own AA number (e.g. 4636AA, 4722AA, 4731AA on 3973MB).
+    const admin = await person("admin");
+    const csv = [
+      "Customer,Machine,Part,Status,Quote #,Customer PO,RA PO,AA",
+      "Same Machine Co,3973MB,Change parts,Folder only,,,,4636AA",
+      "Same Machine Co,3973MB,Change parts,Folder only,,,,4722AA",
+      "Same Machine Co,3973MB,Change parts,Folder only,,,MOR PO 27756,",
+      "Same Machine Co,3973MB,Change parts,Folder only,Q-12,,,",
+      "Same Machine Co,3973MB,Change parts,Folder only,,,,4636AA",
+    ].join("\r\n");
+    const preview = await admin.json("/api/change-parts/import", { body: { csv } });
+    expect(preview.data).toMatchObject({ found: 5, adding: 4, duplicates: 1 });
+    expect((await admin.json("/api/change-parts/import", { body: { csv, confirm: true } })).data.imported).toBe(4);
+    expect((await admin.json("/api/change-parts/import", { body: { csv, confirm: true } })).data).toMatchObject({ imported: 0, duplicates: 5 });
+  });
+
   it("a machine page lists its change-part orders, only for people who may see orders", async () => {
     const admin = await person("admin");
     const m = await admin.json("/api/machines", { body: { serial: "3999MB", customer: "Acme" } });
