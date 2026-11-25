@@ -376,7 +376,7 @@ function KbEditor({ me, article, quickNote, onDone }: { me: Me; article?: any; q
     <>
       <div className="pagehead">
         <h1>{article ? t("Edit {code}", { code: article.code }) : note ? t("Add a quick note") : t("New article")}</h1>
-        {note && !article && <p className="muted">{t("A short Issue and Fix from the field, so the next tech who hits it finds the answer.")}</p>}
+        {note && !article && <p className="muted">{t("A short Issue and Fix from the field, so the next field service engineer who hits it finds the answer.")}</p>}
       </div>
       <form className="panel stack kb-form" onSubmit={save}>
         <div className="grid g2">

@@ -3,7 +3,7 @@
 // can be clicked through without a server. Signed in as Aaron Lewis, admin.
 import logoUrl from "../assets/ronchi-logo.png";
 import { cleanName, fileInfo, fileProblem } from "../../../src/shared/files";
-import { adjustable, effective, isPermission, PERMISSION_GROUPS, PERMISSIONS, ROLES, VIEW_PERMS, type AccessChanges } from "../../../src/portal/lib/roles";
+import { adjustable, effective, isPermission, PERMISSION_GROUPS, PERMISSIONS, rolePermissions, ROLES, VIEW_PERMS, type AccessChanges } from "../../../src/portal/lib/roles";
 import { CP_FIELDS, isOpen, readOrdersCsv } from "../../../src/shared/change-parts";
 import { KbFail, kbRoute, resetKb } from "./kb-mock";
 type Role = keyof typeof ROLES;
@@ -18,9 +18,11 @@ const daysAgo = (n: number, h: number, m = 0) => {
   return d;
 };
 
-interface User { id: string; email: string; name: string; role: Role; status: string; created_at: string; access?: AccessChanges }
+interface User { id: string; email: string; name: string; role: string; status: string; created_at: string; access?: AccessChanges; removed_at?: string | null }
+interface RoleRow { id: string; name: string; perms: string }
 interface DB {
   users: User[];
+  roles: RoleRow[]; // roles made in People > Roles, and changed built-ins
   invites: any[];
   machines: any[];
   boards: any[];
@@ -55,7 +57,7 @@ function examplePdf(title: string): Blob {
 
 function seed(): DB {
   const t0 = iso(daysAgo(20, 9));
-  const u = (name: string, role: Role, email: string): User => ({ id: id(), name, role, email, status: "active", created_at: t0 });
+  const u = (name: string, role: string, email: string): User => ({ id: id(), name, role, email, status: "active", created_at: t0 });
   const users = [
     u("Aaron Lewis", "admin", "a_lewis@ronchiamerica.com"),
     u("Paolo Ferla", "manager", "paolo@ronchiamerica.com"),
@@ -75,7 +77,14 @@ function seed(): DB {
     u("Josue", "tech", "Josue"),
     u("William (Erre Enne)", "tech", "William"),
     u("Gabriele (Erre Enne)", "tech", "Gabriele"),
+    // Office and shop staff (Aaron, 2026-11-25). April's and Joe's jobs aren't confirmed yet.
+    u("April Pack", "service", "april@ronchiamerica.com"),
+    u("Joe", "service", "Joe"),
+    u("Nick Mason", "engineering", "nick@ronchiamerica.com"),
+    u("Olivia", "r-shipping", "Olivia"),
   ];
+  // A role made in People > Roles: Olivia helps with shipping, receiving and the shop.
+  const roles: RoleRow[] = [{ id: "r-shipping", name: "Shipping, receiving and shop", perms: JSON.stringify(["boards.use", "catalog.view", "chats.start", "files.send", "kb.view", "machines.view", "orders.view"]) }];
   const [aaron, paolo, lola, meagan, steve, andrew, michele] = users as [User, User, User, User, User, User, User];
   const m = (serial: string, model: string, customer: string, site: string, notes = "") => ({ id: id(), serial, model, customer, site, notes, sharepoint_url: null, created_at: t0, updated_at: t0 });
   const machines = [
@@ -172,7 +181,7 @@ function seed(): DB {
   ];
   if (!real) orders[0]._h.unshift({ at: iso(daysAgo(1, 15, 20)), action: "cp_order.update", who: andrew.name, changes: { status: ["Fill test", "In production"], ship_date: [dayIso(5), dayIso(12)] } });
   return {
-    users, invites: [], machines, boards: [service, torque, sales, eng, ...chats.map(({ people: _p, ...c }) => c)], posts, audit, prefs: null,
+    users, roles, invites: [], machines, boards: [service, torque, sales, eng, ...chats.map(({ people: _p, ...c }) => c)], posts, audit, prefs: null,
     reads: { [torque.id]: iso(new Date()), [withLola.id]: iso(new Date()), [crew.id]: iso(new Date()), [withSteve.id]: iso(ago(100)) },
     muted: {}, members, files, orders,
   };
@@ -196,12 +205,23 @@ class Fail extends Error {
 const me = () => db.users[0]!;
 const name = (uid: string) => db.users.find((u) => u.id === uid)?.name ?? "";
 const log = (action: string) => db.audit.unshift({ at: iso(new Date()), action, who: me().name, ip: "this browser" });
+const savedPerms = (role: string) => db.roles.find((r) => r.id === role)?.perms ?? null;
+/** Same shape as the server's listRoles: built-in roles (with any changes), then roles made here. */
+function roleList() {
+  const count = (rid: string) => db.users.filter((x) => x.role === rid && !x.removed_at).length;
+  const builtIn = Object.entries(ROLES).map(([rid, nm]) => {
+    const row = db.roles.find((r) => r.id === rid);
+    return { id: rid, name: row?.name ?? nm, builtIn: true, changed: !!row, perms: [...rolePermissions(rid, row?.perms)] as string[], people: count(rid) };
+  });
+  const made = db.roles.filter((r) => !(r.id in ROLES)).map((r) => ({ id: r.id, name: r.name, builtIn: false, changed: false, perms: [...rolePermissions(r.id, r.perms)] as string[], people: count(r.id) }));
+  return [...builtIn, ...made];
+}
 
 function route(method: string, path: string, q: URLSearchParams, body: any): unknown {
   const seg = path.split("/").filter(Boolean);
   const u = me();
   // --- auth & me ---
-  if (path === "/auth/me") return { user: { id: u.id, name: u.name, email: u.email, role: u.role, permissions: [...PERMISSIONS[u.role]] } };
+  if (path === "/auth/me") return { user: { id: u.id, name: u.name, email: u.email, role: u.role, permissions: [...effective(u.role, u.access, savedPerms(u.role))] } };
   if (path === "/auth/logout") throw new Fail(400, "Sign-out is turned off in this preview.");
   if (path === "/auth/add-device") return { link: "https://portal.ronchiamerica.com/welcome#example-one-time-link" };
   if (path === "/prefs") {
@@ -210,9 +230,61 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     return db.prefs ?? cur;
   }
   // --- people ---
-  if (path === "/users/roles") return { roles: ROLES };
+  if (path === "/users/roles" && method === "GET") {
+    const list = roleList();
+    return { roles: Object.fromEntries(list.map((r) => [r.id, r.name])), named: Object.fromEntries(list.filter((r) => !r.builtIn || r.changed).map((r) => [r.id, r.name])), list };
+  }
+  if (path === "/users/roles" && method === "POST") {
+    const nm = String(body.name ?? "").trim();
+    if (!nm) throw new Fail(400, "Role name is required.");
+    if (roleList().some((r) => r.name.toLowerCase() === nm.toLowerCase())) throw new Fail(409, "There's already a role with that name.");
+    const from = body.copyFrom ? roleList().find((r) => r.id === body.copyFrom) : null;
+    const rid = `r-${id().slice(0, 8)}`;
+    db.roles.push({ id: rid, name: nm, perms: JSON.stringify((from?.perms ?? []).filter((p) => adjustable(p as never))) });
+    log("role.create");
+    return { id: rid };
+  }
+  if (seg[0] === "users" && seg[1] === "roles" && seg[2]) {
+    const rid = seg[2];
+    const cur = roleList().find((r) => r.id === rid);
+    if (!cur) throw new Fail(404, "Not found.");
+    if (seg[3] === "reset") { db.roles = db.roles.filter((r) => r.id !== rid); log("role.reset"); return { ok: true }; }
+    if (method === "DELETE") {
+      if (cur.builtIn) throw new Fail(400, "Built-in roles can't be deleted. You can change their switches instead.");
+      if (cur.people) throw new Fail(409, "People have this role. Give them another role first.");
+      db.roles = db.roles.filter((r) => r.id !== rid);
+      log("role.delete");
+      return { ok: true };
+    }
+    if (rid === "admin") throw new Fail(400, "The admin role always has everything.");
+    const nm = body.name === undefined ? cur.name : String(body.name).trim();
+    if (!nm) throw new Fail(400, "Role name is required.");
+    if (roleList().some((r) => r.id !== rid && r.name.toLowerCase() === nm.toLowerCase())) throw new Fail(409, "There's already a role with that name.");
+    const perms = body.perms === undefined ? cur.perms : (body.perms as string[]).filter((p) => isPermission(p) && adjustable(p));
+    db.roles = [...db.roles.filter((r) => r.id !== rid), { id: rid, name: nm, perms: JSON.stringify(perms) }];
+    log("role.update");
+    return { ok: true };
+  }
   if (path === "/users/permissions")
-    return { groups: PERMISSION_GROUPS.map((g) => ({ ...g, perms: g.perms.map((p) => ({ ...p, adjustable: adjustable(p.id), view: VIEW_PERMS.has(p.id) })) })), byRole: Object.fromEntries(Object.entries(PERMISSIONS).map(([r, s]) => [r, [...s]])) };
+    return { groups: PERMISSION_GROUPS.map((g) => ({ ...g, perms: g.perms.map((p) => ({ ...p, adjustable: adjustable(p.id), view: VIEW_PERMS.has(p.id) })) })), byRole: Object.fromEntries(roleList().map((r) => [r.id, r.perms])) };
+  if (seg[0] === "users" && (seg[2] === "remove" || seg[2] === "restore")) {
+    const t = db.users.find((x) => x.id === seg[1]);
+    if (!t) throw new Fail(404, "Not found.");
+    if (seg[2] === "remove") {
+      if (t.id === u.id) throw new Fail(400, "You can't remove yourself.");
+      if (t.role === "admin") throw new Fail(400, "Admins can't be removed. Change their role first.");
+      t.removed_at = iso(new Date());
+      t.status = "disabled";
+      log("user.remove");
+    } else {
+      if (body.role) t.role = body.role;
+      else if (!roleList().some((r) => r.id === t.role)) throw new Fail(409, "Their old role was deleted. Pick a role for them, then press Restore.");
+      t.removed_at = null;
+      t.status = "active";
+      log("user.restore");
+    }
+    return { ok: true };
+  }
   if (seg[0] === "users" && seg[2] === "access" && method === "PUT") {
     const t = db.users.find((x) => x.id === seg[1]);
     if (!t) throw new Fail(404, "Not found.");
@@ -226,10 +298,10 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     }
     t.access = next;
     log("user.access");
-    return { changes: next, permissions: [...effective(t.role, next)] };
+    return { changes: next, permissions: [...effective(t.role, next, savedPerms(t.role))] };
   }
   if (path === "/users" && method === "GET")
-    return { users: db.users.map((x) => ({ ...x, access: x.role === "admin" ? {} : (x.access ?? {}), permissions: [...effective(x.role, x.access)], passkeys: 1 + (x.id === u.id ? 1 : 0), sessions: x.status === "active" ? 1 : 0 })), invites: db.invites };
+    return { users: db.users.map((x) => ({ ...x, access: x.role === "admin" ? {} : (x.access ?? {}), permissions: [...effective(x.role, x.access, savedPerms(x.role))], passkeys: 1 + (x.id === u.id ? 1 : 0), sessions: x.status === "active" ? 1 : 0 })), invites: db.invites };
   if (path === "/users/invite") {
     if (!body.name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email ?? "")) throw new Fail(400, "Enter a name and a valid email.");
     db.invites.unshift({ id: id(), email: body.email, name: body.name, role: body.role, expires_at: iso(new Date(Date.now() + 72 * 3600000)) });
@@ -260,7 +332,7 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   // --- parts catalog (the preview has no manuals or customer parts site, so it starts empty) ---
   if (seg[0] === "kb") {
     try {
-      return kbRoute(method, seg, q, body, { me: u, perms: PERMISSIONS[u.role] as Set<string>, machines: db.machines, nameOf: (x) => (x ? name(x) || null : null), newId: id }, db.users);
+      return kbRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, machines: db.machines, nameOf: (x) => (x ? name(x) || null : null), newId: id }, db.users);
     } catch (e) {
       if (e instanceof KbFail) throw new Fail(e.status, e.message);
       throw e;
