@@ -321,7 +321,7 @@ body:has(.chat-compose) .alerts{bottom:calc(96px + env(safe-area-inset-bottom,0p
 .po-totals{max-width:360px;margin:12px 0 0 auto}
 .po-totals dd{text-align:right}
 .po-edit td{vertical-align:top}
-.po-edit input{min-width:0}
+.po-edit input{min-width:0;box-sizing:border-box}
 .po-bars{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .po-bars li{display:grid;grid-template-columns:80px 1fr auto;gap:10px;align-items:center;font-size:13px}
 .po-bar{height:12px;background:var(--line);border-radius:6px;overflow:hidden}

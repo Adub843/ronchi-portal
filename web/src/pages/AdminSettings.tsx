@@ -14,7 +14,7 @@ type Role = PortalSettings["people"]["defaultRole"];
 const roleName = (r: string) =>
   ({ manager: t("Manager"), billing: t("Billing"), scheduling: t("Scheduling"), service: t("Service"), sales: t("Sales"), engineering: t("Engineering"), tech: t("Field service engineer") })[r] ?? r;
 const sectionName = (s: Section) =>
-  ({ chats: t("Chats and boards"), machines: t("Machines"), catalog: t("Parts catalog"), customers: t("Customers and quote requests"), changeParts: t("Change parts"), knowledge: t("Knowledge base") })[s];
+  ({ chats: t("Chats and boards"), machines: t("Machines"), catalog: t("Parts catalog"), customers: t("Customers and quote requests"), changeParts: t("Change parts"), partsOrders: t("Parts orders"), knowledge: t("Knowledge base") })[s];
 const LOCKED = () => [
   t("Admins always have every permission, and only admins can manage people, settings and the activity log."),
   t("Nobody can remove their own admin access."),
@@ -22,7 +22,7 @@ const LOCKED = () => [
   t("Customers never see the business side. The help center and parts site are separate, with their own data."),
   t("Sign-in is with passkeys only (Face ID, fingerprint, Windows Hello). There are no passwords."),
   t("Each file can be at most 25 MB, and only safe file types can be sent."),
-  t("No money amounts or sales totals are shown anywhere in the portal."),
+  t("No money amounts or sales totals are shown anywhere in the portal, except parts order prices and sales, which only people with See parts prices can see."),
   t("The activity log can't be edited or deleted."),
 ];
 

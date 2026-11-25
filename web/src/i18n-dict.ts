@@ -3,6 +3,7 @@
 // Messages people type are never translated.
 import { ADMIN_ES, ADMIN_IT } from "./i18n-admin";
 import { SOFTWARE_DYNAMIC, SOFTWARE_ES, SOFTWARE_IT } from "./i18n-software";
+import { PARTS_ORDERS_DYNAMIC, PARTS_ORDERS_ES, PARTS_ORDERS_IT } from "./i18n-parts-orders";
 import { THEME_ES, THEME_IT } from "./i18n-themes";
 import { THEMES } from "../../src/shared/themes";
 
@@ -2046,3 +2047,8 @@ DYNAMIC.push(...SOFTWARE_DYNAMIC);
 Object.assign(ES, THEME_ES);
 Object.assign(IT, THEME_IT);
 DYNAMIC.push(...THEMES.map((th) => th.blurb));
+
+// Parts orders (i18n-parts-orders.ts). Words already translated elsewhere keep their translation.
+for (const [k, v] of Object.entries(PARTS_ORDERS_ES)) ES[k] ??= v;
+for (const [k, v] of Object.entries(PARTS_ORDERS_IT)) IT[k] ??= v;
+DYNAMIC.push(...PARTS_ORDERS_DYNAMIC);

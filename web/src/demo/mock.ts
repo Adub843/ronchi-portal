@@ -9,6 +9,7 @@ import { CP_FIELDS, CP_SALE_FIELDS, isOpen, isSaleOpen, readOrdersCsv } from "..
 import { KbFail, kbRoute, resetKb } from "./kb-mock";
 import { JobsFail, jobsRoute, resetJobs } from "./jobs-mock";
 import { resetSoftware, SoftwareFail, softwareRoute } from "./software-mock";
+import { PartsOrdersFail, partsOrdersFor, partsOrdersRoute, resetPartsOrders } from "./parts-orders-mock";
 type Role = keyof typeof ROLES;
 
 // Ids for example records. Uses the browser's secure random source like the real server does.
@@ -433,6 +434,15 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     return { ok: true };
   }
   // --- parts catalog (the preview has no manuals or customer parts site, so it starts empty) ---
+  if (seg[0] === "parts-orders") {
+    if (q.get("machine") && method === "GET" && seg.length === 1) return { orders: [] };
+    try {
+      return partsOrdersRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id });
+    } catch (e) {
+      if (e instanceof PartsOrdersFail) throw new Fail(e.status, e.message);
+      throw e;
+    }
+  }
   if (seg[0] === "jobs" || seg[0] === "switches") {
     try {
       return jobsRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, users: db.users, machines: db.machines, newId: id, pdf: examplePdf });
@@ -487,7 +497,7 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       log("machine.update");
       return { ok: true };
     }
-    return { machine: m, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at), orders: db.orders.filter((x) => x.machine === m.serial && !x.removed_at && x.phase !== "sale").map(({ _h, ...x }) => x) };
+    return { machine: m, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at), orders: db.orders.filter((x) => x.machine === m.serial && !x.removed_at && x.phase !== "sale").map(({ _h, ...x }) => x), partsOrders: partsOrdersFor(m.serial, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id }) };
   }
   // --- change-part orders ---
   if (seg[0] === "change-parts") {
@@ -798,6 +808,7 @@ export function resetDemo() {
   db = seed();
   resetKb();
   resetJobs();
+  resetPartsOrders();
   resetSoftware();
   save();
 }

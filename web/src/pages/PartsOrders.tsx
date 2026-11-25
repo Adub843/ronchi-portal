@@ -146,7 +146,7 @@ function OrderList({ me }: { me: Me }) {
                   <td><PoStatus status={o.status} late={late(o)} priority={o.priority} /></td>
                   <td className="nowrap">{o.lines ? t("{a} of {b} here", { a: o.received, b: o.lines }) : "–"}{o.next_eta && isOpen(o.status) && o.received < o.lines && <small className="muted block">{t("Next arrives {d}", { d: day(o.next_eta) })}</small>}</td>
                   <td className="nowrap">{day(o.promised)}</td>
-                  {prices && <td className="num">{money(o.total)}</td>}
+                  {prices && <td className="num">{o.total ? money(o.total) : "–"}</td>}
                 </tr>
               ))}
             </tbody>
@@ -560,20 +560,20 @@ function OrderEdit({ me, order, lines: start, onDone }: { me: Me; order?: Row; l
           <tbody>
             {lines.map((l, i) => (
               <tr key={l.id ?? `n${i}`}>
-                <td><input aria-label={t("Part number")} className="mono" value={l.part_code ?? ""} onChange={(e) => setLine(i, "part_code", e.target.value)} size={10} /></td>
-                <td><input aria-label={t("Description")} value={l.description ?? ""} onChange={(e) => setLine(i, "description", e.target.value)} size={18} /></td>
+                <td><input aria-label={t("Part number")} className="mono" value={l.part_code ?? ""} onChange={(e) => setLine(i, "part_code", e.target.value)} style={{ width: 120 }} /></td>
+                <td><input aria-label={t("Description")} value={l.description ?? ""} onChange={(e) => setLine(i, "description", e.target.value)} style={{ width: 220 }} /></td>
                 <td><input aria-label={t("Qty")} type="number" min={0} step="any" value={l.qty} onChange={(e) => setLine(i, "qty", e.target.value)} style={{ width: 64 }} /></td>
                 {prices && <>
                   <td><input aria-label={t("Price")} type="number" min={0} step="0.01" value={l.unit_price ?? ""} onChange={(e) => setLine(i, "unit_price", e.target.value)} style={{ width: 84 }} /></td>
                   <td><input aria-label={t("Cost")} type="number" min={0} step="0.01" value={l.unit_cost ?? ""} onChange={(e) => setLine(i, "unit_cost", e.target.value)} style={{ width: 84 }} /></td>
                 </>}
-                <td><input aria-label={t("Supplier")} list="po-suppliers" value={l.supplier ?? ""} onChange={(e) => setLine(i, "supplier", e.target.value)} size={14} /></td>
-                <td><input aria-label={t("Supplier PO")} value={l.supplier_po ?? ""} onChange={(e) => setLine(i, "supplier_po", e.target.value)} size={9} /></td>
+                <td><input aria-label={t("Supplier")} list="po-suppliers" value={l.supplier ?? ""} onChange={(e) => setLine(i, "supplier", e.target.value)} style={{ width: 170 }} /></td>
+                <td><input aria-label={t("Supplier PO")} value={l.supplier_po ?? ""} onChange={(e) => setLine(i, "supplier_po", e.target.value)} style={{ width: 130 }} /></td>
                 <td><input aria-label={t("Arrives")} type="date" value={l.eta ?? ""} onChange={(e) => setLine(i, "eta", e.target.value)} /></td>
                 <td><input aria-label={t("Drop ship")} type="checkbox" checked={!!l.drop_ship} onChange={(e) => setLine(i, "drop_ship", e.target.checked)} /></td>
                 <td><input aria-label={t("Here")} type="number" min={0} step="any" value={l.qty_received} onChange={(e) => setLine(i, "qty_received", e.target.value)} style={{ width: 60 }} /></td>
                 <td><input aria-label={t("Shipped")} type="number" min={0} step="any" value={l.qty_shipped} onChange={(e) => setLine(i, "qty_shipped", e.target.value)} style={{ width: 60 }} /></td>
-                <td><input aria-label={t("Note")} value={l.note ?? ""} onChange={(e) => setLine(i, "note", e.target.value)} size={12} /></td>
+                <td><input aria-label={t("Note")} value={l.note ?? ""} onChange={(e) => setLine(i, "note", e.target.value)} style={{ width: 150 }} /></td>
                 <td><button type="button" className="linkish" aria-label={t("Remove line")} onClick={() => setLines(lines.filter((_, j) => j !== i))}>✕</button></td>
               </tr>
             ))}

@@ -92,6 +92,11 @@ export const AREAS: Area[] = [
     blurb: T("Every change-part job, from the first request to shipped: the sale, then the order.", "Cada trabajo de cambio de formato, de la primera solicitud al envío: la venta y luego el pedido.", "Ogni lavoro di cambio formato, dalla prima richiesta alla spedizione: la vendita, poi l'ordine."),
   },
   {
+    id: "parts-orders", paths: ["/parts-orders"],
+    title: T("Parts orders", "Pedidos de repuestos", "Ordini ricambi"),
+    blurb: T("Spare parts sales, from the customer's first ask to the invoice.", "Ventas de repuestos, desde la primera consulta del cliente hasta la factura.", "Vendite di ricambi, dalla prima richiesta del cliente alla fattura."),
+  },
+  {
     id: "people", paths: ["/people"],
     title: T("People and access", "Personas y acceso", "Persone e accessi"),
     blurb: T("Adding employees, making roles and deciding what each person can do. Admins only.", "Agregar empleados, crear roles y decidir qué puede hacer cada persona. Solo administradores.", "Aggiungere dipendenti, creare ruoli e decidere cosa può fare ogni persona. Solo amministratori."),
@@ -580,6 +585,67 @@ export const GUIDES: Guide[] = [
       T("In Excel, open the sheet and use File, Save As, CSV.", "En Excel, abra la hoja y use Archivo, Guardar como, CSV.", "In Excel apri il foglio e usa File, Salva con nome, CSV."),
       T("In Change parts press Import CSV and choose the file.", "En Cambio de formato pulse Importar CSV y elija el archivo.", "In Cambio formato premi Importa CSV e scegli il file."),
       T("Check what was found. Orders already here are skipped. Press Add to bring in the rest.", "Revise lo encontrado. Los pedidos que ya existen se omiten. Pulse Agregar para traer el resto.", "Controlla cosa è stato trovato. Gli ordini già presenti vengono saltati. Premi Aggiungi per importare il resto."),
+    ],
+  },
+
+  // ---------- Parts orders ----------
+  {
+    id: "view-parts-orders", area: "parts-orders", needs: ["partsorders.view"],
+    title: T("Follow parts orders", "Seguir los pedidos de repuestos", "Seguire gli ordini ricambi"),
+    summary: T("See where every spare parts order is, and what is late.", "Vea dónde está cada pedido de repuestos y qué está atrasado.", "Vedi a che punto è ogni ordine ricambi e cosa è in ritardo."),
+    steps: [
+      T("Open Parts orders. The counts at the top show open quotes, orders waiting on parts, ready to ship, shipped but not invoiced, and late.", "Abra Pedidos de repuestos. Los totales de arriba muestran cotizaciones abiertas, pedidos esperando repuestos, listos para enviar, enviados sin facturar y atrasados.", "Apri Ordini ricambi. I conteggi in alto mostrano offerte aperte, ordini in attesa dei ricambi, pronti da spedire, spediti non fatturati e in ritardo."),
+      T("Search by order number, customer, machine, PO or part number.", "Busque por número de pedido, cliente, máquina, OC o número de repuesto.", "Cerca per numero d'ordine, cliente, macchina, ordine d'acquisto o codice ricambio."),
+      T("Open an order. The line at the top says where it is and what happens next. Below are its parts, when each arrives, and its History.", "Abra un pedido. La línea de arriba dice dónde está y qué sigue. Abajo están sus repuestos, cuándo llega cada uno y su Historial.", "Apri un ordine. La riga in alto dice a che punto è e cosa succede dopo. Sotto ci sono i ricambi, quando arriva ognuno e la Cronologia."),
+    ],
+  },
+  {
+    id: "add-parts-order", area: "parts-orders", needs: ["partsorders.view", "partsorders.add"],
+    title: T("Start a parts order", "Iniciar un pedido de repuestos", "Avviare un ordine ricambi"),
+    summary: T("From a phone call, an email, a quote request, or an old order.", "Desde una llamada, un correo, una solicitud de cotización o un pedido anterior.", "Da una telefonata, un'email, una richiesta di offerta o un vecchio ordine."),
+    steps: [
+      T("Press New order. Fill in the customer, the machine and the parts with their quantities, then press Add order.", "Pulse Nuevo pedido. Complete el cliente, la máquina y los repuestos con sus cantidades, y pulse Agregar pedido.", "Premi Nuovo ordine. Compila cliente, macchina e ricambi con le quantità, poi premi Aggiungi ordine."),
+      T("When a customer sends a quote request from the parts site, open it and press Make parts order. Its parts come across, nothing typed twice.", "Cuando un cliente envía una solicitud de cotización desde el sitio de repuestos, ábrala y pulse Crear pedido de repuestos. Sus repuestos pasan solos, sin escribir dos veces.", "Quando un cliente invia una richiesta di offerta dal sito ricambi, aprila e premi Crea ordine ricambi. I ricambi passano da soli, senza riscrivere nulla."),
+      T("To repeat an old order, open it and press Order again.", "Para repetir un pedido anterior, ábralo y pulse Pedir de nuevo.", "Per ripetere un vecchio ordine, aprilo e premi Ordina di nuovo."),
+    ],
+  },
+  {
+    id: "edit-parts-order", area: "parts-orders", needs: ["partsorders.view", "partsorders.edit"],
+    title: T("Move an order along", "Hacer avanzar un pedido", "Far avanzare un ordine"),
+    summary: T("Quote, take the PO, order from the supplier, receive and ship.", "Cotizar, recibir la OC, pedir al proveedor, recibir y enviar.", "Offerta, ordine del cliente, ordine al fornitore, arrivo e spedizione."),
+    steps: [
+      T("Change the status at the top when you send the quote and when the customer's PO comes in.", "Cambie el estado arriba cuando envíe la cotización y cuando llegue la OC del cliente.", "Cambia lo stato in alto quando invii l'offerta e quando arriva l'ordine del cliente."),
+      T("Open To order from suppliers to see every part still to order, by supplier. Copy list gives you the text for the order email to Italy.", "Abra Por pedir a proveedores para ver cada repuesto pendiente, por proveedor. Copiar lista le da el texto para el correo de pedido a Italia.", "Apri Da ordinare ai fornitori per vedere ogni ricambio ancora da ordinare, per fornitore. Copia elenco ti dà il testo per l'email d'ordine all'Italia."),
+      T("Press Edit and type the supplier PO and arrival date on each line, then how many arrived and shipped. The status moves on by itself.", "Pulse Editar y escriba en cada línea la OC al proveedor y la fecha de llegada, luego cuántos llegaron y se enviaron. El estado avanza solo.", "Premi Modifica e scrivi su ogni riga l'ordine fornitore e la data di arrivo, poi quanti sono arrivati e spediti. Lo stato avanza da solo."),
+      T("Once it ships, type the QuickBooks invoice number, then close it when it's paid.", "Cuando se envíe, escriba el número de factura de QuickBooks y ciérrelo cuando esté pagado.", "Quando è spedito, scrivi il numero di fattura QuickBooks e chiudilo quando è pagato."),
+    ],
+    tip: T("If someone else saved the order while you were editing, the portal stops you so nothing is overwritten. Reload and try again.", "Si otra persona guardó el pedido mientras usted editaba, el portal lo detiene para no sobrescribir nada. Recargue e intente otra vez.", "Se qualcun altro ha salvato l'ordine mentre lo modificavi, il portale ti ferma per non sovrascrivere nulla. Ricarica e riprova."),
+  },
+  {
+    id: "remove-parts-order", area: "parts-orders", needs: ["partsorders.view", "partsorders.remove"],
+    title: T("Remove a parts order", "Quitar un pedido de repuestos", "Rimuovere un ordine ricambi"),
+    summary: T("Take an order typed by mistake off the list. It stays in the record.", "Quite de la lista un pedido escrito por error. Queda en el registro.", "Togli dall'elenco un ordine inserito per errore. Resta nell'archivio."),
+    steps: [
+      T("Open the order and press Remove, then Yes, remove.", "Abra el pedido y pulse Eliminar, luego Sí, eliminar.", "Apri l'ordine e premi Rimuovi, poi Sì, rimuovi."),
+      T("For a sale that didn't happen, set the status to Lost and say why instead, so it counts in the win rate.", "Para una venta que no se dio, ponga el estado en Perdido y diga por qué, así cuenta en la tasa de éxito.", "Per una vendita non andata a buon fine, metti lo stato Perso e indica il motivo, così conta nella percentuale di successo."),
+    ],
+  },
+  {
+    id: "parts-prices", area: "parts-orders", needs: ["partsorders.view", "partsorders.prices"],
+    title: T("Prices, discounts and margin", "Precios, descuentos y margen", "Prezzi, sconti e margine"),
+    summary: T("Only people allowed to see parts prices see any dollar amounts.", "Solo quienes pueden ver precios de repuestos ven montos en dólares.", "Solo chi può vedere i prezzi dei ricambi vede importi in dollari."),
+    steps: [
+      T("In Edit, type each line's price and our cost, plus any discount and freight for the order.", "En Editar, escriba el precio de cada línea y nuestro costo, más el descuento y el flete del pedido.", "In Modifica, scrivi il prezzo di ogni riga e il nostro costo, più eventuale sconto e trasporto dell'ordine."),
+      T("The order shows its total and margin. A margin under 20% shows in red.", "El pedido muestra su total y margen. Un margen menor al 20% se ve en rojo.", "L'ordine mostra totale e margine. Un margine sotto il 20% appare in rosso."),
+    ],
+  },
+  {
+    id: "parts-reports", area: "parts-orders", needs: ["partsorders.view", "partsorders.reports"],
+    title: T("Parts sales reports", "Informes de ventas de repuestos", "Report vendite ricambi"),
+    summary: T("Sales by month, top customers and parts, win rate and how fast orders ship.", "Ventas por mes, mejores clientes y repuestos, tasa de éxito y rapidez de envío.", "Vendite per mese, clienti e ricambi principali, percentuale di successo e rapidità di spedizione."),
+    steps: [
+      T("Open Parts orders, then Sales reports. Pick the dates at the top.", "Abra Pedidos de repuestos y luego Informes de ventas. Elija las fechas arriba.", "Apri Ordini ricambi, poi Report vendite. Scegli le date in alto."),
+      T("Sales count from the day the customer's PO came in. Lost and cancelled orders are left out.", "Las ventas cuentan desde el día en que llegó la OC del cliente. Los pedidos perdidos y cancelados no cuentan.", "Le vendite contano dal giorno in cui è arrivato l'ordine del cliente. Ordini persi e annullati sono esclusi."),
     ],
   },
 
