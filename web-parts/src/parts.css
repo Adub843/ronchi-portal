@@ -64,3 +64,59 @@ a.btn{text-decoration:none;display:inline-block}
   .book-page:last-child{break-after:auto}
   .book-rows tr{break-inside:avoid}
 }
+
+/* ---------- Header and layout like the Ronchi Mario portal ---------- */
+.mh{position:sticky;top:0;z-index:8;background:var(--solid);box-shadow:0 1px 0 var(--line)}
+.mh-top{display:flex;align-items:center;gap:14px;padding:6px max(16px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line)}
+.mh-brand{display:flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none}
+.mh-brand img{height:22px;width:auto}
+.mh-brand span{display:flex;flex-direction:column;line-height:1.1}
+.mh-brand b{font:700 14px var(--body)}
+.mh-brand small{font-size:11.5px;color:var(--muted)}
+.mh-hello{font-size:12px;color:var(--muted);padding-left:14px;border-left:1px solid var(--line)}
+.mh-lang select{border:0;background:none;font:12px var(--body);color:var(--muted);cursor:pointer}
+.mh-search{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:3px;background:var(--solid)}
+.mh-search input{border:0;padding:5px 8px;font:12.5px var(--body);background:none;color:var(--ink);width:min(260px,30vw);outline-offset:-2px}
+.mh-search button{border:0;border-left:1px solid var(--line);background:color-mix(in srgb,var(--line) 40%,var(--solid));color:var(--muted);padding:0 8px;cursor:pointer;display:grid;place-items:center}
+.mh-ic{position:relative;display:grid;place-items:center;width:32px;height:32px;border:0;background:none;color:var(--muted);border-radius:4px;cursor:pointer;text-decoration:none}
+.mh-ic:hover,.mh-ic[aria-current=page],.mh-ic[aria-expanded=true]{color:var(--accent)}
+.mh-count{position:absolute;top:0;right:-2px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--accent);color:#fff;font:700 10px/16px var(--body);text-align:center}
+.mh-menu{position:relative}
+.mh-drop{position:absolute;right:0;top:calc(100% + 6px);min-width:190px;background:var(--solid);border:1px solid var(--line);border-radius:6px;box-shadow:var(--shadow);display:flex;flex-direction:column;padding:4px 0;z-index:9}
+.mh-drop a{padding:8px 14px;color:var(--ink);text-decoration:none;font:500 13.5px var(--body)}
+.mh-drop a:hover{background:var(--accent-soft);color:var(--accent)}
+.mh-bar{display:flex;align-items:center;gap:12px;padding:5px max(16px,env(safe-area-inset-left,0px));background:color-mix(in srgb,var(--line) 25%,var(--solid));border-bottom:1px solid var(--line)}
+.mh-pick{display:inline-flex;align-items:center;gap:4px;border:0;background:none;font:700 12.5px var(--body);color:var(--ink);cursor:pointer;padding:4px 0;font-family:var(--body)}
+.mh-pick[aria-expanded=true]{color:var(--accent)}
+.mh-sn input{padding:4px 8px;border:1px solid var(--line);border-radius:3px;font:12.5px var(--body);background:var(--solid);color:var(--ink);width:150px}
+.mh-star{border:1px solid var(--line)!important;background:var(--solid)!important;padding:2px 8px 2px 4px!important;gap:4px!important;font:500 12px var(--body)}
+.mh-star[aria-pressed=true]{color:var(--accent)}
+.mh-panel{position:absolute;left:10px;right:10px;top:100%;background:var(--solid);border:1px solid var(--line);box-shadow:var(--shadow);padding:12px 14px 16px;max-height:70vh;overflow:auto}
+.mv-main{max-width:1500px;margin:0 auto;padding:14px 0 28px;display:flex;flex-direction:column;gap:12px}
+.mh-home{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(240px,1fr);gap:40px}
+.mh-h{font:600 19px var(--display);color:var(--accent);margin:18px 0 10px}
+.mh-home>div>.mh-h:first-child,.mh-home aside>.mh-h:first-child{margin-top:4px}
+.mh-news{font-size:13px;margin:0 0 8px}
+.mh-links{display:flex;flex-direction:column;gap:8px;font-size:13px}
+.mh-links a{color:var(--ink);text-decoration:none}
+.mh-links a:hover{color:var(--accent)}
+.small{font-size:12.5px}
+.mv-note{color:var(--muted);font-size:13px}
+@media (max-width:900px){
+  .mh-home{grid-template-columns:minmax(0,1fr);gap:8px}
+  .mh-hello{display:none}
+}
+@media (max-width:640px){
+  .mh-top{flex-wrap:wrap;gap:8px}
+  .mh-brand small{display:none}
+  .mh-search{order:9;width:100%}
+  .mh-search input{width:100%}
+  .mh-sn input{width:120px}
+  .mh-star-word{display:none}
+  .mh-panel{left:0;right:0}
+}
+@media print{ .mh{display:none!important} }
+/* Like the Mario portal: a plain white page, no watermark. */
+body{background:var(--solid)}
+body::after{display:none}
+@media (max-width:640px){ .mh-brand b{display:none} .mh-lang select{max-width:80px} }

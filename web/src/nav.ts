@@ -4,10 +4,13 @@
 /** Which unread count a menu line shows. Same names as Unread in components/Alerts.tsx. */
 type Count = "boards" | "chats";
 
-export const NAV: { to: string; label: string; perm?: string; count?: Count; phone?: boolean }[] = [
+export const NAV: { to: string; label: string; perm?: string; count?: Count; phone?: boolean; workbook?: boolean }[] = [
   { to: "/", label: "Home" },
   { to: "/chats", label: "Chats", perm: "boards.use", count: "chats" },
   { to: "/boards", label: "Boards", perm: "boards.use", count: "boards" },
+  { to: "/jobs", label: "Jobs" },
+  // Hidden when an admin switches the Ronchi workbook off in Settings.
+  { to: "/work-orders", label: "Work orders", workbook: true },
   { to: "/kb", label: "Knowledge base", perm: "kb.view" },
   { to: "/machines", label: "Machines", perm: "machines.view" },
   { to: "/catalog", label: "Parts catalog", perm: "catalog.view" },

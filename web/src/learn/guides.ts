@@ -58,6 +58,11 @@ export const AREAS: Area[] = [
     blurb: T("Team rooms for service, engineering, sales and the office.", "Salas de equipo para servicio, ingeniería, ventas y la oficina.", "Stanze di squadra per assistenza, ingegneria, vendite e ufficio."),
   },
   {
+    id: "jobs", paths: ["/jobs", "/work-orders"],
+    title: T("Jobs and work orders", "Trabajos y órdenes de trabajo", "Lavori e ordini di lavoro"),
+    blurb: T("Field service visits: who is going where, and when, plus the Ronchi workbook's work orders.", "Visitas de servicio de campo: quién va adónde y cuándo, más las órdenes de trabajo del cuaderno de trabajo Ronchi.", "Interventi di assistenza sul campo: chi va dove e quando, più gli ordini di lavoro del quaderno di lavoro Ronchi."),
+  },
+  {
     id: "kb", paths: ["/kb"],
     title: T("Knowledge base", "Base de conocimientos", "Base di conoscenza"),
     blurb: T(
@@ -250,6 +255,43 @@ export const GUIDES: Guide[] = [
       T("In a board's menu, tick Announcements only so only you and moderators can post.", "En el menú del tablero, marque Solo anuncios para que solo usted y los moderadores publiquen.", "Nel menu della bacheca spunta Solo annunci perché scrivano solo tu e i moderatori."),
       T("Archive board hides it from everyone's list. Archived boards, on the Boards page, lets you Restore it.", "Archivar tablero lo oculta de todas las listas. Tableros archivados, en la página Tableros, permite Restaurarlo.", "Archivia bacheca la nasconde a tutti. Bacheche archiviate, nella pagina Bacheche, permette di Ripristinarla."),
     ],
+  },
+
+  // ---------- Jobs and work orders ----------
+  {
+    id: "see-jobs", area: "jobs", needs: ["jobs.view"],
+    title: T("See your jobs and get to site", "Ver sus trabajos y llegar al sitio", "Vedere i tuoi lavori e arrivare in cantiere"),
+    summary: T("Every field service visit, with the days, the address, the point of contact and the files.", "Cada visita de servicio de campo, con los días, la dirección, el contacto y los archivos.", "Ogni intervento di assistenza sul campo, con giorni, indirizzo, referente e file."),
+    steps: [
+      T("Open Jobs. Search by job number, customer, machine or address.", "Abra Trabajos. Busque por número de trabajo, cliente, máquina o dirección.", "Apri Lavori. Cerca per numero di lavoro, cliente, macchina o indirizzo."),
+      T("Press a job to see its days of work, field service engineers, point of contact and other information.", "Pulse un trabajo para ver sus días, ingenieros de servicio de campo, contacto y otra información.", "Premi un lavoro per vedere giorni, ingegneri di assistenza sul campo, referente e altre informazioni."),
+      T("Under Location, press Google Maps, Waze or Apple Maps to get directions.", "En Ubicación, pulse Google Maps, Waze o Apple Maps para llegar.", "In Sede premi Google Maps, Waze o Apple Maps per le indicazioni."),
+      T("Under Files, press Add files to attach service reports, photos and drawings.", "En Archivos, pulse Añadir archivos para adjuntar informes de servicio, fotos y dibujos.", "In File premi Aggiungi file per allegare rapporti di assistenza, foto e disegni."),
+    ],
+    tip: T("You get an email with a link when you're put on a job, and again if its days, location or contact change.", "Recibe un correo con un enlace cuando le asignan a un trabajo, y otro si cambian los días, la ubicación o el contacto.", "Ricevi un'email con un link quando vieni assegnato a un lavoro, e di nuovo se cambiano giorni, posizione o referente."),
+  },
+  {
+    id: "schedule-job", area: "jobs", needs: ["jobs.view", "jobs.schedule"],
+    title: T("Schedule a job", "Programar un trabajo", "Programmare un lavoro"),
+    summary: T("Set up a visit, pick the field service engineers and email them the details.", "Prepare una visita, elija a los ingenieros de servicio de campo y envíeles los datos por correo.", "Prepara un intervento, scegli gli ingegneri di assistenza sul campo e mandagli i dettagli via email."),
+    steps: [
+      T("Open Jobs and press Schedule a job.", "Abra Trabajos y pulse Programar un trabajo.", "Apri Lavori e premi Programma un lavoro."),
+      T("Fill in the job number, customer, machine number, customer location and point of contact.", "Complete número de trabajo, cliente, número de máquina, ubicación del cliente y contacto.", "Compila numero di lavoro, cliente, numero macchina, posizione del cliente e referente."),
+      T("Add the days of work one at a time, or pick From and To and press Add these days.", "Añada los días uno por uno, o elija Desde y Hasta y pulse Añadir estos días.", "Aggiungi i giorni uno alla volta, o scegli Da e A e premi Aggiungi questi giorni."),
+      T("Tick the field service engineers, add other information, and press Schedule and email the field service engineers.", "Marque a los ingenieros de servicio de campo, agregue otra información y pulse Programar y enviar correo a los ingenieros de servicio de campo.", "Spunta gli ingegneri di assistenza sul campo, aggiungi altre informazioni e premi Programma e invia l'email agli ingegneri di assistenza sul campo."),
+    ],
+    tip: T("If portal email isn't set up yet, use Send it from my email on the job to send the same message yourself.", "Si el correo del portal aún no está listo, use Enviarlo desde mi correo en el trabajo para enviar el mismo mensaje usted.", "Se l'email del portale non è ancora attiva, usa Inviala dalla mia email nel lavoro per mandare tu lo stesso messaggio."),
+  },
+  {
+    id: "work-orders", area: "jobs", needs: ["jobs.view"], open: "/work-orders",
+    title: T("Use work orders and the machine's log", "Usar las órdenes de trabajo y el historial de la máquina", "Usare gli ordini di lavoro e lo storico della macchina"),
+    summary: T("The Ronchi workbook: the current work order plus every past work order for the same machine.", "El cuaderno de trabajo Ronchi: la orden de trabajo actual y todas las anteriores de la misma máquina.", "Il quaderno di lavoro Ronchi: l'ordine di lavoro attuale e tutti quelli passati della stessa macchina."),
+    steps: [
+      T("Open Work orders, or press Open work order on a job.", "Abra Órdenes de trabajo, o pulse Abrir orden de trabajo en un trabajo.", "Apri Ordini di lavoro, o premi Apri ordine di lavoro in un lavoro."),
+      T("Read the past work orders, quick notes and change-part orders for that machine before you go.", "Lea las órdenes anteriores, notas rápidas y pedidos de cambio de formato de esa máquina antes de ir.", "Leggi gli ordini passati, le note rapide e gli ordini cambio formato di quella macchina prima di partire."),
+      T("Use Print or save as PDF, or Download the log (CSV).", "Use Imprimir o guardar como PDF, o Descargar el registro (CSV).", "Usa Stampa o salva in PDF, o Scarica il registro (CSV)."),
+    ],
+    tip: T("If an admin switches the Ronchi workbook off, Work orders leaves the menu but jobs keep working.", "Si un administrador apaga el cuaderno de trabajo Ronchi, Órdenes de trabajo sale del menú pero los trabajos siguen funcionando.", "Se un amministratore spegne il quaderno di lavoro Ronchi, Ordini di lavoro sparisce dal menu ma i lavori continuano a funzionare."),
   },
 
   // ---------- Knowledge base ----------
@@ -521,6 +563,25 @@ export const GUIDES: Guide[] = [
       T("Sign out everywhere ends all their sessions, for a lost phone.", "Cerrar sesión en todas partes termina todas sus sesiones, para un teléfono perdido.", "Disconnetti ovunque chiude tutte le sessioni, per un telefono perso."),
       T("Disable blocks sign-in for now; Re-enable lets them back in.", "Desactivar bloquea el acceso por ahora; Reactivar lo devuelve.", "Disattiva blocca l'accesso per ora; Riattiva lo ripristina."),
       T("Remove takes someone off the list for good. Their history, orders and messages stay. Restore them from Removed employees.", "Eliminar quita a alguien de la lista para siempre. Su historial, pedidos y mensajes quedan. Restáurelo desde Empleados quitados.", "Rimuovi toglie qualcuno dall'elenco per sempre. Cronologia, ordini e messaggi restano. Ripristinalo da Dipendenti rimossi."),
+    ],
+  },
+  {
+    id: "quick-links", area: "people", needs: ["users.manage"], open: "/",
+    title: T("Set up quick links on Home", "Configurar los enlaces rápidos en Inicio", "Impostare i link rapidi nella Home"),
+    summary: T("Buttons on Home that open websites, for everyone or for chosen roles and people.", "Botones en Inicio que abren sitios web, para todos o para roles y personas elegidos.", "Pulsanti nella Home che aprono siti web, per tutti o per ruoli e persone scelti."),
+    steps: [
+      T("On Home, press Edit quick links.", "En Inicio, pulse Editar enlaces rápidos.", "Nella Home premi Modifica link rapidi."),
+      T("Type a button name and web address, choose Who sees it, and press Add link.", "Escriba el nombre del botón y la dirección web, elija Quién lo ve y pulse Agregar enlace.", "Scrivi il nome del pulsante e l'indirizzo web, scegli Chi lo vede e premi Aggiungi link."),
+      T("Use Move up, Move down, Edit and Remove to tidy them, then press Done.", "Use Subir, Bajar, Editar y Eliminar para ordenarlos y pulse Listo.", "Usa Sposta su, Sposta giù, Modifica e Rimuovi per sistemarli, poi premi Fatto."),
+    ],
+  },
+  {
+    id: "workbook-switch", area: "people", needs: ["users.manage"], open: "/settings",
+    title: T("Switch the Ronchi workbook on or off", "Encender o apagar el cuaderno de trabajo Ronchi", "Accendere o spegnere il quaderno di lavoro Ronchi"),
+    summary: T("If the team keeps its Excel sheets, hide Work orders for everyone.", "Si el equipo sigue con sus hojas de Excel, oculte Órdenes de trabajo para todos.", "Se il team continua con i fogli Excel, nascondi Ordini di lavoro a tutti."),
+    steps: [
+      T("Open Settings and find Ronchi workbook.", "Abra Configuración y busque Cuaderno de trabajo Ronchi.", "Apri Impostazioni e cerca Quaderno di lavoro Ronchi."),
+      T("Untick it and confirm. Jobs, job emails and job files keep working, and nothing is deleted.", "Desmárquelo y confirme. Los trabajos, sus correos y archivos siguen funcionando y no se borra nada.", "Togli la spunta e conferma. Lavori, email e file dei lavori continuano a funzionare e non si cancella nulla."),
     ],
   },
   {
