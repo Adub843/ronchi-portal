@@ -69,9 +69,10 @@ export const EXTRA_GUIDES: Guide[] = [
     title: T("Fill in your time sheet and service report", "Completar su hoja de horas e informe de servicio", "Compilare il foglio ore e il rapporto di assistenza"),
     summary: T("On the job's work order, while you are on site.", "En la orden de trabajo del trabajo, mientras está en sitio.", "Sull'ordine di lavoro dell'intervento, mentre sei in sede."),
     steps: [
-      T("Open Work orders and press the job.", "Abra Órdenes de trabajo y pulse el trabajo.", "Apri Ordini di lavoro e premi l'intervento."),
-      T("Add each day's hours on the time sheet, and write what you did in the service report. Everything saves as you type.", "Agregue las horas de cada día en la hoja de horas y escriba lo que hizo en el informe. Todo se guarda al escribir.", "Aggiungi le ore di ogni giorno sul foglio ore e scrivi cosa hai fatto nel rapporto. Tutto si salva mentre scrivi."),
-      T("When the job is done, press Send for review.", "Cuando termine el trabajo, pulse Enviar a revisión.", "A lavoro finito, premi Invia in revisione."),
+      T("Open Work orders and press the job. Its Time sheet, Service report and Job chat tabs are under the work order.", "Abra Órdenes de trabajo y pulse el trabajo. Las pestañas Hoja de horas, Informe de servicio y Chat del trabajo están debajo de la orden.", "Apri Ordini di lavoro e premi l'intervento. Le schede Foglio ore, Rapporto di assistenza e Chat del lavoro sono sotto l'ordine."),
+      T("Time sheet: press Add day for each day worked and type start, end, break, travel and production hours. Add expenses with a receipt photo (no amounts).", "Hoja de horas: pulse Agregar día por cada día trabajado y escriba inicio, fin, descanso, horas de viaje y de producción. Agregue gastos con la foto del recibo (sin importes).", "Foglio ore: premi Aggiungi giorno per ogni giorno lavorato e scrivi inizio, fine, pausa, ore di viaggio e di produzione. Aggiungi le spese con la foto della ricevuta (senza importi)."),
+      T("Service report: write the summary and the work log, list the Ronchi parts used or needed, add photos, and have the customer sign on the screen.", "Informe de servicio: escriba el resumen y el registro de trabajo, anote las piezas Ronchi usadas o necesarias, agregue fotos y pida al cliente que firme en la pantalla.", "Rapporto di assistenza: scrivi il riepilogo e il registro lavori, elenca i ricambi Ronchi usati o necessari, aggiungi foto e fai firmare il cliente sullo schermo."),
+      T("Everything saves as you type. When the job is done, press Send for review on each one. Print or save as PDF gives the customer a copy.", "Todo se guarda al escribir. Cuando termine el trabajo, pulse Enviar a revisión en cada uno. Imprimir o guardar como PDF da una copia al cliente.", "Tutto si salva mentre scrivi. A lavoro finito, premi Invia in revisione su ciascuno. Stampa o salva come PDF dà una copia al cliente."),
     ],
   },
   {
@@ -80,8 +81,9 @@ export const EXTRA_GUIDES: Guide[] = [
     summary: T("Check what the field service engineers sent, and approve it or send it back.", "Revise lo que enviaron los ingenieros de servicio de campo, y apruébelo o devuélvalo.", "Controlla cosa hanno inviato gli ingegneri di assistenza sul campo, e approvalo o rimandalo."),
     steps: [
       T("Open Time sheets and reports from the menu.", "Abra Hojas de horas e informes en el menú.", "Apri Fogli ore e rapporti dal menu."),
-      T("Waiting for review is at the top. Open one to read it.", "Lo que espera revisión está arriba. Abra uno para leerlo.", "In attesa di revisione è in alto. Aprine uno per leggerlo."),
-      T("Press Approve, or Send back with a note saying what to fix.", "Pulse Aprobar, o Devolver con una nota que diga qué corregir.", "Premi Approva, oppure Rimanda con una nota su cosa correggere."),
+      T("Waiting for review comes first. Filter by field service engineer, job or week, and press Review to read one on its work order.", "Primero aparece En espera de revisión. Filtre por ingeniero de servicio de campo, trabajo o semana, y pulse Revisar para leer uno en su orden de trabajo.", "Per primo c'è In attesa di revisione. Filtra per ingegnere di assistenza sul campo, lavoro o settimana, e premi Rivedi per leggerne uno sul suo ordine di lavoro."),
+      T("Press Approve, or Send back with a note saying what to fix. Approved paperwork is locked until it is sent back.", "Pulse Aprobar, o Devolver con una nota que diga qué corregir. La documentación aprobada queda bloqueada hasta que se devuelva.", "Premi Approva, oppure Rimanda indietro con una nota su cosa correggere. I documenti approvati restano bloccati finché non vengono rimandati."),
+      T("Download hours (CSV) gives the hours shown, one line per day, for payroll and billing.", "Descargar horas (CSV) da las horas mostradas, una línea por día, para nómina y facturación.", "Scarica le ore (CSV) fornisce le ore mostrate, una riga per giorno, per paghe e fatturazione."),
     ],
   },
 ];

@@ -58,6 +58,7 @@ function eventText(p: { body: string; user_id: string; author: string }, meId: s
   if (e.type === "added") return you ? t("You added {names}", { names }) : t("{who} added {names}", { who: p.author, names });
   if (e.type === "removed") return you ? t("You removed {names}", { names }) : t("{who} removed {names}", { who: p.author, names });
   if (e.type === "left") return you ? t("You left the chat") : t("{who} left the chat", { who: p.author });
+  if (e.type === "joined") return you ? t("You joined the chat") : t("{who} joined the chat", { who: p.author });
   return p.author;
 }
 
@@ -277,7 +278,8 @@ function ArchivedBoards() {
 
 interface Pending { file: File; url: string | null }
 
-export function BoardPage({ id, me }: { id: string; me: Me }) {
+/** `embedded`: shown inside another page (a work order's Job chat tab) at a fixed height. */
+export function BoardPage({ id, me, embedded = false }: { id: string; me: Me; embedded?: boolean }) {
   const bid = encodeURIComponent(id);
   const { data, error, reload } = useLoad(() => api(`/boards/${bid}`), [id]);
   const [text, setText] = useState("");
@@ -455,7 +457,7 @@ export function BoardPage({ id, me }: { id: string; me: Me }) {
 
   return (
     <div
-      className={`chat${dragging ? " dragging" : ""}`}
+      className={`chat${embedded ? " embedded" : ""}${dragging ? " dragging" : ""}`}
       onDragOver={(e) => { if (data.canPost && e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragging(true); } }}
       onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
       onDrop={(e) => { e.preventDefault(); setDragging(false); if (data.canPost) addFiles(e.dataTransfer.files); }}
