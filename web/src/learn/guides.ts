@@ -358,6 +358,28 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
+    id: "download-software", area: "kb", needs: ["kb.view", "software.view"],
+    title: T("Download software for a new laptop", "Descargar software para una laptop nueva", "Scaricare il software per un portatile nuovo"),
+    summary: T("Get the installers and program folders you need in one go, instead of hunting on vendor websites.", "Obtenga de una vez los instaladores y carpetas de programas que necesita, sin buscarlos en sitios de proveedores.", "Prendi in una volta sola gli installer e le cartelle dei programmi che ti servono, senza cercarli sui siti dei fornitori."),
+    steps: [
+      T("Open Knowledge base. Under Software and setup files, press a package such as New laptop setup.", "Abra Base de conocimientos. En Software y archivos de instalación, pulse un paquete como New laptop setup.", "Apri Base di conoscenza. In Software e file di installazione, premi un pacchetto come New laptop setup."),
+      T("Tick the folders or files you want. Show files lets you pick single files inside a folder.", "Marque las carpetas o archivos que quiere. Mostrar archivos le deja elegir archivos sueltos dentro de una carpeta.", "Spunta le cartelle o i file che vuoi. Mostra file ti fa scegliere singoli file dentro una cartella."),
+      T("Press Download. On Chrome or Edge, choose a folder on your computer and everything is saved there with its folders. Otherwise each file goes to Downloads.", "Pulse Descargar. En Chrome o Edge, elija una carpeta de su computadora y todo se guarda ahí con sus carpetas. Si no, cada archivo va a Descargas.", "Premi Scarica. Su Chrome o Edge scegli una cartella del computer e tutto viene salvato lì con le sue cartelle. Altrimenti ogni file va in Download."),
+    ],
+    tip: T("Vendor software is licensed. Keep it on company computers and don't pass the files to customers.", "El software de proveedores tiene licencia. Manténgalo en computadoras de la empresa y no pase los archivos a clientes.", "Il software dei fornitori è sotto licenza. Tienilo sui computer aziendali e non passare i file ai clienti."),
+  },
+  {
+    id: "manage-software", area: "kb", needs: ["kb.view", "software.manage"],
+    title: T("Upload software and setup files", "Subir software y archivos de instalación", "Caricare software e file di installazione"),
+    summary: T("Make packages like New laptop setup and fill them with installers or whole program folders.", "Cree paquetes como New laptop setup y llénelos con instaladores o carpetas completas de programas.", "Crea pacchetti come New laptop setup e riempili con installer o intere cartelle di programmi."),
+    steps: [
+      T("Open Knowledge base and press Manage software.", "Abra Base de conocimientos y pulse Administrar software.", "Apri Base di conoscenza e premi Gestisci software."),
+      T("Make a package, or pick one on the left. Tick Legacy software for programs that only older machines need.", "Cree un paquete o elija uno a la izquierda. Marque Software heredado para programas que solo necesitan las máquinas antiguas.", "Crea un pacchetto o scegline uno a sinistra. Spunta Software legacy per i programmi che servono solo alle macchine più vecchie."),
+      T("Press Upload files or Upload a whole folder, or drag them onto the box. Keep the page open until every file says Uploaded.", "Pulse Subir archivos o Subir una carpeta completa, o arrástrelos al recuadro. Deje la página abierta hasta que cada archivo diga Subido.", "Premi Carica file o Carica un'intera cartella, oppure trascinali nel riquadro. Tieni la pagina aperta finché ogni file indica Caricato."),
+    ],
+    tip: T("A setup folder with thousands of small files downloads faster zipped into one file.", "Una carpeta de instalación con miles de archivos pequeños se descarga más rápido comprimida en un solo zip.", "Una cartella di installazione con migliaia di piccoli file si scarica più in fretta compressa in un unico zip."),
+  },
+  {
     id: "publish-kb", area: "kb", needs: ["kb.view", "kb.publish"],
     title: T("Publish an article to the customer help center", "Publicar un artículo en el centro de ayuda para clientes", "Pubblicare un articolo nel centro assistenza clienti"),
     summary: T("Customers can read it with no login. A scan stops anything with customer details first.", "Los clientes lo leen sin iniciar sesión. Antes, un análisis detiene cualquier dato de clientes.", "I clienti lo leggono senza accesso. Prima un controllo blocca qualsiasi dato dei clienti."),

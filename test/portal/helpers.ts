@@ -69,3 +69,10 @@ export async function person(role: string, opts: { name?: string } = {}) {
   const me = await b.json("/api/auth/me");
   return Object.assign(b, { id: me.data.user.id as string, name: me.data.user.name as string, email });
 }
+
+/** Send raw bytes as the whole request body (installer upload parts). */
+export async function sendBytes(b: Browser, path: string, bytes: Uint8Array, method = "PUT") {
+  const headers: Record<string, string> = { "cf-connecting-ip": b.ip, origin: env.ORIGIN, "x-ronchi": "1", "content-type": "application/octet-stream" };
+  if (b.cookie) headers.cookie = b.cookie;
+  return app.request(`${env.ORIGIN}${path}`, { method, headers, body: bytes }, env);
+}

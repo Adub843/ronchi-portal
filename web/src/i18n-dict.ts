@@ -2,6 +2,7 @@
 // Add a line here whenever a new t("...") text is added; test/unit/i18n.test.ts checks none is missing.
 // Messages people type are never translated.
 import { ADMIN_ES, ADMIN_IT } from "./i18n-admin";
+import { SOFTWARE_DYNAMIC, SOFTWARE_ES, SOFTWARE_IT } from "./i18n-software";
 import { THEME_ES, THEME_IT } from "./i18n-themes";
 import { THEMES } from "../../src/shared/themes";
 
@@ -1940,6 +1941,10 @@ Object.assign(ES, ADMIN_ES);
 Object.assign(IT, ADMIN_IT);
 // The access screen lists the admin-controls permission by name (src/portal/lib/roles.ts).
 DYNAMIC.push("Admin controls", "Portal-wide settings. Admins only.");
+// Software downloads (i18n-software.ts).
+Object.assign(ES, SOFTWARE_ES);
+Object.assign(IT, SOFTWARE_IT);
+DYNAMIC.push(...SOFTWARE_DYNAMIC);
 
 // The look descriptions in Settings (i18n-themes.ts).
 Object.assign(ES, THEME_ES);

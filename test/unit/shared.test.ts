@@ -85,3 +85,13 @@ describe("change-part spreadsheet reading", () => {
     expect(isOpen("cancelled")).toBe(false);
   });
 });
+
+describe("software pop-up grouping", async () => {
+  const { groupByFolder } = await import("../../src/shared/software");
+  it("one line per top-level folder with everything under it, then loose files", () => {
+    const f = (folder: string, name: string, size = 1) => ({ id: `${folder}/${name}`, folder, name, size });
+    const g = groupByFolder([f("Studio 5000/Disk1", "setup.exe", 5), f("", "b.msi"), f("RSLinx", "x.exe", 2), f("Studio 5000", "readme.txt", 3), f("", "a.exe")]);
+    expect(g.folders.map((x) => [x.name, x.files.length, x.size])).toEqual([["RSLinx", 1, 2], ["Studio 5000", 2, 8]]);
+    expect(g.loose.map((x) => x.name)).toEqual(["a.exe", "b.msi"]);
+  });
+});

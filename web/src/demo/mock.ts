@@ -8,6 +8,7 @@ import { clean, defaults, LOCKED_RULES, publicPart, SECTIONS, type PortalSetting
 import { CP_FIELDS, isOpen, readOrdersCsv } from "../../../src/shared/change-parts";
 import { KbFail, kbRoute, resetKb } from "./kb-mock";
 import { JobsFail, jobsRoute, resetJobs } from "./jobs-mock";
+import { resetSoftware, SoftwareFail, softwareRoute } from "./software-mock";
 type Role = keyof typeof ROLES;
 
 // Ids for example records. Uses the browser's secure random source like the real server does.
@@ -427,6 +428,14 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
       throw e;
     }
   }
+  if (seg[0] === "software") {
+    try {
+      return softwareRoute(method, seg, body, { perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id });
+    } catch (e) {
+      if (e instanceof SoftwareFail) throw new Fail(e.status, e.message);
+      throw e;
+    }
+  }
   if (seg[0] === "kb") {
     try {
       return kbRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, machines: db.machines, nameOf: (x) => (x ? name(x) || null : null), newId: id }, db.users);
@@ -723,7 +732,9 @@ export function installDemo() {
     const path = url.pathname.slice(at + 4);
     const method = (init?.method ?? "GET").toUpperCase();
     let body: any = {};
-    if (init?.body instanceof FormData) {
+    if (init?.body instanceof Blob || init?.body instanceof ArrayBuffer) {
+      body = { __blob: init.body instanceof Blob ? init.body : new Blob([init.body]) };
+    } else if (init?.body instanceof FormData) {
       const f = init.body;
       body = { body: f.get("body") ?? "", parentId: f.get("parentId") ?? null, files: f.getAll("files") };
     } else {
@@ -751,5 +762,6 @@ export function resetDemo() {
   db = seed();
   resetKb();
   resetJobs();
+  resetSoftware();
   save();
 }

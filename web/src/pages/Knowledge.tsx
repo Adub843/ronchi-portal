@@ -6,6 +6,7 @@ import { api, can, fmtTime, type Me } from "../api";
 import { t } from "../i18n";
 import { Empty, ErrorNote, Link, toast, useLoad, Tip } from "../components/ui";
 import { navigate } from "../router";
+import { SoftwareManage, SoftwareShelf } from "./Software";
 
 const KINDS: Record<string, string> = {
   opl: "One Point Lesson", howto: "How-to", known_issue: "Known issue", quick_note: "Quick note",
@@ -78,6 +79,8 @@ export function KnowledgeBase({ me }: { me: Me }) {
         )}
       </div>
 
+      <SoftwareShelf me={me} />
+
       <ErrorNote error={error} />
       {data?.machine && (
         <p className="note-inline kb-found">
@@ -146,6 +149,7 @@ export function KnowledgeBase({ me }: { me: Me }) {
 // ---------- One article ----------
 
 export function KbArticle({ id, me }: { id: string; me: Me }) {
+  if (id === "software") return <SoftwareManage me={me} />;
   if (id === "new" || id === "new-note") return <KbEditor me={me} quickNote={id === "new-note"} />;
   return <KbView id={id} me={me} />;
 }
