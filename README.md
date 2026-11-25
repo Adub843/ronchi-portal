@@ -219,6 +219,26 @@ the wall fails the build.
      `"MAIL_FROM": "jobs@ronchiamerica.com"`, then deploy.
   3. People whose login is a username (no email) need an "email for job notices", set on the People page.
 
+## Shipping and receiving
+
+- **Shipping** (`/shipping`): everything going out (machines, spare parts, change parts, samples) and coming in
+  (from Ronchi Italy, supplier deliveries, customer returns, sample bottles and caps). Numbers `SH-2026-0001`
+  (out) and `RC-2026-0001` (in). Each shipment has its packages (crates, pallets, boxes with weight and size),
+  carrier, tracking or PRO numbers, the list of items, photos and papers (R2 under `shipping/<id>`), and history.
+- **Receiving** checks items in a bit at a time (partial receipts), with the shelf or bin, any problem (damaged,
+  short, extra, wrong item) and a quality hold per item.
+- **Tracking needs no carrier account**: the portal opens the carrier's own public tracking page. For LTL carriers
+  with no fill-in link it opens their tracking page and copies the PRO number. Live tracking status, carrier
+  labels and live rates would need an outside service; see `docs/research/shipping-and-receiving-software.md`.
+- **Printouts**: packing slip and straight bill of lading, from the shipment page (print or save as PDF).
+- **Talks to the rest of the portal**: change-part orders, jobs and machines list their shipments and have a
+  "Ship this" button that fills in the customer, address and items. Shipping a change-part order fills its ship
+  date and moves it to Shipped; receiving its samples fills "samples received". Parts orders read these tables
+  (see the comment at the top of `migrations/portal/0017_shipping.sql`).
+- **Who**: `shipping.view` (every staff role) and `shipping.edit` (scheduling, service, sales, managers, admins;
+  give it to anyone else on People > Access). Section switch `shipping` in the admin controls.
+  Code: `src/portal/routes/shipping.ts`, `src/shared/shipping.ts`, `web/src/pages/Shipping.tsx`.
+
 ## Going live
 
 See [docs/REBUILD.md](docs/REBUILD.md). In short: create the three D1 databases and two R2

@@ -2,6 +2,7 @@
 // Add a line here whenever a new t("...") text is added; test/unit/i18n.test.ts checks none is missing.
 // Messages people type are never translated.
 import { ADMIN_ES, ADMIN_IT } from "./i18n-admin";
+import { SHIPPING_DYNAMIC, SHIPPING_ES, SHIPPING_IT } from "./i18n-shipping";
 import { SOFTWARE_DYNAMIC, SOFTWARE_ES, SOFTWARE_IT } from "./i18n-software";
 import { THEME_ES, THEME_IT } from "./i18n-themes";
 import { THEMES } from "../../src/shared/themes";
@@ -1950,3 +1951,8 @@ DYNAMIC.push(...SOFTWARE_DYNAMIC);
 Object.assign(ES, THEME_ES);
 Object.assign(IT, THEME_IT);
 DYNAMIC.push(...THEMES.map((th) => th.blurb));
+
+// Shipping and receiving keeps its own words in i18n-shipping.ts (fewer clashes in this file).
+for (const [k, v] of Object.entries(SHIPPING_ES)) ES[k] ??= v;
+for (const [k, v] of Object.entries(SHIPPING_IT)) IT[k] ??= v;
+DYNAMIC.push(...SHIPPING_DYNAMIC);

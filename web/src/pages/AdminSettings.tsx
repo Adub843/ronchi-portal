@@ -14,7 +14,7 @@ type Role = PortalSettings["people"]["defaultRole"];
 const roleName = (r: string) =>
   ({ manager: t("Manager"), billing: t("Billing"), scheduling: t("Scheduling"), service: t("Service"), sales: t("Sales"), engineering: t("Engineering"), tech: t("Field service engineer") })[r] ?? r;
 const sectionName = (s: Section) =>
-  ({ chats: t("Chats and boards"), machines: t("Machines"), catalog: t("Parts catalog"), customers: t("Customers and quote requests"), changeParts: t("Change parts"), knowledge: t("Knowledge base") })[s];
+  ({ chats: t("Chats and boards"), machines: t("Machines"), catalog: t("Parts catalog"), customers: t("Customers and quote requests"), changeParts: t("Change parts"), knowledge: t("Knowledge base"), shipping: t("Shipping and receiving") })[s];
 const LOCKED = () => [
   t("Admins always have every permission, and only admins can manage people, settings and the activity log."),
   t("Nobody can remove their own admin access."),

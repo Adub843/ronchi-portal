@@ -4,6 +4,7 @@ import { t } from "../i18n";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad, Tip } from "../components/ui";
 import { navigate } from "../router";
 import { StatusPill } from "./ChangeParts";
+import { LinkedShipments } from "./Shipping";
 
 export function Machines({ me }: { me: Me }) {
   const [q, setQ] = useState("");
@@ -138,6 +139,7 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
               ) : <Empty>{t("No change-part orders for this machine.")}</Empty>}
             </div>
           )}
+          <LinkedShipments me={me} machine={m.serial} />
         </div>
       )}
     </>

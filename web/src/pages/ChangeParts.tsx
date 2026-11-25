@@ -7,6 +7,7 @@ import { api, can, fmtTime, type Me } from "../api";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad, Tip } from "../components/ui";
 import { loc, t } from "../i18n";
 import { navigate } from "../router";
+import { LinkedShipments } from "./Shipping";
 
 type Order = Record<CpField, string | null> & { id: string; open: boolean; revision: number; updated_at: string; machine_id?: string | null };
 
@@ -333,6 +334,7 @@ export function ChangePartPage({ id, me }: { id: string; me: Me }) {
             <h2>{label("notes")}</h2>
             <p style={{ whiteSpace: "pre-wrap" }}>{o.notes || <span className="muted">{t("No notes yet.")}</span>}</p>
           </div>
+          <LinkedShipments me={me} link={{ type: "cp_order", id: o.id }} shipLabel={t("Ship these change parts")} />
         </div>
       )}
       <div className="panel">

@@ -7,7 +7,8 @@ import { adjustable, effective, isPermission, PERMISSION_GROUPS, PERMISSIONS, ro
 import { clean, defaults, LOCKED_RULES, publicPart, SECTIONS, type PortalSettings } from "../../../src/portal/lib/settings";
 import { CP_FIELDS, isOpen, readOrdersCsv } from "../../../src/shared/change-parts";
 import { KbFail, kbRoute, resetKb } from "./kb-mock";
-import { JobsFail, jobsRoute, resetJobs } from "./jobs-mock";
+import { demoJobs, JobsFail, jobsRoute, resetJobs } from "./jobs-mock";
+import { resetShipping, ShippingFail, shippingRoute } from "./shipping-mock";
 import { resetSoftware, SoftwareFail, softwareRoute } from "./software-mock";
 type Role = keyof typeof ROLES;
 
@@ -91,7 +92,7 @@ function seed(): DB {
     u("Olivia", "r-shipping", "Olivia"),
   ];
   // A role made in People > Roles: Olivia helps with shipping, receiving and the shop.
-  const roles: RoleRow[] = [{ id: "r-shipping", name: "Shipping, receiving and shop", perms: JSON.stringify(["boards.use", "catalog.view", "chats.start", "files.send", "kb.view", "machines.view", "orders.view"]) }];
+  const roles: RoleRow[] = [{ id: "r-shipping", name: "Shipping, receiving and shop", perms: JSON.stringify(["boards.use", "catalog.view", "chats.start", "files.send", "kb.view", "machines.view", "orders.view", "shipping.view", "shipping.edit"]) }];
   const [aaron, paolo, lola, meagan, steve, andrew, michele] = users as [User, User, User, User, User, User, User];
   const m = (serial: string, model: string, customer: string, site: string, notes = "") => ({ id: id(), serial, model, customer, site, notes, sharepoint_url: null, created_at: t0, updated_at: t0 });
   const machines = [
@@ -476,6 +477,14 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     }
     return { machine: m, boards: db.boards.filter((b) => b.machine_id === m.id && !b.archived_at), orders: db.orders.filter((x) => x.machine === m.serial && !x.removed_at).map(({ _h, ...x }) => x) };
   }
+  if (seg[0] === "shipping") {
+    try {
+      return shippingRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, users: db.users, orders: db.orders, jobs: demoJobs, machines: db.machines, newId: id, pdf: examplePdf });
+    } catch (e) {
+      if (e instanceof ShippingFail) throw new Fail(e.status, e.message);
+      throw e;
+    }
+  }
   // --- change-part orders ---
   if (seg[0] === "change-parts") {
     const view = (x: any) => {
@@ -762,6 +771,7 @@ export function resetDemo() {
   db = seed();
   resetKb();
   resetJobs();
+  resetShipping();
   resetSoftware();
   save();
 }

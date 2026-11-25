@@ -24,6 +24,7 @@ import { Settings } from "./pages/Settings";
 import { JobList, JobPage, NewJob } from "./pages/Jobs";
 import { WorkOrderPage, WorkOrders } from "./pages/WorkOrders";
 import { Learn } from "./pages/Learn";
+import { NewShipment, ShipmentPage, Shipping } from "./pages/Shipping";
 import { menuFor } from "./nav";
 import { roleLabel, useRoleNames } from "./roles";
 
@@ -100,6 +101,9 @@ export function App() {
   else if (section === "/catalog") page = <Catalog me={me} path={path} />;
   else if (section === "/customers") page = <Customers me={me} />;
   else if (section === "/quotes") page = <Quotes key={path} id={/^\/quotes\/([A-Za-z0-9_-]+)$/.exec(path)?.[1]} />;
+  else if (path === "/shipping/new") page = <NewShipment key={path} />;
+  else if (/^\/shipping\/[A-Za-z0-9_-]+$/.test(path)) page = <ShipmentPage key={path} id={path.slice(10)} me={me} />;
+  else if (section === "/shipping") page = <Shipping me={me} />;
   else if (m?.[1] === "change-parts") page = <ChangePartPage key={m[2]} id={m[2]!} me={me} />;
   else if (section === "/chats") page = <Chats me={me} />;
   else if (section === "/boards") page = <Boards me={me} />;
