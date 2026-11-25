@@ -1,5 +1,5 @@
 // On/off switches for whole parts of the portal (lib/switches.ts). Everyone signed in can read them,
-// so the menu knows what to show; only admins can change them.
+// so the menu knows what to show; only the owner (settings.manage) can change them.
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
@@ -14,7 +14,7 @@ switches.get("/", async (c) => {
 });
 
 switches.put("/:name", async (c) => {
-  const admin = requirePerm(c, "users.manage");
+  const admin = requirePerm(c, "settings.manage");
   const name = c.req.param("name");
   if (!isSwitch(name)) fail(404, "Not found.");
   const b = await body(c);

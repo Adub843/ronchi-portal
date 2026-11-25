@@ -1,4 +1,4 @@
-// Settings > Admin controls: everything an admin can change without touching code.
+// Settings > Command center: every switch and control for the portal, for the portal owner only (Aaron).
 // The server (src/portal/routes/settings.ts) checks and enforces every value; this page only shows them.
 import { useEffect, useState, type ReactNode } from "react";
 import { api, fmtTime } from "../api";
@@ -13,10 +13,15 @@ type Role = PortalSettings["people"]["defaultRole"];
 // Plain names for the screen. Kept here (not from the server) so each one is translated.
 const roleName = (r: string) =>
   ({ manager: t("Manager"), billing: t("Billing"), scheduling: t("Scheduling"), service: t("Service"), sales: t("Sales"), engineering: t("Engineering"), tech: t("Field service engineer") })[r] ?? r;
-const sectionName = (s: Section) =>
-  ({ chats: t("Chats and boards"), machines: t("Machines"), catalog: t("Parts catalog"), customers: t("Customers and quote requests"), changeParts: t("Change parts"), knowledge: t("Knowledge base") })[s];
+// A section added later (lib/settings.ts SECTIONS) shows with the label the server sends until it gets a line here.
+const SECTION_NAMES: Partial<Record<string, () => string>> = {
+  chats: () => t("Chats and boards"), jobs: () => t("Jobs (field service scheduling)"), machines: () => t("Machines"), catalog: () => t("Parts catalog"),
+  customers: () => t("Customers and quote requests"), changeParts: () => t("Change parts"), knowledge: () => t("Knowledge base"), software: () => t("Software downloads"),
+};
+const sectionName = (s: string, label?: string) => SECTION_NAMES[s]?.() ?? label ?? s;
 const LOCKED = () => [
-  t("Admins always have every permission, and only admins can manage people, settings and the activity log."),
+  t("Admins always have every permission, and only admins can manage people and the activity log."),
+  t("Only the portal owner sees the command center. Other admins can't disable, demote or sign out the owner."),
   t("Nobody can remove their own admin access."),
   t("Private chats are members-only. Admins can't read chats they aren't in."),
   t("Customers never see the business side. The help center and parts site are separate, with their own data."),
@@ -26,9 +31,14 @@ const LOCKED = () => [
   t("The activity log can't be edited or deleted."),
 ];
 
-interface Loaded { settings: PortalSettings; defaults: PortalSettings; updatedAt: string | null; updatedBy: string | null }
+type Switches = { workbook: boolean };
+interface Loaded {
+  settings: PortalSettings; defaults: PortalSettings; updatedAt: string | null; updatedBy: string | null;
+  sections: Record<string, { label: string; hint?: string }>;
+  owner: { id: string; name: string } | null; admins: { id: string; name: string }[];
+}
 
-export function AdminSettings({ onSaved }: { onSaved: (s: PortalSettings) => void }) {
+export function AdminSettings({ onSaved, switches, onSwitches }: { onSaved: (s: PortalSettings) => void; switches: Switches; onSwitches: (s: Switches) => void }) {
   const loaded = useLoad<Loaded>(() => api("/settings"));
   const stats = useLoad(() => api("/settings/stats"));
   const [draft, setDraft] = useState<PortalSettings | null>(null);
@@ -40,7 +50,8 @@ export function AdminSettings({ onSaved }: { onSaved: (s: PortalSettings) => voi
 
   if (loaded.error) return <ErrorNote error={loaded.error} />;
   if (!loaded.data || !draft) return <div className="panel" aria-busy="true">{t("Loading…")}</div>;
-  const saved = loaded.data.settings;
+  const data = loaded.data;
+  const saved = data.settings;
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
 
   function set<G extends keyof PortalSettings>(group: G, patch: Partial<PortalSettings[G]>) {
@@ -83,7 +94,7 @@ export function AdminSettings({ onSaved }: { onSaved: (s: PortalSettings) => voi
   return (
     <div className="admin stack">
       <p className="muted" style={{ margin: 0 }}>
-        {t("Only admins see this. Every change is checked on the server and recorded in the activity log.")}
+        {t("Only you see this, as the portal owner. Every change is checked on the server and recorded in the activity log.")}
         {loaded.data.updatedAt && <> {t("Last changed {when} by {who}.", { when: fmtTime(loaded.data.updatedAt), who: loaded.data.updatedBy ?? "–" })}</>}
       </p>
 
@@ -154,9 +165,10 @@ export function AdminSettings({ onSaved }: { onSaved: (s: PortalSettings) => voi
       <Group title={t("Sections of the portal")} sub={t("Turn a section off to hide it from everyone except admins, for example while it's being set up.")} onReset={() => reset("sections")}>
         <div className="grid g2">
           {(Object.keys(draft.sections) as Section[]).map((k) => (
-            <Switch key={k} checked={draft.sections[k]} onChange={(v) => set("sections", { [k]: v })} label={sectionName(k)} hint={draft.sections[k] ? t("On for everyone whose role allows it") : t("Off: only admins see it")} />
+            <Switch key={k} checked={draft.sections[k]} onChange={(v) => set("sections", { [k]: v })} label={sectionName(k, data.sections[k]?.label)} hint={draft.sections[k] ? t("On for everyone whose role allows it") : t("Off: only admins see it")} />
           ))}
         </div>
+        <WorkbookSwitch on={switches.workbook} onSwitches={onSwitches} />
       </Group>
 
       <Group title={t("Roles and permissions")} sub={t("What each role can do, and changes for one person, are set on the People page so there's only one place to edit them.")}>
@@ -222,6 +234,17 @@ export function AdminSettings({ onSaved }: { onSaved: (s: PortalSettings) => voi
         </div>
         <Switch checked={draft.look.popupsDefault} onChange={(v) => set("look", { popupsDefault: v })} label={t("Pop-up message alerts on for new people")} hint={t("Each person can still turn theirs on or off.")} />
       </Group>
+
+      <Group title={t("Other controls")} sub={t("Controls that live on their own pages, one press away.")}>
+        <div className="row wrap">
+          <Link to="/people" className="btn">{t("People, roles and access")}</Link>
+          <Link to="/people" className="btn">{t("Activity log")}</Link>
+          <Link to="/kb" className="btn">{t("Knowledge base")}</Link>
+          <Link to="/learn" className="btn">{t("Portal training")}</Link>
+        </div>
+      </Group>
+
+      <Owner owner={data.owner} admins={data.admins} />
 
       <Group title={t("Emergency")} sub={t("For a lost phone or a link sent to the wrong person. These can't be undone, but nobody loses any data.")}>
         <Emergency onSignOut={(text) => emergency("/settings/sign-out-everyone", text)} onCancelInvites={() => emergency("/settings/cancel-invites")} />
@@ -307,5 +330,58 @@ function Emergency({ onSignOut, onCancelInvites }: { onSignOut: (text: string) =
         <div><button className="btn danger" onClick={onCancelInvites}>{t("Cancel all invite links")}</button></div>
       </div>
     </div>
+  );
+}
+
+/** The Ronchi workbook switch: off = the Work orders pages are gone for everyone. Saves at once. */
+function WorkbookSwitch({ on, onSwitches }: { on: boolean; onSwitches: (s: Switches) => void }) {
+  return (
+    <label className="row switchrow">
+      <input type="checkbox" checked={on} onChange={async (e) => {
+        const next = e.target.checked;
+        if (!next && !window.confirm(t("Switch the Ronchi workbook off for everyone? Work orders leave the menu. Jobs, job emails and job files keep working, and nothing is deleted."))) return;
+        try {
+          const r = await api("/switches/workbook", { method: "PUT", body: { on: next } });
+          onSwitches(r.switches);
+          toast(next ? t("The Ronchi workbook is on") : t("The Ronchi workbook is off"));
+        } catch (x) {
+          toast((x as Error).message);
+        }
+      }} />
+      <span><b>{t("Use the Ronchi workbook (Work orders)")}</b><small className="muted">{t("On: each job has a work order with the machine's log of past work orders, and the field service engineer's email opens it. Off: for teams that keep their Excel sheets. Jobs, job emails and files keep working; switching back on brings everything back.")}</small></span>
+    </label>
+  );
+}
+
+/** Who owns the command center, and handing it to another admin. */
+function Owner({ owner, admins }: { owner: { id: string; name: string } | null; admins: { id: string; name: string }[] }) {
+  const [to, setTo] = useState("");
+  const [text, setText] = useState("");
+  const others = admins.filter((a) => a.id !== owner?.id);
+  async function hand() {
+    if (text !== "OWNER") return toast(t("Type OWNER to confirm."));
+    try {
+      await api("/settings/owner", { body: { userId: to, confirm: text } });
+      toast(t("Done. The command center now belongs to them."));
+      location.hash = "#my-settings";
+      location.reload();
+    } catch (x) {
+      toast((x as Error).message);
+    }
+  }
+  return (
+    <Group title={t("Owner")} sub={t("Only the owner sees the command center. If the owner's login is ever lost, whoever deploys the portal can run npm run owner on that PC.")}>
+      <p style={{ margin: 0 }}>{owner ? t("{who} owns the command center.", { who: owner.name }) : t("Nobody owns the command center yet, so every admin sees it.")}</p>
+      {others.length > 0 && (
+        <div className="row wrap">
+          <select aria-label={t("Hand the command center to")} value={to} onChange={(e) => setTo(e.target.value)}>
+            <option value="">{t("Hand the command center to…")}</option>
+            {others.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+          <input aria-label={t("Type OWNER to confirm.")} placeholder="OWNER" value={text} onChange={(e) => setText(e.target.value)} style={{ width: 110 }} />
+          <button className="btn" disabled={!to} onClick={hand}>{t("Hand over")}</button>
+        </div>
+      )}
+    </Group>
   );
 }

@@ -79,7 +79,7 @@ export function can(role: Role | undefined | null, perm: Permission): boolean {
   return PERMISSIONS[role]?.has(perm) ?? false;
 }
 
-// ---- Sections switched off in Settings > Admin controls ----
+// ---- Sections switched off in Settings > Command center ----
 // Their permissions are taken from everyone except admins, whatever their role or own changes say.
 let switchedOff: ReadonlySet<Permission> = new Set();
 

@@ -1,4 +1,4 @@
-// Spanish and Italian for Settings > Admin controls (pages/AdminSettings.tsx and the admin bits of
+// Spanish and Italian for Settings > Command center (pages/AdminSettings.tsx and the admin bits of
 // Settings and People). Kept apart from i18n-dict.ts so it merges cleanly; i18n-dict.ts adds these in.
 
 export const ADMIN_ES: Record<string, string> = {
@@ -66,7 +66,7 @@ export const ADMIN_ES: Record<string, string> = {
   "Most people in one chat": "Máximo de personas en un chat",
   "My settings": "Mis ajustes",
   "Name and notice": "Nombre y aviso",
-  "New invites are paused. Turn them back on in Settings > Admin controls.": "Las invitaciones nuevas están en pausa. Vuelva a activarlas en Ajustes > Controles de administrador.",
+  "New invites are paused. The portal owner can turn them back on in Settings > Command center.": "Las invitaciones nuevas están en pausa. El dueño del portal puede volver a activarlas en Ajustes > Centro de mando.",
   "No money amounts or sales totals are shown anywhere in the portal.": "No se muestran montos de dinero ni totales de ventas en ninguna parte del portal.",
   "Nobody can make a new invite link until this is turned off. Links already sent still work.": "Nadie puede crear un enlace de invitación nuevo hasta que se desactive. Los enlaces ya enviados siguen funcionando.",
   "Nobody can remove their own admin access.": "Nadie puede quitarse su propio acceso de administrador.",
@@ -115,6 +115,25 @@ export const ADMIN_ES: Record<string, string> = {
   "{n} day(s)": "{n} día(s)",
   "{n} hour(s)": "{n} hora(s)",
   "{role}: {perm}": "{role}: {perm}",
+  "Command center": "Centro de mando",
+  "Every switch and control for the portal, in one place. Only you see this.": "Cada interruptor y control del portal, en un solo lugar. Solo usted lo ve.",
+  "Jobs (field service scheduling)": "Trabajos (programación de servicio de campo)",
+  "Admins always have every permission, and only admins can manage people and the activity log.": "Los administradores siempre tienen todos los permisos, y solo ellos pueden gestionar personas y el registro de actividad.",
+  "Only the portal owner sees the command center. Other admins can't disable, demote or sign out the owner.": "Solo el dueño del portal ve el centro de mando. Otros administradores no pueden desactivar, degradar ni cerrar la sesión del dueño.",
+  "Only you see this, as the portal owner. Every change is checked on the server and recorded in the activity log.": "Solo usted lo ve, como dueño del portal. Cada cambio se comprueba en el servidor y queda en el registro de actividad.",
+  "Other controls": "Otros controles",
+  "Controls that live on their own pages, one press away.": "Controles que están en sus propias páginas, a un toque.",
+  "People, roles and access": "Personas, roles y acceso",
+  "Activity log": "Registro de actividad",
+  "Owner": "Dueño",
+  "Only the owner sees the command center. If the owner's login is ever lost, whoever deploys the portal can run npm run owner on that PC.": "Solo el dueño ve el centro de mando. Si alguna vez se pierde el acceso del dueño, quien publica el portal puede ejecutar npm run owner en ese PC.",
+  "{who} owns the command center.": "{who} es el dueño del centro de mando.",
+  "Nobody owns the command center yet, so every admin sees it.": "Nadie es dueño del centro de mando todavía, así que todos los administradores lo ven.",
+  "Hand the command center to": "Pasar el centro de mando a",
+  "Hand the command center to…": "Pasar el centro de mando a…",
+  "Type OWNER to confirm.": "Escriba OWNER para confirmar.",
+  "Hand over": "Pasar",
+  "Done. The command center now belongs to them.": "Listo. El centro de mando ahora es de esa persona.",
 };
 
 export const ADMIN_IT: Record<string, string> = {
@@ -182,7 +201,7 @@ export const ADMIN_IT: Record<string, string> = {
   "Most people in one chat": "Numero massimo di persone in una chat",
   "My settings": "Le mie impostazioni",
   "Name and notice": "Nome e avviso",
-  "New invites are paused. Turn them back on in Settings > Admin controls.": "I nuovi inviti sono in pausa. Riattivali in Impostazioni > Controlli amministratore.",
+  "New invites are paused. The portal owner can turn them back on in Settings > Command center.": "I nuovi inviti sono in pausa. Il proprietario del portale può riattivarli in Impostazioni > Centro di comando.",
   "No money amounts or sales totals are shown anywhere in the portal.": "Nel portale non compaiono mai importi in denaro né totali di vendita.",
   "Nobody can make a new invite link until this is turned off. Links already sent still work.": "Nessuno può creare nuovi link di invito finché è attivo. I link già inviati funzionano ancora.",
   "Nobody can remove their own admin access.": "Nessuno può togliersi il proprio accesso da amministratore.",
@@ -231,4 +250,23 @@ export const ADMIN_IT: Record<string, string> = {
   "{n} day(s)": "{n} giorno/i",
   "{n} hour(s)": "{n} ora/e",
   "{role}: {perm}": "{role}: {perm}",
+  "Command center": "Centro di comando",
+  "Every switch and control for the portal, in one place. Only you see this.": "Ogni interruttore e controllo del portale, in un unico posto. Lo vedi solo tu.",
+  "Jobs (field service scheduling)": "Lavori (pianificazione del servizio sul campo)",
+  "Admins always have every permission, and only admins can manage people and the activity log.": "Gli amministratori hanno sempre tutti i permessi, e solo loro possono gestire le persone e il registro attività.",
+  "Only the portal owner sees the command center. Other admins can't disable, demote or sign out the owner.": "Solo il proprietario del portale vede il centro di comando. Gli altri amministratori non possono disattivare, declassare o disconnettere il proprietario.",
+  "Only you see this, as the portal owner. Every change is checked on the server and recorded in the activity log.": "Lo vedi solo tu, come proprietario del portale. Ogni modifica è controllata sul server e registrata nel registro attività.",
+  "Other controls": "Altri controlli",
+  "Controls that live on their own pages, one press away.": "Controlli che stanno nelle loro pagine, a un tocco.",
+  "People, roles and access": "Persone, ruoli e accesso",
+  "Activity log": "Registro attività",
+  "Owner": "Proprietario",
+  "Only the owner sees the command center. If the owner's login is ever lost, whoever deploys the portal can run npm run owner on that PC.": "Solo il proprietario vede il centro di comando. Se l'accesso del proprietario va perso, chi pubblica il portale può eseguire npm run owner su quel PC.",
+  "{who} owns the command center.": "{who} è il proprietario del centro di comando.",
+  "Nobody owns the command center yet, so every admin sees it.": "Nessuno è ancora proprietario del centro di comando, quindi lo vedono tutti gli amministratori.",
+  "Hand the command center to": "Passa il centro di comando a",
+  "Hand the command center to…": "Passa il centro di comando a…",
+  "Type OWNER to confirm.": "Scrivi OWNER per confermare.",
+  "Hand over": "Passa",
+  "Done. The command center now belongs to them.": "Fatto. Il centro di comando ora è di quella persona.",
 };

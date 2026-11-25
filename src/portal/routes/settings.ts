@@ -1,4 +1,4 @@
-// Settings > Admin controls: read and change the portal-wide settings, see how the portal is used,
+// Settings > Command center: read and change the portal-wide settings, see how the portal is used,
 // and sign everyone out in an emergency. Admin only (settings.manage, which only admins can have).
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
@@ -6,6 +6,8 @@ import { audit, now } from "../lib/db";
 import { body, fail, requirePerm } from "../lib/http";
 import { LOCKED_RULES, SECTIONS } from "../lib/settings";
 import { DEFAULTS, loadSettings, saveSettings } from "../lib/settings-store";
+import { SWITCHES, readSwitches } from "../lib/switches";
+import { setOwner } from "../lib/owner";
 
 export const settings = new Hono<AppEnv>();
 
@@ -19,6 +21,11 @@ settings.get("/", async (c) => {
     settings: current,
     defaults: DEFAULTS(),
     sections: SECTIONS,
+    // Whole parts that are gone for everyone when off (lib/switches.ts), shown next to the sections.
+    switches: await readSwitches(c.env.DB),
+    switchList: Object.fromEntries(Object.entries(SWITCHES).map(([k, v]) => [k, { label: v.label, hint: v.hint }])),
+    owner: await c.env.DB.prepare("SELECT id, name FROM users WHERE is_owner = 1 AND role = 'admin' AND status = 'active'").first<{ id: string; name: string }>(),
+    admins: (await c.env.DB.prepare("SELECT id, name FROM users WHERE role = 'admin' AND status = 'active' AND removed_at IS NULL ORDER BY name").all<{ id: string; name: string }>()).results,
     locked: LOCKED_RULES,
     updatedAt: row?.updated_at ?? null,
     updatedBy: row?.updated_by ?? null,
@@ -93,4 +100,16 @@ settings.post("/cancel-invites", async (c) => {
   const n = r.meta.changes ?? 0;
   await audit(c.env.DB, { userId: admin.id, action: "settings.cancel_invites", detail: { invites: n }, ip: c.get("ip") });
   return c.json({ ok: true, invites: n });
+});
+
+/** Hand the command center to another admin (or, on a portal with no owner yet, claim it). */
+settings.post("/owner", async (c) => {
+  const me = requirePerm(c, "settings.manage");
+  const b = await body(c);
+  if (b.confirm !== "OWNER") fail(400, "Type OWNER to confirm.");
+  const id = typeof b.userId === "string" ? b.userId : "";
+  const target = await c.env.DB.prepare("SELECT id, role, status, removed_at FROM users WHERE id = ?").bind(id).first<{ id: string; role: string; status: string; removed_at: string | null }>();
+  if (!target || target.role !== "admin" || target.status !== "active" || target.removed_at) fail(400, "The command center can only go to an active admin.");
+  await setOwner(c.env.DB, id, { id: me.id, ip: c.get("ip") });
+  return c.json({ ok: true });
 });

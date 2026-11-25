@@ -1936,7 +1936,7 @@ export const IT: Record<string, string> = {
   "Web address": "Indirizzo web",
 };
 
-// Settings > Admin controls (i18n-admin.ts).
+// Settings > Command center (i18n-admin.ts).
 Object.assign(ES, ADMIN_ES);
 Object.assign(IT, ADMIN_IT);
 // The access screen lists the admin-controls permission by name (src/portal/lib/roles.ts).

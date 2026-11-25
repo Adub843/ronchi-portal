@@ -8,8 +8,9 @@ import type { AppEnv, SessionUser } from "../env";
 import { effective, readChanges } from "./roles";
 import { addSeconds, now } from "./db";
 import { getSettings } from "./settings-store";
+import { isOwner, OWNERS_SQL } from "./owner";
 
-// How long a sign-in lasts is set in Settings > Admin controls (defaults: 30 days no matter what,
+// How long a sign-in lasts is set in Settings > Command center (defaults: 30 days no matter what,
 // or 14 days without use). Shortening either one applies to people already signed in.
 const absoluteLifetime = () => getSettings().people.sessionDays * 24 * 3600;
 const idleLifetime = () => getSettings().people.idleDays * 24 * 3600;
@@ -43,11 +44,12 @@ export async function loadSession(c: Context<AppEnv>): Promise<SessionUser | nul
   const row = await c.env.DB.prepare(
     `SELECT s.id_hash, s.created_at, s.last_seen_at, s.expires_at, u.id, u.email, u.name, u.role, u.status,
             (SELECT group_concat(a.perm || '=' || a.allow) FROM user_access a WHERE a.user_id = u.id) AS access,
-            (SELECT r.perms FROM roles r WHERE r.id = u.role) AS role_perms
+            (SELECT r.perms FROM roles r WHERE r.id = u.role) AS role_perms,
+            u.is_owner, (${OWNERS_SQL}) AS owners
        FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id_hash = ?`,
   )
     .bind(hash)
-    .first<{ id_hash: string; created_at: string; last_seen_at: string; expires_at: string; id: string; email: string; name: string; role: SessionUser["role"]; status: string; access: string | null; role_perms: string | null }>();
+    .first<{ id_hash: string; created_at: string; last_seen_at: string; expires_at: string; id: string; email: string; name: string; role: SessionUser["role"]; status: string; access: string | null; role_perms: string | null; is_owner: number; owners: number }>();
   if (!row) return null;
   const t = now();
   const idleExpired = Date.parse(row.last_seen_at) + idleLifetime() * 1000 < Date.parse(t);
@@ -60,7 +62,10 @@ export async function loadSession(c: Context<AppEnv>): Promise<SessionUser | nul
   if (Date.parse(t) - Date.parse(row.last_seen_at) > 5 * 60 * 1000) {
     await c.env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?").bind(t, hash).run();
   }
-  return { id: row.id, email: row.email, name: row.name, role: row.role, perms: effective(row.role, readChanges(row.access), row.role_perms), sessionHash: hash };
+  const owner = isOwner(row.role, row.is_owner === 1, row.owners);
+  const perms = effective(row.role, readChanges(row.access), row.role_perms);
+  if (!owner) perms.delete("settings.manage"); // the command center is the owner's alone
+  return { id: row.id, email: row.email, name: row.name, role: row.role, perms, owner, sessionHash: hash };
 }
 
 export async function endSession(c: Context<AppEnv>): Promise<void> {

@@ -16,13 +16,17 @@ export const LANG_IDS: Lang[] = ["en", "es", "it"];
 
 /** Parts of the portal an admin can turn off for everyone else, and the permissions each one covers. */
 export const SECTIONS = {
+  // A new part of the portal adds one line here: its permissions close to everyone but admins when
+  // the owner switches it off in Settings > Command center. `hint` is one optional plain sentence.
   chats: { label: "Chats and boards", perms: ["boards.use", "boards.create", "chats.start", "files.send", "boards.moderate"] },
+  jobs: { label: "Jobs (field service scheduling)", perms: ["jobs.view", "jobs.schedule"] },
   machines: { label: "Machines", perms: ["machines.view", "machines.add", "machines.edit"] },
   catalog: { label: "Parts catalog", perms: ["catalog.view", "catalog.edit"] },
   customers: { label: "Customers and quote requests", perms: ["customers.manage", "customers.invite", "quotes.manage"] },
   changeParts: { label: "Change parts", perms: ["orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import"] },
-  knowledge: { label: "Knowledge base", perms: ["kb.view", "kb.write", "kb.edit_all", "kb.import", "kb.publish", "software.view", "software.manage"] },
-} as const satisfies Record<string, { label: string; perms: Permission[] }>;
+  knowledge: { label: "Knowledge base", perms: ["kb.view", "kb.write", "kb.edit_all", "kb.import", "kb.publish"] },
+  software: { label: "Software downloads", perms: ["software.view", "software.manage"] },
+} as const satisfies Record<string, { label: string; perms: Permission[]; hint?: string }>;
 export type Section = keyof typeof SECTIONS;
 export const SECTION_IDS = Object.keys(SECTIONS) as Section[];
 
@@ -57,7 +61,7 @@ export function defaults(themeIds: string[] = [...THEME_IDS]): PortalSettings {
   return {
     brand: { name: "Ronchi Portal", company: "Ronchi America", notice: "" },
     people: { inviteHours: 72, sessionDays: 30, idleDays: 14, invitesPaused: false, defaultRole: "tech" },
-    sections: { chats: true, machines: true, catalog: true, customers: true, changeParts: true, knowledge: true },
+    sections: Object.fromEntries(SECTION_IDS.map((k) => [k, true])) as Record<Section, boolean>, // every part starts on
     chats: { maxPeople: 30, files: true, maxFileMb: 25, maxFiles: 10 },
     languages: { allowed: [...LANG_IDS], default: "en" },
     look: { defaultTheme: DEFAULT_THEME, allowedThemes: themeIds, popupsDefault: true },
@@ -131,7 +135,7 @@ export function clean(
   }
 
   const s = part("sections");
-  const sections = Object.fromEntries(SECTION_IDS.map((k) => [k, bool(s[k], base.sections[k])])) as PortalSettings["sections"];
+  const sections = Object.fromEntries(SECTION_IDS.map((k) => [k, bool(s[k], base.sections[k] ?? true)])) as PortalSettings["sections"];
 
   const ch = part("chats");
   const chats = {
