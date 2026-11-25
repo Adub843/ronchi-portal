@@ -10,13 +10,16 @@ export function People({ me }: { me: Me }) {
   const { data, error, reload } = useLoad(() => api("/users"));
   const roles = useLoad(() => api("/users/roles"));
   const audit = useLoad(() => api("/users/audit/recent"));
+  // The starting role, link lifetime and pause switch are admin controls in Settings.
+  const people = me.settings?.people;
+  const startRole: string = people?.defaultRole ?? "tech";
   const permList = useLoad(() => api("/users/permissions"));
   const [open, setOpen] = useState<string | null>(null);
   const [mail, setMail] = useState<{ id: string; value: string } | null>(null);
   const [tab, setTab] = useState<"people" | "roles">("people");
   const [removing, setRemoving] = useState<string | null>(null);
   const [restoreRole, setRestoreRole] = useState<Record<string, string>>({});
-  const [form, setForm] = useState({ name: "", email: "", role: "tech" });
+  const [form, setForm] = useState({ name: "", email: "", role: startRole });
   const [link, setLink] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -26,7 +29,7 @@ export function People({ me }: { me: Me }) {
     try {
       const r = await api("/users/invite", { body: form });
       setLink(r.link);
-      setForm({ name: "", email: "", role: "tech" });
+      setForm({ name: "", email: "", role: startRole });
       reload();
     } catch (x) {
       setErr((x as Error).message);
@@ -100,11 +103,12 @@ export function People({ me }: { me: Me }) {
           </select>
         </div>
         <ErrorNote error={err} />
-        <div><button className="btn primary" type="submit">{t("Create invite link")}</button></div>
+        {people?.invitesPaused && <p className="note-inline">{t("New invites are paused. Turn them back on in Settings > Admin controls.")}</p>}
+        <div><button className="btn primary" type="submit" disabled={people?.invitesPaused}>{t("Create invite link")}</button></div>
       </form>
       {link && (
         <div className="panel stack">
-          <b>{t("Invite link (shown once, works for 3 days)")}</b>
+          <b>{(people?.inviteHours ?? 72) % 24 === 0 ? t("Invite link (shown once, works for {n} day(s))", { n: (people?.inviteHours ?? 72) / 24 }) : t("Invite link (shown once, works for {n} hour(s))", { n: people?.inviteHours ?? 72 })}</b>
           <code className="mono" style={{ overflowWrap: "anywhere" }}>{link}</code>
           <div className="row">
             <button className="btn" onClick={() => navigator.clipboard.writeText(link).then(() => toast(t("Copied")))}>{t("Copy")}</button>

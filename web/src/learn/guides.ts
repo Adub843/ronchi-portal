@@ -594,6 +594,17 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
+    id: "admin-controls", area: "people", needs: ["settings.manage"], open: "/settings",
+    title: T("Use the admin controls", "Usar los controles de administrador", "Usare i controlli amministratore"),
+    summary: T("Portal-wide settings: usage, a notice for everyone, sign-in, sections, chat limits, languages, looks and emergency sign-out.", "Ajustes de todo el portal: uso, un aviso para todos, inicio de sesión, secciones, límites de chat, idiomas, aspectos y cierre de sesión de emergencia.", "Impostazioni di tutto il portale: utilizzo, un avviso per tutti, accesso, sezioni, limiti delle chat, lingue, aspetti e disconnessione di emergenza."),
+    steps: [
+      T("Open Settings and press Admin controls.", "Abra Configuración y pulse Controles de administrador.", "Apri Impostazioni e premi Controlli amministratore."),
+      T("Change what you need. A bar appears at the bottom; press Save changes, or Discard to undo.", "Cambie lo que necesite. Aparece una barra abajo; pulse Guardar cambios, o Descartar para deshacer.", "Modifica ciò che ti serve. In basso compare una barra; premi Salva modifiche, oppure Scarta per annullare."),
+      T("Reset this group puts one group back to how the portal started. Roles and one person's access are changed on People.", "Restablecer este grupo devuelve un grupo a como empezó el portal. Los roles y el acceso de una persona se cambian en Personas.", "Ripristina questo gruppo riporta un gruppo come all'inizio. Ruoli e accesso di una persona si cambiano in Persone."),
+    ],
+    tip: T("Turning a section off hides it from everyone except admins, even someone given it personally.", "Apagar una sección la oculta a todos excepto a los administradores, incluso a quien la tenga de forma personal.", "Spegnere una sezione la nasconde a tutti tranne agli amministratori, anche a chi l'ha avuta personalmente."),
+  },
+  {
     id: "audit-log", area: "people", needs: ["users.manage", "audit.view"],
     title: T("Check the audit log", "Revisar el registro de auditoría", "Controllare il registro di controllo"),
     summary: T("See who did what, and when.", "Vea quién hizo qué y cuándo.", "Vedi chi ha fatto cosa e quando."),

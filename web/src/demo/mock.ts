@@ -4,6 +4,7 @@
 import logoUrl from "../assets/ronchi-logo.png";
 import { cleanName, fileInfo, fileProblem } from "../../../src/shared/files";
 import { adjustable, effective, isPermission, PERMISSION_GROUPS, PERMISSIONS, rolePermissions, ROLES, VIEW_PERMS, type AccessChanges } from "../../../src/portal/lib/roles";
+import { clean, defaults, LOCKED_RULES, publicPart, SECTIONS, type PortalSettings } from "../../../src/portal/lib/settings";
 import { CP_FIELDS, isOpen, readOrdersCsv } from "../../../src/shared/change-parts";
 import { KbFail, kbRoute, resetKb } from "./kb-mock";
 import { JobsFail, jobsRoute, resetJobs } from "./jobs-mock";
@@ -37,6 +38,8 @@ interface DB {
   members: Record<string, string[]>; // chat id -> user ids
   files: any[];
   orders: any[];
+  settings: PortalSettings;
+  settingsAt: string | null;
 }
 
 /** A small real PDF (one page of text), so example files open like the real thing. */
@@ -194,6 +197,7 @@ function seed(): DB {
     users, roles, invites: [], machines, boards: [service, torque, sales, eng, ...chats.map(({ people: _p, ...c }) => c)], posts, audit, prefs: null,
     reads: { [torque.id]: iso(new Date()), [withLola.id]: iso(new Date()), [crew.id]: iso(new Date()), [withSteve.id]: iso(ago(100)) },
     muted: {}, members, files, orders,
+    settings: defaults(), settingsAt: null,
   };
 }
 
@@ -231,7 +235,43 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   const seg = path.split("/").filter(Boolean);
   const u = me();
   // --- auth & me ---
-  if (path === "/auth/me") return { user: { id: u.id, name: u.name, email: u.email, role: u.role, permissions: [...effective(u.role, u.access, savedPerms(u.role))] } };
+  if (path === "/auth/me") return { user: { id: u.id, name: u.name, email: u.email, role: u.role, permissions: [...effective(u.role, u.access, savedPerms(u.role))] }, settings: publicPart(db.settings) };
+  // --- admin controls ---
+  if (path === "/settings" && method === "GET")
+    return { settings: db.settings, defaults: defaults(), sections: SECTIONS, locked: LOCKED_RULES, updatedAt: db.settingsAt, updatedBy: db.settingsAt ? u.name : null };
+  if (path === "/settings" || path === "/settings/reset") {
+    const d = defaults();
+    const input = path === "/settings" ? body : body.group ? { [body.group]: (d as any)[body.group] } : d;
+    const merged: any = { ...db.settings };
+    for (const [k, v] of Object.entries(input ?? {})) merged[k] = v && typeof v === "object" && !Array.isArray(v) ? { ...(merged[k] ?? {}), ...(v as object) } : v;
+    const r = clean(merged, d, true);
+    if (r.error) throw new Fail(400, r.error);
+    db.settings = r.settings;
+    db.settingsAt = iso(new Date());
+    log("settings.update");
+    return { settings: db.settings };
+  }
+  if (path === "/settings/stats") {
+    const since = Date.now() - 30 * 86400000;
+    const recent = db.posts.filter((p) => Date.parse(p.created_at) > since && p.kind !== "event");
+    return {
+      active: db.users.filter((x) => x.status === "active").length, disabled: db.users.filter((x) => x.status !== "active").length,
+      invites: db.invites.length, seen7: 5, seen30: 6, posts30: recent.length, chats: db.boards.filter((b) => b.kind === "chat").length,
+      boards: db.boards.filter((b) => b.kind === "board").length, machines: db.machines.length, orders: db.orders.length,
+      people: db.users.map((x, i) => ({ id: x.id, name: x.name, role: x.role, status: x.status, last_seen: i === 0 ? iso(new Date()) : i < 6 ? iso(daysAgo(i - 1, 8 + i)) : null, last_login: null, posts30: recent.filter((p) => p.user_id === x.id).length })),
+    };
+  }
+  if (path === "/settings/sign-out-everyone") {
+    if (body.confirm !== "SIGN OUT") throw new Fail(400, "Type SIGN OUT to confirm.");
+    log("settings.sign_out_everyone");
+    return { ok: true, sessions: 9 };
+  }
+  if (path === "/settings/cancel-invites") {
+    const n = db.invites.length;
+    db.invites = [];
+    log("settings.cancel_invites");
+    return { ok: true, invites: n };
+  }
   if (path === "/auth/logout") throw new Fail(400, "Sign-out is turned off in this preview.");
   if (path === "/auth/add-device") return { link: "https://portal.ronchiamerica.com/welcome#example-one-time-link" };
   if (path === "/prefs/tips") {
@@ -350,6 +390,7 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   if (path === "/users" && method === "GET")
     return { users: db.users.map((x) => ({ ...x, access: x.role === "admin" ? {} : (x.access ?? {}), permissions: [...effective(x.role, x.access, savedPerms(x.role))], passkeys: 1 + (x.id === u.id ? 1 : 0), sessions: x.status === "active" ? 1 : 0 })), invites: db.invites };
   if (path === "/users/invite") {
+    if (db.settings.people.invitesPaused) throw new Fail(403, "New invites are paused. Turn them back on in Settings > Admin controls.");
     if (!body.name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email ?? "")) throw new Fail(400, "Enter a name and a valid email.");
     db.invites.unshift({ id: id(), email: body.email, name: body.name, role: body.role, expires_at: iso(new Date(Date.now() + 72 * 3600000)) });
     log("invite.create");

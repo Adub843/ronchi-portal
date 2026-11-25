@@ -9,6 +9,7 @@ import { listRoles, roleExists, saveRole } from "../lib/role-store";
 import { randomId } from "../../shared/crypto";
 import { isEmail } from "../lib/mail";
 import { endAllSessions } from "../lib/session";
+import { getSettings } from "../lib/settings-store";
 import { loginId } from "../../shared/login";
 
 export const users = new Hono<AppEnv>();
@@ -175,6 +176,7 @@ users.get("/", async (c) => {
 /** Invite a new person. Returns the link once; it is never shown again. */
 users.post("/invite", async (c) => {
   const admin = requirePerm(c, "users.manage");
+  if (getSettings().people.invitesPaused) fail(403, "New invites are paused. Turn them back on in Settings > Admin controls.");
   const b = await body(c);
   // A work email or a plain username (Aaron, 2026-11-24: "just a username").
   const email = loginId(b.email);

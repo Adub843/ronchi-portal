@@ -1,6 +1,7 @@
 import { randomId, randomToken, sha256Hex } from "../../shared/crypto";
 import type { Env } from "../env";
 import { addSeconds, now } from "./db";
+import { getSettings } from "./settings-store";
 
 /**
  * Make a one-time invite link. Only the hash of the token is stored; the link itself
@@ -16,7 +17,7 @@ export async function createInvite(
   await env.DB.prepare(
     "INSERT INTO invites (id, email, name, role, token_hash, created_by, created_at, expires_at, user_id) VALUES (?,?,?,?,?,?,?,?,?)",
   )
-    .bind(randomId(), o.email, o.name, o.role, await sha256Hex(token), o.createdBy, t, addSeconds(t, (o.hours ?? 72) * 3600), o.userId ?? null)
+    .bind(randomId(), o.email, o.name, o.role, await sha256Hex(token), o.createdBy, t, addSeconds(t, (o.hours ?? getSettings().people.inviteHours) * 3600), o.userId ?? null)
     .run();
   return `${env.ORIGIN}/welcome#${token}`;
 }

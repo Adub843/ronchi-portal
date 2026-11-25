@@ -1,4 +1,5 @@
 import { loc } from "./i18n";
+import type { PublicSettings } from "../../src/portal/lib/settings";
 
 // Every call to the portal's API goes through here.
 // The X-Ronchi header (with the browser's Origin) is how the server knows a change
@@ -46,6 +47,8 @@ export interface Me {
   email: string;
   role: string;
   permissions: string[];
+  /** The admin controls everyone's app follows (name, notice, languages, looks, chat limits). */
+  settings?: PublicSettings | null;
 }
 
 export const can = (me: Me | null, perm: string) => !!me?.permissions.includes(perm);

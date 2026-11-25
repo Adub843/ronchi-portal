@@ -14,6 +14,7 @@ export const ROLES: Record<Role, string> = {
 };
 
 export type Permission =
+  | "settings.manage"     // the admin controls in Settings (admins only)
   | "users.manage"        // invite people, change roles, disable, sign out everywhere
   | "audit.view"
   | "machines.view"
@@ -43,7 +44,7 @@ export type Permission =
   | "jobs.schedule";      // schedule jobs, choose the field service engineers, send the job emails
 
 const ALL: Permission[] = [
-  "users.manage", "audit.view", "machines.view", "machines.add", "machines.edit",
+  "settings.manage", "users.manage", "audit.view", "machines.view", "machines.add", "machines.edit",
   "boards.use", "boards.create", "chats.start", "files.send", "boards.moderate",
   "catalog.view", "catalog.edit", "customers.manage", "customers.invite", "quotes.manage",
   "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import",
@@ -55,7 +56,7 @@ const STAFF_BASE: Permission[] = ["boards.use", "boards.create", "chats.start", 
 
 // Managers (Aaron, 2026-11-24: "paolo, steve, michele, and morad should all be manager level log
 // ins i am the only admin") get everything except managing people and reading the audit log.
-const MANAGER: Permission[] = ALL.filter((p) => p !== "users.manage" && p !== "audit.view");
+const MANAGER: Permission[] = ALL.filter((p) => p !== "users.manage" && p !== "audit.view" && p !== "settings.manage");
 
 export const PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
   admin: new Set(ALL),
@@ -71,7 +72,17 @@ export const PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
 /** What a role allows on its own, before any per-person changes. */
 export function can(role: Role | undefined | null, perm: Permission): boolean {
   if (!role) return false;
+  if (role !== "admin" && switchedOff.has(perm)) return false;
   return PERMISSIONS[role]?.has(perm) ?? false;
+}
+
+// ---- Sections switched off in Settings > Admin controls ----
+// Their permissions are taken from everyone except admins, whatever their role or own changes say.
+let switchedOff: ReadonlySet<Permission> = new Set();
+
+/** Called by lib/settings-store.ts whenever Settings are loaded or saved. */
+export function setSwitchedOff(perms: Iterable<Permission>) {
+  switchedOff = new Set([...perms].filter((p) => !ADMIN_ONLY.has(p)));
 }
 
 // ---- Per-person access (Aaron, 2026-11-24: "i need to be able to control more in detail") ----
@@ -80,7 +91,7 @@ export function can(role: Role | undefined | null, perm: Permission): boolean {
 //  - admins always have everything (no one can switch an admin's access off),
 //  - managing people and reading the audit log stay admin-only and can't be handed out.
 
-export const ADMIN_ONLY: ReadonlySet<Permission> = new Set(["users.manage", "audit.view"]);
+export const ADMIN_ONLY: ReadonlySet<Permission> = new Set(["users.manage", "audit.view", "settings.manage"]);
 
 export function isPermission(value: unknown): value is Permission {
   return typeof value === "string" && (ALL as string[]).includes(value);
@@ -117,12 +128,13 @@ export function rolePermissions(role: string, saved?: string | null): Set<Permis
 /** Everything one person may do: their role, plus their own changes. */
 export function effective(role: string, changes: AccessChanges | null | undefined, saved?: string | null): Set<Permission> {
   const out = rolePermissions(role, saved);
-  if (role === "admin" || !changes) return out;
-  for (const [perm, on] of Object.entries(changes)) {
+  if (role === "admin") return out;
+  for (const [perm, on] of Object.entries(changes ?? {})) {
     if (!isPermission(perm) || !adjustable(perm)) continue;
     if (on) out.add(perm);
     else out.delete(perm);
   }
+  for (const p of switchedOff) out.delete(p); // a section turned off in Settings wins
   return out;
 }
 
@@ -183,6 +195,7 @@ export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label:
   { group: "Admin only", perms: [
     { id: "users.manage", label: "Manage people", hint: "Invites, roles, access and sign-outs. Admins only." },
     { id: "audit.view", label: "Read the audit log", hint: "Who did what, and when. Admins only." },
+    { id: "settings.manage", label: "Admin controls", hint: "Portal-wide settings. Admins only." },
   ] },
 ];
 

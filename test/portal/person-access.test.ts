@@ -82,7 +82,7 @@ describe("per-person access", () => {
     const ids = data.groups.flatMap((g: any) => g.perms.map((p: any) => p.id));
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toEqual(expect.arrayContaining(await perms(admin)));
-    expect(data.groups.flatMap((g: any) => g.perms).filter((p: any) => !p.adjustable).map((p: any) => p.id).sort()).toEqual(["audit.view", "users.manage"]);
+    expect(data.groups.flatMap((g: any) => g.perms).filter((p: any) => !p.adjustable).map((p: any) => p.id).sort()).toEqual(["audit.view", "settings.manage", "users.manage"]);
   });
 });
 

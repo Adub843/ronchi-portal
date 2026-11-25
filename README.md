@@ -45,7 +45,8 @@ All mainstream, nothing homemade:
 src/portal/          staff portal Worker
   index.ts           start here: security headers, request checks, routes
   env.ts             what Cloudflare gives the Worker
-  lib/roles.ts       who can do what (one table)
+  lib/roles.ts       who can do what (sections switched off in Settings are removed for everyone but admins)
+  lib/settings.ts    the admin controls in Settings: defaults, limits, checks (stored by lib/settings-store.ts)
   lib/session.ts     sign-in cookies
   routes/            one file per feature: auth, users, machines, boards, prefs, catalog, customers
   lib/parts-site.ts  the only way the portal talks to the parts site (publish, customer logins)
@@ -122,14 +123,16 @@ peer list. All peers the project needs are listed directly in `package.json`.)
 ## How security works
 
 - **Passkeys only.** No passwords and no text codes. A person gets a one-time invite link
-  (72 hours) from an admin, and creates a passkey. Extra devices are added from
+  (72 hours unless an admin changes it in Settings) from an admin, and creates a passkey. Extra devices are added from
   Settings with a one-hour link.
 - **Sessions** are a random 256-bit token in an `HttpOnly`, `Secure`, `SameSite=Strict`
-  cookie. Only its SHA-256 hash is stored. Sessions end after 14 idle days or 30 days,
+  cookie. Only its SHA-256 hash is stored. Sessions end after 14 idle days or 30 days (both adjustable in Settings > Admin controls),
   and can be ended from Settings (own devices) or People (anyone, by an admin).
   Changing someone's role or disabling them signs them out everywhere at once.
 - **Deny by default.** Every API route asks `requirePerm(...)`; the role table is in
-  `src/portal/lib/roles.ts`. Boards limited to some roles return "not found" to others.
+  `src/portal/lib/roles.ts`. An admin can turn a whole section off in Settings > Admin controls;
+  its permissions are then removed from everyone but admins, even from someone given one personally.
+  Managing people, the admin controls and the audit log stay admin-only. Boards limited to some roles return "not found" to others.
 - **Per-person access.** On People, the Access button switches any single permission on or off
   for one person, on top of their role (table `user_access`, migration 0009). It applies on
   their next click. Admins always keep everything, nobody can change their own access, and

@@ -3,7 +3,7 @@
 // Every request passes through this file:
 //   1. security headers are added to every response (pages and API alike)
 //   2. API calls that change something must come from the portal's own pages (Origin check + X-Ronchi header)
-//   3. the session cookie is read, so routes know who is signed in
+//   3. the admin controls (lib/settings-store.ts) are loaded, then the session cookie is read, so routes know who is signed in
 //   4. each /api/... path goes to its file in routes/; anything else is the staff app from web/dist
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -11,6 +11,7 @@ import { PORTAL_CSP, securityHeaders, withHeaders } from "../shared/security-hea
 import type { AppEnv } from "./env";
 import { fail } from "./lib/http";
 import { loadSession } from "./lib/session";
+import { loadSettings } from "./lib/settings-store";
 import { auth } from "./routes/auth";
 import { boards } from "./routes/boards";
 import { catalog } from "./routes/catalog";
@@ -23,6 +24,7 @@ import { kb } from "./routes/kb";
 import { links } from "./routes/links";
 import { machines } from "./routes/machines";
 import { prefs } from "./routes/prefs";
+import { settings } from "./routes/settings";
 import { users } from "./routes/users";
 
 const HEADERS = securityHeaders({ csp: PORTAL_CSP });
@@ -46,6 +48,8 @@ app.use("/api/*", async (c, next) => {
     // Cross-site request protection, on top of the SameSite=Strict cookie.
     if (c.req.header("origin") !== c.env.ORIGIN || c.req.header("x-ronchi") !== "1") fail(403, "Request blocked.");
   }
+  // The admin controls (who can do what, sign-in lengths, limits) apply to every API call.
+  await loadSettings(c.env.DB);
   c.set("user", await loadSession(c));
   const user = c.get("user");
   if (c.env.API_LIMIT) {
@@ -62,6 +66,7 @@ app.route("/api/users", users);
 app.route("/api/machines", machines);
 app.route("/api/boards", boards);
 app.route("/api/prefs", prefs);
+app.route("/api/settings", settings);
 app.route("/api/files", files);
 app.route("/api/catalog", catalog);
 app.route("/api/customers", customers);
