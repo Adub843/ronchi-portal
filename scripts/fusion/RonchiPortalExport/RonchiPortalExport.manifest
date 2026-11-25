@@ -1,0 +1,11 @@
+{
+  "autodeskProduct": "Fusion",
+  "type": "addin",
+  "id": "8d0f6a3e-6c52-4c0e-9d1b-ronchiportal01",
+  "author": "Ronchi America",
+  "description": { "": "Turns CAD assemblies dropped in a folder into STEP files for the Ronchi Portal parts catalog." },
+  "version": "1.0.0",
+  "runOnStartup": true,
+  "supportedOS": "windows|mac",
+  "editEnabled": true
+}

@@ -18,7 +18,8 @@ interface OcctNode {
   children: OcctNode[];
 }
 
-export async function stepToGlb(file: File): Promise<{ glb: Blob; parts: number; names: string[] }> {
+/** Read a STEP file into a three.js object tree (Y-up), keeping the CAD names on the nodes. */
+export async function stepToObject(file: File): Promise<{ root: THREE.Object3D; parts: number; names: string[]; dispose: () => void }> {
   const occt = await occtimportjs({ locateFile: () => wasmUrl });
   const res = occt.ReadStepFile(new Uint8Array(await file.arrayBuffer()), {
     linearUnit: "millimeter",
@@ -62,13 +63,54 @@ export async function stepToGlb(file: File): Promise<{ glb: Blob; parts: number;
     for (const c of n.children) g.add(build(c));
     return g;
   };
-  const root = build(res.root);
+  const top = build(res.root);
   // CAD is Z-up; the viewer is Y-up.
-  root.rotation.x = -Math.PI / 2;
+  top.rotation.x = -Math.PI / 2;
+  const root = new THREE.Group();
+  root.add(top);
+  root.updateMatrixWorld(true);
+  const dispose = () => {
+    top.traverse((o) => (o as THREE.Mesh).isMesh && (o as THREE.Mesh).geometry.dispose());
+    mats.forEach((m) => m.dispose());
+  };
+  return { root, parts, names: [...names], dispose };
+}
+
+/**
+ * One node of a model as its own GLB, placed where it sits in the whole model so every assembly
+ * keeps the same orientation. The node itself is not moved or changed.
+ */
+export async function objectToGlb(node: THREE.Object3D): Promise<Blob> {
+  node.updateWorldMatrix(true, false);
+  const holder = new THREE.Group();
+  holder.applyMatrix4(node.parent ? node.parent.matrixWorld : new THREE.Matrix4());
+  const parent = node.parent;
+  holder.add(node);
   const scene = new THREE.Scene();
-  scene.add(root);
-  const out = (await new GLTFExporter().parseAsync(scene, { binary: true })) as ArrayBuffer;
-  root.traverse((o) => (o as THREE.Mesh).isMesh && (o as THREE.Mesh).geometry.dispose());
-  mats.forEach((m) => m.dispose());
-  return { glb: new Blob([out], { type: "model/gltf-binary" }), parts, names: [...names] };
+  scene.add(holder);
+  try {
+    const out = (await new GLTFExporter().parseAsync(scene, { binary: true })) as ArrayBuffer;
+    return new Blob([out], { type: "model/gltf-binary" });
+  } finally {
+    // Put the node back where it was.
+    if (parent) parent.add(node);
+    else holder.remove(node);
+  }
+}
+
+export async function stepToGlb(file: File): Promise<{ glb: Blob; parts: number; names: string[] }> {
+  const r = await stepToObject(file);
+  try {
+    return { glb: await objectToGlb(r.root), parts: r.parts, names: r.names };
+  } finally {
+    r.dispose();
+  }
+}
+
+/** Read a GLB file into a three.js object tree. */
+export async function glbToObject(file: File): Promise<THREE.Object3D> {
+  const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+  const gltf = await new GLTFLoader().parseAsync(await file.arrayBuffer(), "");
+  gltf.scene.updateMatrixWorld(true);
+  return gltf.scene;
 }

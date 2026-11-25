@@ -17,6 +17,7 @@ import { TILE } from "../../catalog/icons";
 import { SheetView } from "../../catalog/SheetView";
 import type { Row } from "../../catalog/PartsList";
 import { codeOf } from "../../catalog/codes";
+import { findAssemblies } from "../../catalog/split";
 import { w, type Word } from "../../catalog/words";
 import { linkSubAssemblies, readChapter11, type PageText } from "../../../src/shared/catalog/chapter11";
 import { cleanPartCode, type ParsedSheet } from "../../../src/shared/catalog/model";
@@ -143,6 +144,37 @@ function CatalogMachine({ id, me }: { id: string; me: Me }) {
       setBusy(null);
     }
   }
+  /** One 3D model of the whole machine: each assembly in it goes onto the parts list with its number. */
+  async function wholeModel(file: File) {
+    let dispose = () => {};
+    try {
+      setBusy(t("Reading the 3D file. A whole machine can take a few minutes…"));
+      const step = await import("../catalog/step");
+      let root;
+      if (/\.glb$/i.test(file.name)) root = await step.glbToObject(file);
+      else ({ root, dispose } = await step.stepToObject(file));
+      const byCode = new Map<string, string[]>();
+      for (const s of data.sheets as { id: string; code: string | null }[]) if (s.code) byCode.set(s.code, [...(byCode.get(s.code) ?? []), s.id]);
+      const hits = findAssemblies(root, byCode.keys());
+      if (!hits.size) throw new Error(t("None of this machine's assembly numbers are in the 3D file. Check the CAD names start with the part number."));
+      const jobs = [...hits].flatMap(([code, node]) => (byCode.get(code) ?? []).map((id) => ({ id, node })));
+      let done = 0, tooBig = 0;
+      for (const j of jobs) {
+        setBusy(t("Saving 3D on parts list {n} of {total}…", { n: done + tooBig + 1, total: jobs.length }));
+        const glb = await step.objectToGlb(j.node);
+        if (glb.size > 95 * 1024 * 1024) { tooBig++; continue; }
+        await apiPut(`/catalog/sheets/${enc(j.id)}/model`, glb, "model/gltf-binary");
+        done++;
+      }
+      toast(t("3D added to {n} parts lists", { n: done }) + (tooBig ? " · " + t("{n} were too big (over 95 MB)", { n: tooBig }) : ""));
+      reload();
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      dispose();
+      setBusy(null);
+    }
+  }
   async function unpublish() {
     if (!confirm(t("Take this catalog off the customer parts site?"))) return;
     try {
@@ -168,6 +200,12 @@ function CatalogMachine({ id, me }: { id: string; me: Me }) {
         <span className="row" style={{ gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
           {editor && <button className="btn small" onClick={() => setImporting(!importing)}>{importing ? t("Close import") : t("Import from manual")}</button>}
           {editor && <button className="btn small" onClick={() => setAdding(!adding)}>{t("Add a drawing")}</button>}
+          {editor && data.sheets.some((s: any) => s.code) && (
+            <label className="btn small" title={t("One STEP or GLB file of the whole machine or a big assembly. Each assembly in it goes onto the parts list with the same number.")}>
+              {t("Add 3D for the whole machine")}
+              <input hidden type="file" accept=".step,.stp,.glb" disabled={!!busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) wholeModel(f); }} />
+            </label>
+          )}
           {editor && data.sheets.length > 0 && <button className="btn small primary" disabled={!!busy} onClick={publish}>{t("Publish to customers")}</button>}
           {editor && m.catalog_published_at && <button className="btn small danger" disabled={!!busy} onClick={unpublish}>{t("Unpublish")}</button>}
         </span>
