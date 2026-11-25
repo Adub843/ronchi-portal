@@ -60,6 +60,18 @@ items most worth doing come first. Each one says what it would change and what i
   is scanned before it is published, but the drawing images are copied as they are. A title block
   could show a customer's name (unconfirmed). Text recognition on each drawing before publishing
   would close this gap.
+- **Chapter 11 reading (catalog).** A parts list's own number is taken as the first part code found
+  outside the table, so a code printed on the drawing could be used instead
+  (src/shared/catalog/chapter11.ts:225-243). Any matching number outside the table also counts as a
+  balloon, including dimensions and title-block numbers (chapter11.ts:266-281). Both need checking
+  against a few real manuals.
+- **3D model node names aren't checked for customer names.** The names inside a GLB model reach
+  customers without the customer-name check; only the 3D part names typed in the portal are checked.
+- **Removed part pictures stay in storage.** A picture removed in the portal stays on the parts site
+  as an unreachable file. A cleanup job would delete it.
+- **Fusion views fix not yet run in Fusion.** The change that takes the whole-assembly views last (so
+  they are centred) is written but hasn't been run in Fusion: Fusion was busy with another job. Run
+  `node scripts/fusion-renders.mjs --demo` on the NUC once Fusion is free.
 - **The demo file is 15 MB.** The preview inlines the 3D and PDF readers. Loading them only when a
   catalog page opens would make the preview, and the real app's first load, faster.
 - **The Ronchi watermark** behind the cards on every page is busy compared with the reference apps.
@@ -70,6 +82,11 @@ items most worth doing come first. Each one says what it would change and what i
 - Parts orders and sales tracking (/parts-orders) and Shipping and receiving (/shipping), modeled on
   Prophet 21, Acumatica, Odoo, inFlow, NetSuite, ShipStation, Freightview and Flexport (research in
   docs/research).
+- Fusion pictures for the parts catalog: Fusion makes one picture of each part and four views of
+  each assembly from a STEP file (scripts/fusion-renders.mjs), and "Add Fusion pictures" puts them
+  on the matching parts. They reach customers only for their own machines. Also 4 catalog fixes:
+  3D kept on re-import, 3D part names checked before publishing, a mistyped assembly number refused,
+  and no blank viewer.
 - The Ronchi workbook on every work order: time sheet, service report with photos and customer
   signature, job chat, and the reviewers' page (/reports). Everything saves as you type.
 
