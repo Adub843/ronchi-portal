@@ -213,34 +213,34 @@ describe("parts orders", () => {
     }
   });
 
-  it("counts what Shipping has shipped and received for each line, once that section exists", async () => {
+  it("counts what Shipping receives and ships for each line, and moves the order on by itself", async () => {
     const sales = await person("sales");
-    const { data } = await sales.json("/api/parts-orders", { body: ORDER });
-    const page = (await sales.json(`/api/parts-orders/${data.id}`)).data;
+    const { data } = await sales.json("/api/parts-orders", { body: { ...ORDER, status: "ordered" } });
+    let page = (await sales.json(`/api/parts-orders/${data.id}`)).data;
     expect(page.shipments).toEqual([]);
     const [l1, l2] = page.lines;
-    // The shipping tables (built in the Shipping work); made here in their shape if they aren't there yet.
-    const db = env.DB;
-    await db.batch([
-      db.prepare("CREATE TABLE IF NOT EXISTS shipments (id TEXT PRIMARY KEY, number TEXT, direction TEXT, status TEXT, carrier TEXT, tracking TEXT, source_type TEXT, source_id TEXT, removed_at TEXT)"),
-      db.prepare("CREATE TABLE IF NOT EXISTS shipment_lines (id TEXT PRIMARY KEY, shipment_id TEXT, source_type TEXT, source_id TEXT, part_code TEXT, description TEXT, qty REAL, qty_received REAL)"),
-    ]);
-    const cols = async (t: string) => (await db.prepare(`SELECT name FROM pragma_table_info('${t}')`).all<{ name: string }>()).results.map((r) => r.name);
-    const put = async (t: string, row: Record<string, unknown>) => {
-      const have = await cols(t);
-      const keys = Object.keys(row).filter((k) => have.includes(k));
-      await db.prepare(`INSERT INTO ${t} (${keys.join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`).bind(...keys.map((k) => row[k])).run();
-    };
-    const t = new Date().toISOString();
-    const base = { created_at: t, updated_at: t, revision: 1, customer: "Acme Labs", party: "Acme Labs" };
-    await put("shipments", { ...base, id: "s-in", number: "R-1", direction: "in", status: "received", source_type: "parts_order", source_id: data.id });
-    await put("shipment_lines", { id: "sl-1", shipment_id: "s-in", source_type: "parts_order_line", source_id: l1.id, part_code: l1.part_code, qty: 12, qty_received: 8, line_no: 1 });
-    await put("shipments", { ...base, id: "s-out", number: "S-1", direction: "out", status: "shipped", carrier: "UPS", tracking: "1ZABC", source_type: "parts_order", source_id: data.id });
-    await put("shipment_lines", { id: "sl-2", shipment_id: "s-out", source_type: "parts_order_line", source_id: l2.id, part_code: l2.part_code, qty: 2, qty_received: 0, line_no: 1 });
-    const after = (await sales.json(`/api/parts-orders/${data.id}`)).data;
-    expect(after.lines.map((l: any) => [l.qty_received, l.qty_shipped])).toEqual([[8, 0], [0, 2]]);
-    expect(after.shipments.map((s: any) => s.number).sort()).toEqual(["R-1", "S-1"]);
+    // The Italian line comes in from the supplier and is checked in through Shipping.
+    const inbound = await sales.json("/api/shipping", { body: { direction: "in", kind: "supplier", party: "Ronchi Mario (Italy)", lines: [{ part_code: l1.part_code, description: l1.description, qty: 12, source_type: "parts_order_line", source_id: l1.id }] } });
+    expect(inbound.status, JSON.stringify(inbound.data)).toBe(200);
+    const s1 = (await sales.json(`/api/shipping/${inbound.data.id}`)).data;
+    const got = await sales.json(`/api/shipping/${inbound.data.id}/receive`, { body: { revision: s1.shipment.revision, lines: [{ id: s1.lines[0].id, qty: 12 }] } });
+    expect(got.status, JSON.stringify(got.data)).toBe(200);
+    page = (await sales.json(`/api/parts-orders/${data.id}`)).data;
+    expect(page.lines.map((l: any) => l.qty_received)).toEqual([12, 0]);
+    expect(page.order.status).toBe("ready"); // the other line is from stock, so everything is here
+    // Ship it with the lines Shipping suggests for this order.
+    const pre = (await sales.json(`/api/shipping/prefill?source=parts_order&id=${data.id}`)).data;
+    expect(pre.lines.map((l: any) => [l.source_id, l.qty])).toEqual([[l1.id, 12], [l2.id, 2]]);
+    const out = await sales.json("/api/shipping", { body: { ...pre, direction: "out", status: "shipped", carrier: "ups", tracking: "1ZABC" } });
+    expect(out.status, JSON.stringify(out.data)).toBe(200);
+    page = (await sales.json(`/api/parts-orders/${data.id}`)).data;
+    expect(page.lines.map((l: any) => [l.qty_received, l.qty_shipped])).toEqual([[12, 12], [0, 2]]);
+    expect(page.order.status).toBe("shipped");
+    expect(page.order.shipped_at).toBeTruthy();
+    expect(page.history[0]).toMatchObject({ action: "parts_order.update", changes: { status: ["ready", "shipped"] } });
+    expect(page.shipments.length).toBe(2);
   });
+
   it("moves the status on by itself as parts are ordered, arrive and ship, and never backwards", async () => {
     const sales = await person("sales");
     const { data } = await sales.json("/api/parts-orders", { body: { ...ORDER, status: "ordered" } });

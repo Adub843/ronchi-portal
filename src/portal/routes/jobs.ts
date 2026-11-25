@@ -220,7 +220,8 @@ jobs.delete("/files/:fileId", async (c) => {
 jobs.post("/:id/files", async (c) => {
   const u = requirePerm(c, "jobs.view");
   const job = await loadJob(c.env.DB, c.req.param("id"));
-  if (!has(u, "files.send")) fail(403, "You can't add photos or files. Ask an admin.");
+  // Adding files to a job is part of jobs.view ("see jobs ... and add files to them", roles.ts), so it keeps
+  // working when Chats and boards (which hold files.send) are switched off.
   let form: FormData;
   try {
     form = await c.req.raw.formData();

@@ -81,7 +81,7 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
   async function save(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await api(`/machines/${encodeURIComponent(id)}`, { method: "PATCH", body: edit });
+      await api(`/machines/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...edit, updated_at: m.updated_at } });
       setEdit(null);
       reload();
       toast(t("Saved"));

@@ -93,10 +93,19 @@ machines.patch("/:id", async (c) => {
   const id = c.req.param("id");
   const before = await c.env.DB.prepare("SELECT * FROM machines WHERE id = ?").bind(id).first();
   if (!before) fail(404, "Not found.");
-  const f = fields(await body(c));
-  await c.env.DB.prepare("UPDATE machines SET model = ?, customer = ?, site = ?, notes = ?, sharepoint_url = ?, updated_at = ? WHERE id = ?")
-    .bind(f.model, f.customer, f.site, f.notes, f.sharepoint_url, now(), id)
-    .run();
+  const b = await body(c);
+  // Someone else saved this machine after this person opened it: don't overwrite their change.
+  if (typeof b.updated_at === "string" && b.updated_at !== before.updated_at) fail(409, "Someone else changed this machine while you were editing. Reload to see their change, then edit again.");
+  const all = fields(b);
+  // Only the fields that were sent change; a field left out keeps what it had.
+  const sent: Record<string, string> = { model: "model", customer: "customer", site: "site", notes: "notes", sharepointUrl: "sharepoint_url" };
+  const f = Object.fromEntries(Object.entries(sent).filter(([k]) => k in b).map(([, col]) => [col, all[col as keyof typeof all]]));
+  const cols = Object.keys(f);
+  if (cols.length) {
+    await c.env.DB.prepare(`UPDATE machines SET ${cols.map((k) => `${k} = ?`).join(", ")}, updated_at = ? WHERE id = ?`)
+      .bind(...cols.map((k) => f[k] ?? null), now(), id)
+      .run();
+  }
   await audit(c.env.DB, { userId: u.id, action: "machine.update", targetType: "machine", targetId: id, detail: { before, after: f }, ip: c.get("ip") });
   return c.json({ ok: true });
 });

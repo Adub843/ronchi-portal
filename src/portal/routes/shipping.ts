@@ -21,6 +21,7 @@ import {
   MAX_LINES, nextNumber, packageTotals, receiveStatus, SHIP_MAX, SHIP_TEXT_FIELDS, trackingLinks, type Direction, type Package, type Source,
 } from "../../shared/shipping";
 import type { AppEnv, SessionUser } from "../env";
+import { syncPartsOrdersForShipment } from "./parts-orders";
 import { audit, now } from "../lib/db";
 import { body, fail, has, requirePerm } from "../lib/http";
 import { isEmail } from "../lib/mail";
@@ -422,6 +423,7 @@ shipping.post("/", async (c) => {
   }
   await audit(db, { userId: u.id, action: "shipment.create", targetType: "shipment", targetId: id, detail: { number, direction, ...f, lines: lines.length }, ip: c.get("ip") });
   if (direction === "out" && (f.status === "shipped" || f.status === "delivered")) await tellChangePartOrder(c, await loadShipment(db, id), u, "shipped");
+  await syncPartsOrdersForShipment(db, id, u.id, c.get("ip"));
   return c.json({ id, number });
 });
 
@@ -482,6 +484,7 @@ shipping.patch("/:id", async (c) => {
   const after = await loadShipment(db, id);
   if (diff.status && after.direction === "out" && (after.status === "shipped" || after.status === "delivered")) await tellChangePartOrder(c, after, u, "shipped");
   if (diff.status && after.direction === "in" && after.status === "received") await tellChangePartOrder(c, after, u, "received");
+  await syncPartsOrdersForShipment(db, id, u.id, c.get("ip"));
   return c.json({ ok: true, revision: after.revision });
 });
 
@@ -537,6 +540,7 @@ shipping.post("/:id/receive", async (c) => {
   await audit(db, { userId: u.id, action: "shipment.receive", targetType: "shipment", targetId: id, detail: { received: got.filter((g) => g.qty || g.bin || g.hold !== null).map((g) => ({ item: byId.get(g.id)!.part_code ?? byId.get(g.id)!.description, qty: g.qty, bin: g.bin, hold: g.hold, hold_note: g.hold_note })), status, problem, note }, ip: c.get("ip") });
   const after = await loadShipment(db, id);
   if (status === "received" || s.kind === "samples") await tellChangePartOrder(c, after, u, "received");
+  await syncPartsOrdersForShipment(db, id, u.id, c.get("ip"));
   return c.json({ ok: true, revision: after.revision, status });
 });
 

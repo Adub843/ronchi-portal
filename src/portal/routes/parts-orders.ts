@@ -123,7 +123,7 @@ async function shippedFromShipping(db: D1Database, orderId?: string): Promise<Ma
   const { results } = await db.prepare(
     `SELECT l.source_id AS line_id,
             SUM(CASE WHEN s.direction = 'out' AND s.status IN ('shipped','delivered') THEN l.qty ELSE 0 END) AS shipped,
-            SUM(CASE WHEN s.direction = 'in' AND s.status IN ('partly_received','received','closed') THEN COALESCE(l.qty_received, 0) ELSE 0 END) AS received
+            SUM(CASE WHEN s.direction = 'in' AND s.status != 'cancelled' THEN COALESCE(l.qty_received, 0) ELSE 0 END) AS received
        FROM shipment_lines l JOIN shipments s ON s.id = l.shipment_id
       WHERE l.source_type = 'parts_order_line' AND s.removed_at IS NULL
         ${orderId ? "AND l.source_id IN (SELECT id FROM parts_order_lines WHERE order_id = ?)" : ""}
@@ -137,6 +137,36 @@ async function shippedFromShipping(db: D1Database, orderId?: string): Promise<Ma
 function merged(l: Row, ship: Map<string, { shipped: number; received: number }>): Row {
   const s = ship.get(l.id);
   return s ? { ...l, qty_received: Math.max(l.qty_received, s.received), qty_shipped: Math.max(l.qty_shipped, s.shipped) } : l;
+}
+
+/**
+ * After Shipping saves a shipment: move each parts order it carries parts for forward, the same way a
+ * save on the order would (autoStatus: only forward, only from Customer PO received onward). Written to
+ * the order's history as done by that shipment. Shipping calls this; nothing here changes a shipment.
+ */
+export async function syncPartsOrdersForShipment(db: D1Database, shipmentId: string, userId: string, ip: string): Promise<void> {
+  if (!(await shippingReady(db))) return;
+  const s = await db.prepare("SELECT number FROM shipments WHERE id = ?").bind(shipmentId).first<{ number: string }>();
+  const { results } = await db.prepare(
+    `SELECT DISTINCT p.order_id FROM shipment_lines l JOIN parts_order_lines p ON p.id = l.source_id
+      WHERE l.shipment_id = ? AND l.source_type = 'parts_order_line'`,
+  ).bind(shipmentId).all<{ order_id: string }>();
+  for (const { order_id } of results) {
+    const o = await db.prepare("SELECT * FROM parts_orders WHERE id = ? AND removed_at IS NULL").bind(order_id).first<Row>();
+    if (!o) continue;
+    const ship = await shippedFromShipping(db, order_id);
+    const ls = (await db.prepare(`SELECT ${LINE_COLS} FROM parts_order_lines WHERE order_id = ?`).bind(order_id).all<Row>()).results;
+    const next = autoStatus(o.status as Status, ls.map((l) => merged({ ...l, drop_ship: !!l.drop_ship }, ship) as Line));
+    if (!next) continue;
+    const t = now();
+    const set: Row = { status: next };
+    for (const stamp of stampsFor(next)) if (!o[stamp]) set[stamp] = t;
+    const keys = Object.keys(set);
+    const r = await db.prepare(`UPDATE parts_orders SET ${keys.map((k) => `${k} = ?, `).join("")}revision = revision + 1, updated_by = ?, updated_at = ? WHERE id = ? AND revision = ?`)
+      .bind(...keys.map((k) => set[k]), userId, t, order_id, o.revision).run();
+    if (!r.meta.changes) continue; // someone saved the order at the same moment; their save runs autoStatus too
+    await audit(db, { userId, action: "parts_order.update", targetType: "parts_order", targetId: order_id, detail: { changes: { status: [o.status, next] }, by: `shipment ${s?.number ?? ""}`.trim() }, ip });
+  }
 }
 
 function hidePrices<T extends Row>(row: T): T {
