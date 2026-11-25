@@ -91,9 +91,29 @@ export function adjustable(perm: Permission): boolean {
 /** A person's own changes: true = switched on, false = switched off. Anything missing follows the role. */
 export type AccessChanges = Partial<Record<Permission, boolean>>;
 
+/** Built-in role ids (the rest live in the roles table). */
+export function isBuiltInRole(value: unknown): value is Role {
+  return isRole(value);
+}
+
+/**
+ * What a role allows. `saved` is the role's switches from the roles table (a JSON list), when it
+ * has a row there: a role an admin created, or a built-in role whose switches were changed.
+ * Admin always has everything; no other role can hold the admin-only permissions.
+ */
+export function rolePermissions(role: string, saved?: string | null): Set<Permission> {
+  if (role === "admin") return new Set(ALL);
+  if (saved != null) {
+    let list: unknown = [];
+    try { list = JSON.parse(saved); } catch { list = []; }
+    return new Set((Array.isArray(list) ? list : []).filter((p): p is Permission => isPermission(p) && adjustable(p)));
+  }
+  return new Set(isRole(role) ? PERMISSIONS[role] : []);
+}
+
 /** Everything one person may do: their role, plus their own changes. */
-export function effective(role: Role, changes: AccessChanges | null | undefined): Set<Permission> {
-  const out = new Set(PERMISSIONS[role] ?? []);
+export function effective(role: string, changes: AccessChanges | null | undefined, saved?: string | null): Set<Permission> {
+  const out = rolePermissions(role, saved);
   if (role === "admin" || !changes) return out;
   for (const [perm, on] of Object.entries(changes)) {
     if (!isPermission(perm) || !adjustable(perm)) continue;
@@ -162,3 +182,6 @@ export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label:
 export function isRole(value: unknown): value is Role {
   return typeof value === "string" && Object.prototype.hasOwnProperty.call(ROLES, value);
 }
+
+/** Roles an admin can't rename or delete, and whose switches can't change (admin). */
+export const LOCKED_ROLES: ReadonlySet<string> = new Set(["admin"]);

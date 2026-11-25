@@ -10,9 +10,9 @@ import { Menu, type MenuItem } from "../components/Menu";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad } from "../components/ui";
 import { loc, t } from "../i18n";
 import { navigate } from "../router";
+import { roleIds, roleLabel, useRoleNames } from "../roles";
 
 type Kind = "board" | "chat";
-const ROLE_LABELS: Record<string, string> = { admin: "Admin", manager: "Managers", billing: "Billing", scheduling: "Scheduling", service: "Service", sales: "Sales", engineering: "Engineering", tech: "Field service engineers" };
 const base = (k: Kind) => (k === "chat" ? "/chats" : "/boards");
 
 /** A chat's name: the name it was given, or the other people in it. */
@@ -23,7 +23,7 @@ export function chatTitle(b: { kind?: string; name: string; members?: { id: stri
   return others.map((m) => m.name.split(" ")[0]).join(", ") || t("Just you");
 }
 
-const audienceText = (audience: string | null) => (audience ? (JSON.parse(audience) as string[]).map((r) => t(ROLE_LABELS[r] ?? r)).join(", ") : t("All staff"));
+const audienceText = (audience: string | null) => (audience ? (JSON.parse(audience) as string[]).map((r) => roleLabel(r, true)).join(", ") : t("All staff"));
 
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
@@ -156,13 +156,14 @@ function ConversationList({ me, kind }: { me: Me; kind: Kind }) {
 }
 
 function RolePicker({ roles, setRoles }: { roles: string[]; setRoles: (r: string[]) => void }) {
+  useRoleNames();
   return (
     <fieldset className="field">
       <label>{t("Who can see it")}</label>
       <div className="row">
-        {Object.entries(ROLE_LABELS).map(([k, v]) => (
+        {roleIds().map((k) => (
           <label key={k} className="row" style={{ gap: 4 }}>
-            <input type="checkbox" checked={roles.includes(k)} onChange={(e) => setRoles(e.target.checked ? [...roles, k] : roles.filter((r) => r !== k))} /> {t(v)}
+            <input type="checkbox" checked={roles.includes(k)} onChange={(e) => setRoles(e.target.checked ? [...roles, k] : roles.filter((r) => r !== k))} /> {roleLabel(k, true)}
           </label>
         ))}
       </div>
@@ -212,7 +213,7 @@ function PeoplePicker({ picked, setPicked, exclude = [] }: { picked: string[]; s
           <label key={p.id} className="picker-row">
             <input type="checkbox" checked={picked.includes(p.id)} onChange={(e) => setPicked(e.target.checked ? [...picked, p.id] : picked.filter((x) => x !== p.id))} />
             <span className="avatar person" aria-hidden="true">{initials(p.name)}</span>
-            <span><b>{p.name}</b><small className="muted">{t(ROLE_LABELS[p.role] ?? p.role)}</small></span>
+            <span><b>{p.name}</b><small className="muted">{roleLabel(p.role)}</small></span>
           </label>
         ))}
         {people.data && !list.length && <Empty>{t("Nothing matches.")}</Empty>}
@@ -414,7 +415,7 @@ export function BoardPage({ id, me }: { id: string; me: Me }) {
   const others = (data.members ?? []).filter((m: any) => m.id !== me.id);
   const direct = kind === "chat" && !b.name && others.length <= 1;
   const subtitle = kind === "chat"
-    ? direct ? t(ROLE_LABELS[others[0]?.role] ?? others[0]?.role ?? "") : [t("You"), ...others.map((m: any) => m.name)].join(", ")
+    ? direct ? roleLabel(others[0]?.role) : [t("You"), ...others.map((m: any) => m.name)].join(", ")
     : [b.locked ? t("Announcements") : null, b.description ?? audienceText(b.audience)].filter(Boolean).join(" · ");
   const byId = new Map(posts.map((p) => [p.id, p]));
   const pinned = posts.filter((p) => p.pinned).at(-1);
@@ -703,7 +704,7 @@ function PeoplePanel({ data, me, direct, startAdding, onClose, onChanged }: { da
             <span className="avatar person" aria-hidden="true">{initials(m.name)}</span>
             <span className="people-text">
               <b>{m.id === me.id ? t("You") : m.name}</b>
-              <small className="muted">{[t(ROLE_LABELS[m.role] ?? m.role ?? ""), m.id === b.created_by ? t("Started this chat") : null].filter(Boolean).join(" · ")}</small>
+              <small className="muted">{[roleLabel(m.role), m.id === b.created_by ? t("Started this chat") : null].filter(Boolean).join(" · ")}</small>
             </span>
             {data.canModerate && m.id !== me.id && !direct && (confirm === m.id ? (
               <span className="people-confirm">

@@ -27,7 +27,8 @@ export interface SessionUser {
   id: string;
   email: string;
   name: string;
-  role: Role;
+  /** A built-in role id (see lib/roles.ts) or the id of a role an admin made (table roles). */
+  role: string;
   /** Everything this person may do: their role plus any per-person changes. */
   perms: ReadonlySet<Permission>;
   sessionHash: string;
