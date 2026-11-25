@@ -8,6 +8,7 @@ import { useRoleNames } from "../roles";
 export function Home({ me, unread }: { me: Me; unread: Unread }) {
   const boards = useLoad(() => (can(me, "boards.use") ? api("/boards") : Promise.resolve({ boards: [] })));
   const orders = useLoad(() => (can(me, "orders.view") ? api("/change-parts") : Promise.resolve(null)));
+  const sales = useLoad(() => (can(me, "cpsales.view") ? api("/change-parts/sales") : Promise.resolve(null)));
   const hour = new Date().getHours();
   useRoleNames();
   const greet = hour < 12 ? t("Good morning") : hour < 18 ? t("Good afternoon") : t("Good evening");
@@ -45,11 +46,12 @@ export function Home({ me, unread }: { me: Me; unread: Unread }) {
             <span className="muted">{t("Find any machine by number, model or customer.")}</span>
           </Link>
         )}
-        {can(me, "orders.view") && (
-          <Link to="/change-parts" className="panel tile">
-            <h2>{t("Change-part orders")}</h2>
-            <span className="stat"><span className="n">{orders.data ? orders.data.orders.filter((o: any) => o.open && o.status !== "Folder only").length : "–"}</span><span className="l">{t("Open jobs")}</span></span>
-            <span className="muted">{t("Every change-part job, from quote to shipped.")}</span>
+        {(can(me, "orders.view") || can(me, "cpsales.view")) && (
+          <Link to={can(me, "orders.view") ? "/change-parts" : "/change-parts/sales"} className="panel tile">
+            <h2>{t("Change parts")}</h2>
+            {can(me, "cpsales.view") && <span className="stat"><span className="n">{sales.data ? sales.data.sales.filter((o: any) => o.open).length : "–"}</span><span className="l">{t("Open sales")}</span></span>}
+            {can(me, "orders.view") && <span className="stat"><span className="n">{orders.data ? orders.data.orders.filter((o: any) => o.open && o.status !== "Folder only").length : "–"}</span><span className="l">{t("Open jobs")}</span></span>}
+            <span className="muted">{t("Every change-part job, from the first request to shipped.")}</span>
           </Link>
         )}
         <Link to="/learn" className="panel tile">

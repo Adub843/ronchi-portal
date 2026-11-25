@@ -234,7 +234,7 @@ the wall fails the build.
 - **Talks to the rest of the portal**: change-part orders, jobs and machines list their shipments and have a
   "Ship this" button that fills in the customer, address and items. Shipping a change-part order fills its ship
   date and moves it to Shipped; receiving its samples fills "samples received". Parts orders read these tables
-  (see the comment at the top of `migrations/portal/0017_shipping.sql`).
+  (see the comment at the top of `migrations/portal/0019_shipping.sql`).
 - **Who**: `shipping.view` (every staff role) and `shipping.edit` (scheduling, service, sales, managers, admins;
   give it to anyone else on People > Access). Section switch `shipping` in the admin controls.
   Code: `src/portal/routes/shipping.ts`, `src/shared/shipping.ts`, `web/src/pages/Shipping.tsx`.

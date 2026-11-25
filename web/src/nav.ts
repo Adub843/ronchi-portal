@@ -5,6 +5,7 @@
 /** Which unread count a menu line shows. Same names as Unread in components/Alerts.tsx. */
 type Count = "boards" | "chats";
 
+/** perm may list several permissions split by "|": any one of them shows the page. */
 export interface NavItem { to: string; label: string; perm?: string; unless?: string; count?: Count; phone?: boolean; workbook?: boolean }
 
 export const NAV: NavItem[] = [
@@ -21,7 +22,8 @@ export const NAV: NavItem[] = [
   // Quote requests open from the Customers page; people who read quotes without managing customers
   // (Billing) get their own menu line instead.
   { to: "/quotes", label: "Quote requests", perm: "quotes.manage", unless: "customers.manage" },
-  { to: "/change-parts", label: "Change parts", perm: "orders.view" },
+  // Sales people and order people both use it, so either permission shows it.
+  { to: "/change-parts", label: "Change parts", perm: "orders.view|cpsales.view" },
   { to: "/shipping", label: "Shipping", perm: "shipping.view" },
   { to: "/people", label: "People", perm: "users.manage" },
   // On phones Portal training and Settings live in the account menu (top right), so the tab bar keeps room for the rest.
@@ -31,5 +33,5 @@ export const NAV: NavItem[] = [
 
 /** The menu lines one person sees: pages their permissions allow, and Work orders only while the workbook is on. */
 export function menuFor(perms: ReadonlySet<string>, switches: { workbook: boolean }): NavItem[] {
-  return NAV.filter((n) => (!n.perm || perms.has(n.perm)) && (!n.unless || !perms.has(n.unless)) && (!n.workbook || switches.workbook));
+  return NAV.filter((n) => (!n.perm || n.perm.split("|").some((p) => perms.has(p))) && (!n.unless || !perms.has(n.unless)) && (!n.workbook || switches.workbook));
 }

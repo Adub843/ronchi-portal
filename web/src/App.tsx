@@ -104,6 +104,7 @@ export function App() {
   else if (path === "/shipping/new") page = <NewShipment key={path} />;
   else if (/^\/shipping\/[A-Za-z0-9_-]+$/.test(path)) page = <ShipmentPage key={path} id={path.slice(10)} me={me} />;
   else if (section === "/shipping") page = <Shipping me={me} />;
+  else if (m?.[1] === "change-parts" && m[2] === "sales") page = <ChangeParts me={me} tab="sales" />;
   else if (m?.[1] === "change-parts") page = <ChangePartPage key={m[2]} id={m[2]!} me={me} />;
   else if (section === "/chats") page = <Chats me={me} />;
   else if (section === "/boards") page = <Boards me={me} />;
@@ -124,7 +125,7 @@ export function App() {
     "sep",
     { label: t("Portal training"), onSelect: () => navigate("/learn") },
     { label: t("Settings"), onSelect: () => navigate("/settings") },
-    { label: t("Admin controls"), hint: t("Admin"), onSelect: () => navigate("/settings/admin"), hidden: !can(me, "settings.manage") },
+    { label: t("Command center"), hint: t("Owner"), onSelect: () => navigate("/settings/admin"), hidden: !can(me, "settings.manage") },
     { label: t("People and access"), hint: t("Admin"), onSelect: () => navigate("/people"), hidden: !can(me, "users.manage") },
     { label: t("Archived boards"), hint: t("Admin"), onSelect: () => navigate("/boards"), hidden: !can(me, "boards.moderate") || !can(me, "users.manage") },
     "sep",

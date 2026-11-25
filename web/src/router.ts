@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 export const DEMO = import.meta.env.MODE === "demo";
 
 // "#settings" is reserved where the demo is shown, so the demo uses "#my-settings".
-const HASH_ALIAS: Record<string, string> = { "my-settings": "settings", "admin-controls": "settings/admin" };
+const HASH_ALIAS: Record<string, string> = { "my-settings": "settings", "admin-controls": "settings/admin", "command-center": "settings/admin" };
 
 function hashToPath(hash: string): string {
   const h = hash.replace(/^#/, "");
@@ -27,7 +27,7 @@ export function hrefFor(path: string): string {
   const m = /^\/(boards|machines|chats|change-parts|jobs|work-orders)\/(.+)$/.exec(path);
   if (m) return `#${m[1]!.slice(0, -1)}-${m[2]}`;
   const name = path.slice(1);
-  return `#${name === "settings" ? "my-settings" : name === "settings/admin" ? "admin-controls" : name}`;
+  return `#${name === "settings" ? "my-settings" : name === "settings/admin" ? "command-center" : name}`;
 }
 
 function currentPath(): string {
