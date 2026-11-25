@@ -223,6 +223,13 @@ export const DYNAMIC: string[] = [
 ];
 
 export const ES: Record<string, string> = {
+  "3D added to {n} parts lists": "3D añadido a {n} listas de piezas",
+  "Add 3D for the whole machine": "Añadir 3D de toda la máquina",
+  "None of this machine's assembly numbers are in the 3D file. Check the CAD names start with the part number.": "Ninguno de los números de conjunto de esta máquina está en el archivo 3D. Compruebe que los nombres del CAD empiezan por el número de pieza.",
+  "One STEP or GLB file of the whole machine or a big assembly. Each assembly in it goes onto the parts list with the same number.": "Un archivo STEP o GLB de toda la máquina o de un conjunto grande. Cada conjunto va a la lista de piezas con el mismo número.",
+  "Reading the 3D file. A whole machine can take a few minutes…": "Leyendo el archivo 3D. Una máquina completa puede tardar unos minutos…",
+  "Saving 3D on parts list {n} of {total}…": "Guardando 3D en la lista de piezas {n} de {total}…",
+  "{n} were too big (over 95 MB)": "{n} eran demasiado grandes (más de 95 MB)",
   "Published to the customer help center. Customer names hidden: {n}": "Publicado en el centro de ayuda para clientes. Nombres de clientes ocultos: {n}",
   "Customers see [customer] or [site] in place of these names: {names}. Staff see the whole article.": "Los clientes ven [customer] o [site] en lugar de estos nombres: {names}. El personal ve el artículo completo.",
   "Machine numbers and passwords must come out before customers can see this. Tick an email address or phone number only if it is Ronchi's own.": "Los números de máquina y las contraseñas deben quitarse antes de que los clientes puedan verlo. Marque un correo o un teléfono solo si es de Ronchi.",
@@ -1149,6 +1156,13 @@ export const ES: Record<string, string> = {
 };
 
 export const IT: Record<string, string> = {
+  "3D added to {n} parts lists": "3D aggiunto a {n} distinte ricambi",
+  "Add 3D for the whole machine": "Aggiungi 3D dell'intera macchina",
+  "None of this machine's assembly numbers are in the 3D file. Check the CAD names start with the part number.": "Nessuno dei codici di gruppo di questa macchina è nel file 3D. Controlla che i nomi nel CAD inizino con il codice.",
+  "One STEP or GLB file of the whole machine or a big assembly. Each assembly in it goes onto the parts list with the same number.": "Un file STEP o GLB dell'intera macchina o di un grande gruppo. Ogni gruppo va sulla distinta con lo stesso codice.",
+  "Reading the 3D file. A whole machine can take a few minutes…": "Lettura del file 3D. Una macchina intera può richiedere qualche minuto…",
+  "Saving 3D on parts list {n} of {total}…": "Salvataggio 3D sulla distinta {n} di {total}…",
+  "{n} were too big (over 95 MB)": "{n} erano troppo grandi (oltre 95 MB)",
   "Published to the customer help center. Customer names hidden: {n}": "Pubblicato nel centro assistenza clienti. Nomi di clienti nascosti: {n}",
   "Customers see [customer] or [site] in place of these names: {names}. Staff see the whole article.": "I clienti vedono [customer] o [site] al posto di questi nomi: {names}. Il personale vede l'articolo completo.",
   "Machine numbers and passwords must come out before customers can see this. Tick an email address or phone number only if it is Ronchi's own.": "Numeri macchina e password vanno tolti prima che i clienti possano vederlo. Spunta un'email o un numero di telefono solo se è di Ronchi.",

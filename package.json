@@ -20,6 +20,7 @@
     "invite:first-admin": "node scripts/first-admin.mjs",
     "set:help-key": "node scripts/set-help-key.mjs",
     "build:demo": "vite build --config web/vite.demo.config.ts && node scripts/inline-demo.mjs",
+    "cad:check": "esbuild scripts/cad-check.ts --bundle --platform=node --format=esm --external:occt-import-js --log-level=warning --outfile=node_modules/.cache/cad-check.mjs && node node_modules/.cache/cad-check.mjs",
     "owner": "node scripts/set-owner.mjs"
   },
   "dependencies": {
