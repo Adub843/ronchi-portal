@@ -10,6 +10,8 @@ export class Browser {
   cookie = "";
   ip = `10.0.${Math.floor(++ipCounter / 250)}.${ipCounter % 250}`;
   passkey = new SoftAuthenticator(env.RP_ID, env.ORIGIN);
+  /** What the Worker is given; a test can swap in extra secrets (e.g. the Microsoft connection). */
+  env: typeof env = env;
 
   async fetch(path: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
     const method = init.method ?? (init.body === undefined ? "GET" : "POST");
@@ -20,7 +22,7 @@ export class Browser {
       headers["x-ronchi"] ??= "1";
       headers["content-type"] = "application/json";
     }
-    const res = await app.request(`${env.ORIGIN}${path}`, { method, headers, body: init.body === undefined ? undefined : JSON.stringify(init.body) }, env);
+    const res = await app.request(`${env.ORIGIN}${path}`, { method, headers, body: init.body === undefined ? undefined : JSON.stringify(init.body) }, this.env);
     const set = res.headers.get("set-cookie");
     if (set) {
       const pair = set.split(";")[0]!;

@@ -556,6 +556,8 @@ span.tip{display:inline-flex}
 .sw-where select,.sw-where input:not([type=checkbox]){font:inherit;font-weight:400;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--solid);color:var(--ink);min-width:0;width:100%}
 .sw-newpkg{display:flex;flex-direction:column;gap:6px;padding-left:12px;border-left:3px solid var(--accent-soft)}
 .sw-goes{font-weight:600;margin:0}
+.sw-connection{margin:0 0 12px;padding:8px 12px;border-radius:10px;border:1px solid var(--line,rgba(127,127,127,.3))}
+.sw-connection.on{border-color:var(--ok,#2e9d5b)}
 .sw-dialog .sw-drop{margin:4px 0}
 .sw-uploads li>*{min-width:0}
 @media (max-width:760px){.sw-uploads li{grid-template-columns:1fr auto}.sw-uploads .sw-path{grid-column:1/-1}}

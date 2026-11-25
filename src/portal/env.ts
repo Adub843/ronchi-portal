@@ -25,6 +25,12 @@ export interface Env {
   // says "email isn't set up" and offers to send from the scheduler's own email app.
   EMAIL?: SendEmail;
   MAIL_FROM?: string;      // for example jobs@ronchiamerica.com, on a domain set up for Email Sending
+  // The portal's own Microsoft 365 app (docs/SHAREPOINT.md), so software downloads can come from
+  // SharePoint through the portal. All three are secrets; without them downloads go straight to
+  // SharePoint with each person's own Microsoft sign-in.
+  MS_TENANT_ID?: string;
+  MS_CLIENT_ID?: string;
+  MS_CLIENT_SECRET?: string;
 }
 
 export interface SessionUser {

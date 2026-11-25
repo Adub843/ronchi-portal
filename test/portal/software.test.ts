@@ -1,7 +1,7 @@
 // Software downloads (Aaron, 2026-11-25): admins upload installers and whole program folders into
 // packages such as "New laptop setup"; staff open a package, tick the folders they want and
 // download them all at once. Licensed vendor software stays with signed-in staff.
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { person, sendBytes } from "./helpers";
 
 type P = Awaited<ReturnType<typeof person>>;
@@ -150,5 +150,134 @@ describe("software kept on SharePoint (Aaron, 2026-11-25: \"we dont have to stor
     for (const bad of ["https://evil.example.com/a.exe", "http://ronchiam.sharepoint.com/sites/x/a.exe", "https://ronchiam.sharepoint.com.evil.com/sites/x/a.exe", "javascript:alert(1)", SP]) {
       expect((await admin.json(`/api/software/${id}/links`, { body: { links: [bad] } })).status, bad).toBe(400);
     }
+  });
+});
+
+describe("SharePoint through the portal (Aaron, 2026-11-25: \"just built it and ill do that when i get that log in\")", () => {
+  const SP = "https://ronchiam.sharepoint.com/sites/HelpReferenceDocuments/Shared%20Documents/AB%20Studio%205000%20Software";
+  const MS = { MS_TENANT_ID: "tenant-1", MS_CLIENT_ID: "client-1", MS_CLIENT_SECRET: "secret-1" };
+  const shareId = (url: string) => "u!" + btoa(url).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** A pretend Microsoft: a token, the Graph shares API, and SharePoint's pre-signed download host. */
+  function fakeMicrosoft(opts: { tokenFails?: boolean; folders?: Record<string, { name: string; size?: number; folder?: boolean }[]> } = {}) {
+    const calls: { url: string; headers: Headers }[] = [];
+    const items: Record<string, string> = {}; // item id -> webUrl
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const req = new Request(input, init);
+      const url = req.url;
+      calls.push({ url, headers: req.headers });
+      if (url.startsWith("https://login.microsoftonline.com/")) {
+        if (!url.includes("/tenant-1/")) return Response.json({ error: "invalid_tenant" }, { status: 400 });
+        if (opts.tokenFails) return Response.json({ error: "invalid_client" }, { status: 401 });
+        const form = new URLSearchParams(await req.text());
+        expect(form.get("client_id")).toBe("client-1");
+        expect(form.get("scope")).toBe("https://graph.microsoft.com/.default");
+        return Response.json({ access_token: "tok-1", expires_in: 3600 });
+      }
+      expect(req.headers.get("authorization") ?? "", url).toBe(url.startsWith("https://graph.microsoft.com/") ? "Bearer tok-1" : "");
+      const content = /\/shares\/([^/]+)\/driveItem\/content$/.exec(url);
+      if (content) return new Response(null, { status: 302, headers: { location: `https://ronchiam-my.sharepoint.com/download.aspx?tempauth=xyz&f=${content[1]}` } });
+      if (url.startsWith("https://ronchiam-my.sharepoint.com/download.aspx")) {
+        const range = req.headers.get("range");
+        if (range === "bytes=2-5") return new Response("2345", { status: 206, headers: { "content-range": "bytes 2-5/10", "content-length": "4" } });
+        return new Response("0123456789", { headers: { "content-length": "10", "content-type": "text/html" } });
+      }
+      const share = /\/shares\/([^/?]+)\/driveItem\?/.exec(url);
+      if (share) {
+        const web = Object.keys(opts.folders ?? {}).find((w) => shareId(w) === share[1]);
+        if (!web) return Response.json({ error: { code: "itemNotFound" } }, { status: 404 });
+        items.root = web;
+        return Response.json({ id: "root", name: decodeURIComponent(web.split("/").pop()!), webUrl: web, folder: { childCount: 1 }, parentReference: { driveId: "d1" } });
+      }
+      const kids = /\/drives\/d1\/items\/([^/]+)\/children/.exec(url);
+      if (kids) {
+        const web = items[kids[1]!]!;
+        const value = (opts.folders?.[web] ?? []).map((k, i) => {
+          const id = `${kids[1]}-${i}`;
+          const childWeb = `${web}/${encodeURIComponent(k.name)}`;
+          items[id] = childWeb;
+          return k.folder ? { id, name: k.name, webUrl: childWeb, folder: { childCount: 1 } } : { id, name: k.name, webUrl: childWeb, size: k.size ?? 1, file: {} };
+        });
+        return Response.json({ value });
+      }
+      return new Response("unexpected " + url, { status: 500 });
+    });
+    return calls;
+  }
+
+  async function connected(role: string) {
+    const p = await person(role);
+    p.env = { ...p.env, ...MS };
+    return p;
+  }
+
+  it("once the Microsoft connection is set, Download comes through the portal itself, resumable", async () => {
+    const admin = await connected("admin");
+    const tech = await connected("tech");
+    const id = (await admin.json("/api/software", { body: { name: "AB tunnel" } })).data.id;
+    await admin.json(`/api/software/${id}/links`, { body: { links: [`${SP}/RSLinx%20Classic%204.21.exe`] } });
+    const list = await tech.json(`/api/software/${id}`);
+    expect(list.data.sharepoint).toBe(true);
+    const fid = list.data.files[0].id;
+    const calls = fakeMicrosoft();
+    const res = await tech.fetch(`/api/software/files/${fid}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/octet-stream");
+    expect(res.headers.get("content-disposition")).toContain("RSLinx%20Classic%204.21.exe");
+    expect(res.headers.get("content-length")).toBe("10");
+    expect(await res.text()).toBe("0123456789");
+    expect(calls.some((c) => c.url === `https://graph.microsoft.com/v1.0/shares/${shareId(`${SP}/RSLinx%20Classic%204.21.exe`)}/driveItem/content`)).toBe(true);
+
+    const part = await tech.fetch(`/api/software/files/${fid}`, { headers: { range: "bytes=2-5" } });
+    expect(part.status).toBe(206);
+    expect(part.headers.get("content-range")).toBe("bytes 2-5/10");
+    expect(await part.text()).toBe("2345");
+  });
+
+  it("without the connection, or if Microsoft refuses it, Download still goes straight to SharePoint", async () => {
+    const admin = await person("admin");
+    const id = (await admin.json("/api/software", { body: { name: "AB fallback" } })).data.id;
+    await admin.json(`/api/software/${id}/links`, { body: { links: [`${SP}/a.exe`] } });
+    const list = await admin.json(`/api/software/${id}`);
+    expect(list.data.sharepoint).toBe(false);
+    expect((await admin.json("/api/software")).data.sharepoint).toBe(false);
+    const fid = list.data.files[0].id;
+    expect((await admin.fetch(`/api/software/files/${fid}`)).status).toBe(302);
+
+    admin.env = { ...admin.env, ...MS, MS_TENANT_ID: "tenant-2" };
+    fakeMicrosoft({ tokenFails: true });
+    const res = await admin.fetch(`/api/software/files/${fid}`);
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toContain("download.aspx?SourceUrl=");
+  });
+
+  it("with the connection, a SharePoint folder link adds every file inside it, keeping subfolders", async () => {
+    const admin = await connected("admin");
+    const id = (await admin.json("/api/software", { body: { name: "AB folder" } })).data.id;
+    fakeMicrosoft({
+      folders: {
+        [SP]: [{ name: "v33", folder: true }, { name: "RSLinx Classic 4.21.exe", size: 900 }],
+        [`${SP}/v33`]: [{ name: "Disk1", folder: true }, { name: "readme.txt", size: 12 }],
+        [`${SP}/v33/Disk1`]: [{ name: "setup.exe", size: 4000 }],
+      },
+    });
+    const add = await admin.json(`/api/software/${id}/links`, { body: { folder: "Studio 5000", links: [SP] } });
+    expect(add.status, JSON.stringify(add.data)).toBe(200);
+    expect(add.data.added).toBe(3);
+    const files = (await admin.json(`/api/software/${id}`)).data.files;
+    expect(files.map((f: any) => [f.folder, f.name, f.size])).toEqual([
+      ["Studio 5000/AB Studio 5000 Software", "RSLinx Classic 4.21.exe", 900],
+      ["Studio 5000/AB Studio 5000 Software/v33", "readme.txt", 12],
+      ["Studio 5000/AB Studio 5000 Software/v33/Disk1", "setup.exe", 4000],
+    ]);
+  });
+
+  it("without the connection, a folder link is turned away with a plain reason", async () => {
+    const admin = await person("admin");
+    const id = (await admin.json("/api/software", { body: { name: "AB no folder" } })).data.id;
+    const add = await admin.json(`/api/software/${id}/links`, { body: { links: [SP] } });
+    expect(add.status).toBe(400);
+    expect(add.data.error).toContain("Microsoft connection");
   });
 });
