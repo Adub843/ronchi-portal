@@ -1,5 +1,6 @@
 // DEMO ONLY. Shipping and receiving in the preview, with example shipments. Customers, suppliers,
 // parts and tracking numbers are made up. Works like routes/shipping.ts, kept in this browser.
+import { isOpen, isShipped } from "../../../src/shared/change-parts";
 import { cleanName, fileInfo, fileProblem } from "../../../src/shared/files";
 import { cleanPackages, firstStatus, isDirection, isStatusFor, nextNumber, packageTotals, receiveStatus, trackingLinks, DONE_STATUSES } from "../../../src/shared/shipping";
 
@@ -9,7 +10,7 @@ export class ShippingFail extends Error {
   }
 }
 
-interface Ctx { me: { id: string; name: string }; perms: Set<string>; users: { id: string; name: string }[]; orders: any[]; jobs: () => any[]; machines: { id: string; serial: string; model: string | null }[]; newId: () => string; pdf: (title: string) => Blob }
+interface Ctx { me: { id: string; name: string }; perms: Set<string>; users: { id: string; name: string }[]; orders: any[]; jobs: () => any[]; partsOrder: (id: string) => any | null; machines: { id: string; serial: string; model: string | null }[]; newId: () => string; pdf: (title: string) => Blob }
 
 let ships: any[] | null = null;
 let lines: any[] = [];
@@ -71,7 +72,7 @@ export function shippingRoute(method: string, seg: string[], q: URLSearchParams,
     const o = c.orders.find((x) => x.id === s.source_id);
     if (!o) return;
     if (s.kind === "samples") { const k = event === "shipped" ? "samples_shipped" : "samples_received"; o[k] ||= today(); }
-    else if (event === "shipped") { o.ship_date ||= today(); if (!/^(shipped|delivered|closed|complete|cancel)/i.test(o.status ?? "")) o.status = "Shipped"; }
+    else if (event === "shipped") { o.ship_date ||= today(); if (isOpen(o.status) && !isShipped(o.status)) o.status = "Shipped to customer"; }
     o.revision++;
   };
 
@@ -87,6 +88,15 @@ export function shippingRoute(method: string, seg: string[], q: URLSearchParams,
       const j = c.jobs().find((x) => x.id === id);
       if (!j) throw new ShippingFail(404, "Not found.");
       Object.assign(out, { source_type: src, source_id: id, direction: "out", kind: "spare_parts", party: j.customer, machine: j.machine, address: j.location, contact_name: j.contact_name, contact_phone: j.contact_phone, contact_email: j.contact_email, reference: j.job_number, label: `Job ${j.job_number}` });
+    } else if (src === "parts_order" && id) {
+      need(c, "partsorders.view");
+      const o = c.partsOrder(id);
+      if (!o) throw new ShippingFail(404, "Not found.");
+      Object.assign(out, {
+        source_type: src, source_id: id, direction: "out", kind: "spare_parts", party: o.customer, machine: o.machine ?? null, address: o.ship_to ?? null,
+        contact_name: o.contact ?? null, contact_email: o.contact_email ?? null, contact_phone: o.contact_phone ?? null, reference: o.customer_po ?? o.number, label: o.number,
+        lines: o.lines.filter((l: any) => l.qty - (l.qty_shipped ?? 0) > 0).map((l: any) => ({ part_code: l.part_code, description: l.description ?? l.part_code ?? "Part", qty: Math.ceil(l.qty - (l.qty_shipped ?? 0)), source_type: "parts_order_line", source_id: l.id })),
+      });
     } else if (src) throw new ShippingFail(404, "Not found.");
     return out;
   }
@@ -209,6 +219,7 @@ export function shippingRoute(method: string, seg: string[], q: URLSearchParams,
   const m = c.machines.find((x) => x.serial === s.machine);
   let source = null;
   if (s.source_type === "cp_order") { const o = c.orders.find((x) => x.id === s.source_id); source = { type: "cp_order", id: s.source_id, label: o ? [o.customer, o.part].filter(Boolean).join(" · ") : null, open: !!o && c.perms.has("orders.view") }; }
+  if (s.source_type === "parts_order") { const o = c.partsOrder(s.source_id); source = { type: "parts_order", id: s.source_id, label: o ? o.number : null, open: !!o && c.perms.has("partsorders.view") }; }
   if (s.source_type === "job") { const j = c.jobs().find((x) => x.id === s.source_id); source = { type: "job", id: s.source_id, label: j ? `Job ${j.job_number}` : null, open: !!j && c.perms.has("jobs.view") }; }
   return {
     shipment: s,

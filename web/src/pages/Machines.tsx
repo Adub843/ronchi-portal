@@ -1,6 +1,6 @@
 import { MachinePartsOrders } from "./PartsOrders";
 import { useState } from "react";
-import { api, can, fmtTime, type Me } from "../api";
+import { api, can, fmtDate, fmtTime, type Me } from "../api";
 import { t } from "../i18n";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad, Tip } from "../components/ui";
 import { navigate } from "../router";
@@ -81,7 +81,7 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
   async function save(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await api(`/machines/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...edit, updated_at: m.updated_at } });
+      await api(`/machines/${encodeURIComponent(id)}`, { method: "PATCH", body: edit }); // edit keeps the updated_at it started from
       setEdit(null);
       reload();
       toast(t("Saved"));
@@ -95,7 +95,7 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
       <PageHead title={m.serial} sub={[m.model, m.customer, m.site].filter(Boolean).join(" · ") || undefined}>
         <Link to="/machines" className="btn">{t("All machines")}</Link>
         {can(me, "machines.edit") && !edit && (
-          <button className="btn" onClick={() => setEdit({ model: m.model ?? "", customer: m.customer ?? "", site: m.site ?? "", notes: m.notes ?? "", sharepointUrl: m.sharepoint_url ?? "" })}>{t("Edit")}</button>
+          <button className="btn" onClick={() => setEdit({ model: m.model ?? "", customer: m.customer ?? "", site: m.site ?? "", notes: m.notes ?? "", sharepointUrl: m.sharepoint_url ?? "", updated_at: m.updated_at })}>{t("Edit")}</button>
         )}
       </PageHead>
       {edit ? (
@@ -133,7 +133,7 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
                   <table>
                     <tbody>
                       {data.jobs.map((j: any) => (
-                        <tr key={j.id}><td><Link to={`/jobs/${j.id}`}>{j.job_number}</Link></td><td><JobStatusPill status={j.status} /></td><td className="muted">{j.first_day ?? ""}</td></tr>
+                        <tr key={j.id}><td><Link to={`/jobs/${j.id}`}>{j.job_number}</Link></td><td><JobStatusPill status={j.status} /></td><td className="muted">{j.first_day ? fmtDate(j.first_day) : ""}</td></tr>
                       ))}
                     </tbody>
                   </table>

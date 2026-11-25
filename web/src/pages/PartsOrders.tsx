@@ -453,6 +453,7 @@ const FORM_FIELDS: OrderField[] = ["customer", "contact", "contact_email", "cont
 const emptyLine = (): Row => ({ part_code: "", description: "", qty: 1, unit_price: "", unit_cost: "", supplier: "", supplier_po: "", eta: "", drop_ship: false, qty_received: 0, qty_shipped: 0, note: "" });
 
 export function NewPartsOrder({ me }: { me: Me }) {
+  if (!can(me, "partsorders.add")) return <ErrorNote error="Your role doesn't allow this." />;
   return <OrderEdit me={me} onDone={() => navigate("/parts-orders")} />;
 }
 
@@ -465,6 +466,7 @@ function OrderEdit({ me, order, lines: start, onDone }: { me: Me; order?: Row; l
   });
   const [lines, setLines] = useState<Row[]>(() => (start?.length ? start.map((l) => ({ ...l, unit_price: l.unit_price ?? "", unit_cost: l.unit_cost ?? "" })) : [emptyLine()]));
   const [err, setErr] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
   const [busy, setBusy] = useState(false);
   const set = (k: string, v: unknown) => setF({ ...f, [k]: v });
   const setLine = (i: number, k: string, v: unknown) => setLines(lines.map((l, j) => (j === i ? { ...l, [k]: v } : l)));
@@ -492,6 +494,7 @@ function OrderEdit({ me, order, lines: start, onDone }: { me: Me; order?: Row; l
       }
     } catch (x) {
       setErr((x as Error).message);
+      setStale((x as { status?: number }).status === 409);
     } finally {
       setBusy(false);
     }
@@ -591,6 +594,7 @@ function OrderEdit({ me, order, lines: start, onDone }: { me: Me; order?: Row; l
         </div>
       </div>
       <ErrorNote error={err} />
+      {stale && order && <div><button className="btn" type="button" onClick={() => onDone(true)}>{t("Show their changes")}</button></div>}
       <div className="row">
         <button className="btn primary" type="submit" disabled={busy}>{order ? t("Save") : t("Add order")}</button>
         <button className="btn" type="button" onClick={() => onDone(false)}>{t("Cancel")}</button>

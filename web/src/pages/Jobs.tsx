@@ -296,6 +296,7 @@ export function NewJob({ me }: { me: Me }) {
 export function JobForm({ me, job, onDone }: { me: Me; job: any | null; onDone: (r: { id: string; emails: EmailResult[] } | null) => void }) {
   const staff = useLoad(() => api("/jobs/staff"));
   const [f, setF] = useState(() => (job ? { ...EMPTY, ...Object.fromEntries(Object.entries(job).map(([k, v]) => [k, v ?? ""])), work_days: job.work_days, techIds: job.techIds } : EMPTY));
+  const [revision] = useState(job?.revision); // the page reloads on its own; keep the revision this form started from
   const [day, setDay] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -313,7 +314,7 @@ export function JobForm({ me, job, onDone }: { me: Me; job: any | null; onDone: 
     const payload: any = { ...Object.fromEntries(Object.keys(EMPTY).filter((k) => k in rest).map((k) => [k, rest[k]])), work_days, techIds };
     try {
       if (job) {
-        const r = await api(`/jobs/${encodeURIComponent(job.id)}`, { method: "PATCH", body: { ...payload, revision: job.revision } });
+        const r = await api(`/jobs/${encodeURIComponent(job.id)}`, { method: "PATCH", body: { ...payload, revision } });
         toast(t("Saved"));
         onDone({ id: job.id, emails: r.emails });
       } else {

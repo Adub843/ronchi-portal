@@ -72,7 +72,8 @@ export function jobsRoute(method: string, seg: string[], q: URLSearchParams, bod
   const list = jobs!;
   const name = (id: string) => c.users.find((u) => u.id === id)?.name ?? "";
   const techsOf = (jid: string) => techs.filter((t) => t.job_id === jid).map((t) => ({ id: t.user_id, name: name(t.user_id), email_status: t.email_status, emailed_at: t.emailed_at })).sort((a, b) => a.name.localeCompare(b.name));
-  const filesOf = (jid: string) => files.filter((f) => f.job_id === jid && !f.deleted).map(({ blob: _b, ...f }) => ({ ...f, by_name: name(f.user_id) }));
+  // Expense receipts show money, so they stay out of the job's file list (as on the server).
+  const filesOf = (jid: string) => files.filter((f) => f.job_id === jid && !f.deleted && !isReceipt(f.id)).map(({ blob: _b, ...f }) => ({ ...f, by_name: name(f.user_id) }));
   const find = (id: string) => {
     const j = list.find((x) => x.id === id);
     if (!j) throw new JobsFail(404, "Not found.");
@@ -156,8 +157,13 @@ export function jobsRoute(method: string, seg: string[], q: URLSearchParams, bod
       const p = fileProblem(f.name, f.size);
       if (p) throw new JobsFail(400, `${cleanName(f.name)}: ${p}`);
     }
-    for (const f of fl) files.unshift({ id: c.newId(), job_id: j.id, user_id: c.me.id, name: cleanName(f.name), ext: fileInfo(f.name)!.ext, size: f.size, created_at: new Date().toISOString(), blob: f, url: URL.createObjectURL(f) });
-    return { ids: [] };
+    const ids: string[] = [];
+    for (const f of fl) {
+      const id = c.newId();
+      ids.push(id);
+      files.unshift({ id, job_id: j.id, user_id: c.me.id, name: cleanName(f.name), ext: fileInfo(f.name)!.ext, size: f.size, created_at: new Date().toISOString(), blob: f, url: URL.createObjectURL(f) });
+    }
+    return { ids };
   }
   if (seg[2] === "email") return { emails: email(j, techs.filter((t) => t.job_id === j.id).map((t) => t.user_id)) };
   if (method === "PATCH") {
@@ -189,6 +195,10 @@ const book = (id: string): Wb => {
   return b;
 };
 const nameOf = (c: Ctx, id: string) => c.users.find((u) => u.id === id)?.name ?? "";
+function isReceipt(fileId: string) {
+  for (const b of books.values()) if (b.expenses.some((e) => e.receipt_file === fileId)) return true;
+  return false;
+}
 const isPhoto = (ext: string) => ["jpg", "jpeg", "png", "webp", "heic", "gif"].includes(ext.toLowerCase());
 
 export function resetWorkbook() {
@@ -230,7 +240,8 @@ export function workbookRoute(method: string, seg: string[], q: URLSearchParams,
 
   if (!seg[2]) {
     const money = fill || can(c, "workbook.billing");
-    const photos = files.filter((f) => f.job_id === j.id && !f.deleted && isPhoto(f.ext)).map((f) => ({ id: f.id, name: f.name, ext: f.ext, created_at: f.created_at, ...(b.photos[f.id] ?? { caption: null, recipe_screen: null }) }));
+    const receipts = new Set([...books.values()].flatMap((x) => x.expenses.map((e) => e.receipt_file)).filter(Boolean));
+    const photos = files.filter((f) => f.job_id === j.id && !f.deleted && isPhoto(f.ext) && !receipts.has(f.id)).map((f) => ({ id: f.id, name: f.name, ext: f.ext, created_at: f.created_at, url: f.url, ...(b.photos[f.id] ?? { caption: null, recipe_screen: null }) }));
     return {
       report: { ...b.report, submitted_by_name: b.report.submitted_by ? nameOf(c, b.report.submitted_by) : null },
       entries: b.entries.filter((e) => !e.removed).map((e) => ({ ...e, who: nameOf(c, e.user_id) })),

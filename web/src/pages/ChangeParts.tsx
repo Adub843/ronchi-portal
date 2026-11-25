@@ -180,6 +180,7 @@ function OrderList({ me }: { me: Me }) {
 /** The add / edit form. Sends the revision it started from so a newer save is never overwritten. */
 function OrderForm({ order, onSaved, onCancel }: { order?: Order; onSaved: (id: string) => void; onCancel: () => void }) {
   const [f, setF] = useState<Record<CpField, string>>(() => Object.fromEntries(CP_FIELDS.map((k) => [k, order?.[k] ?? ""])) as Record<CpField, string>);
+  const [revision] = useState(order?.revision); // the page reloads on its own; keep the revision this form started from
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -189,7 +190,7 @@ function OrderForm({ order, onSaved, onCancel }: { order?: Order; onSaved: (id: 
     setErr(null);
     try {
       if (order) {
-        await api(`/change-parts/${encodeURIComponent(order.id)}`, { method: "PATCH", body: { ...f, revision: order.revision } });
+        await api(`/change-parts/${encodeURIComponent(order.id)}`, { method: "PATCH", body: { ...f, revision } });
         onSaved(order.id);
       } else {
         const r = await api<{ id: string }>("/change-parts", { body: f });
@@ -398,6 +399,7 @@ function SaleList({ me }: { me: Me }) {
 /** Start or edit a sale: only what's known before the customer's PO. */
 function SaleForm({ me, sale, onSaved, onCancel }: { me: Me; sale?: Order; onSaved: (id: string) => void; onCancel: () => void }) {
   const [f, setF] = useState<Record<string, string>>(() => Object.fromEntries(CP_SALE_FIELDS.map((k) => [k, sale?.[k] ?? (k === "salesperson" ? me.name : k === "status" ? CP_SALE_STAGES[0] : "")])));
+  const [revision] = useState(sale?.revision);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   async function save(e: React.FormEvent) {
@@ -406,7 +408,7 @@ function SaleForm({ me, sale, onSaved, onCancel }: { me: Me; sale?: Order; onSav
     setErr(null);
     try {
       if (sale) {
-        await api(`/change-parts/${encodeURIComponent(sale.id)}`, { method: "PATCH", body: { ...f, revision: sale.revision } });
+        await api(`/change-parts/${encodeURIComponent(sale.id)}`, { method: "PATCH", body: { ...f, revision } });
         onSaved(sale.id);
       } else {
         const r = await api<{ id: string }>("/change-parts/sales", { body: f });
@@ -455,6 +457,7 @@ function SaleForm({ me, sale, onSaved, onCancel }: { me: Me; sale?: Order; onSav
 /** Mark a sale sold: the customer's PO turns it into a change-part order. */
 function SoldForm({ sale, onDone, onCancel }: { sale: Order; onDone: () => void; onCancel: () => void }) {
   const [f, setF] = useState({ customer_po: sale.customer_po ?? "", status: "Open", aa: "", ra_po: "", ship_date: "" });
+  const [revision] = useState(sale.revision);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   async function save(e: React.FormEvent) {
@@ -462,7 +465,7 @@ function SoldForm({ sale, onDone, onCancel }: { sale: Order; onDone: () => void;
     setBusy(true);
     setErr(null);
     try {
-      await api(`/change-parts/${encodeURIComponent(sale.id)}/sold`, { body: { ...f, revision: sale.revision } });
+      await api(`/change-parts/${encodeURIComponent(sale.id)}/sold`, { body: { ...f, revision } });
       toast(t("Sold. It's now a change-part order."));
       onDone();
     } catch (x) {

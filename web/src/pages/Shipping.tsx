@@ -24,6 +24,9 @@ export function ShipStatus({ status }: { status: string }) {
   return <span className={`pill ${STATUS_CLASS[status] ?? "p-info"}`}>{t(STATUS_LABEL[status as Status] ?? status)}</span>;
 }
 
+/** What a shipment is for, when the person can't open it (so the name isn't shown). */
+const SOURCE_NAME = { job: "a job", cp_order: "a change-part order", parts_order: "a parts order" } as const;
+
 const pieces = (n: number) => (n === 1 ? t("1 piece") : t("{n} pieces", { n }));
 const dir = (d: Direction) => (d === "out" ? t("Going out") : t("Coming in"));
 const today = () => new Date().toISOString().slice(0, 10);
@@ -251,7 +254,7 @@ export function ShipmentPage({ id, me }: { id: string; me: Me }) {
               {s.contact_email && <a href={`mailto:${s.contact_email}`}>{s.contact_email}</a>}
             </div>
           )}
-          {data.source && (data.source.open ? <Link to={data.source.type === "job" ? `/jobs/${data.source.id}` : data.source.type === "cp_order" ? `/change-parts/${data.source.id}` : `/parts-orders/${data.source.id}`}>{t("For: {what}", { what: data.source.label ?? "" })}</Link> : <span className="muted">{t("For: {what}", { what: data.source.label ?? "" })}</span>)}
+          {data.source && (data.source.open ? <Link to={data.source.type === "job" ? `/jobs/${data.source.id}` : data.source.type === "cp_order" ? `/change-parts/${data.source.id}` : `/parts-orders/${data.source.id}`}>{t("For: {what}", { what: data.source.label ?? "" })}</Link> : <span className="muted">{t("For: {what}", { what: data.source.label ?? t(SOURCE_NAME[data.source.type as keyof typeof SOURCE_NAME] ?? "an order") })}</span>)}
           {data.machine && <Link to={`/machines/${data.machine.id}`}>{t("Machine {serial}", { serial: data.machine.serial })}</Link>}
         </div>
         <div className="panel stack">
@@ -401,6 +404,7 @@ function Receive({ s, lines, edit, onDone }: { s: any; lines: any[]; edit: boole
       onDone();
     } catch (e) {
       toast((e as Error).message);
+      if ((e as { status?: number }).status === 409) onDone(); // load the newest version; the counts typed here stay
     } finally {
       setBusy(false);
     }

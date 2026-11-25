@@ -129,6 +129,8 @@ const PAIRS: [string, string, string][] = [
   ["Sales reports", "Informes de ventas", "Report vendite"],
   ["Search order, customer, machine, PO or part number", "Buscar pedido, cliente, máquina, OC o número de repuesto", "Cerca ordine, cliente, macchina, ordine d'acquisto o codice ricambio"],
   ["Ship this order", "Enviar este pedido", "Spedisci questo ordine"],
+  ["Show their changes", "Ver sus cambios", "Mostra le loro modifiche"],
+  ["Making a parts order from a quote request isn't part of the preview. Use New order instead.", "Crear un pedido de repuestos desde una solicitud de cotización no está en la vista previa. Use Nuevo pedido.", "Creare un ordine ricambi da una richiesta di preventivo non è nell'anteprima. Usa Nuovo ordine."],
   ["Shipments", "Envíos", "Spedizioni"],
   ["Shipped and invoiced.", "Enviado y facturado.", "Spedito e fatturato."],
   ["Shipped, not invoiced", "Enviados, sin facturar", "Spediti, non fatturati"],

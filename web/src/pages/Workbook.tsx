@@ -86,6 +86,8 @@ function ReportTop({ jobId, report, fill, onSaved }: { jobId: string; report: an
       onSaved();
     } catch (e) {
       toast((e as Error).message);
+      // Someone else saved first: load their version (what you typed stays here) so the next save can go through.
+      if ((e as { status?: number }).status === 409) onSaved();
     }
   }
   return (
@@ -230,7 +232,7 @@ function Photos({ jobId, photos, fill, onChange }: { jobId: string; photos: any[
         <div className="wb-photos">
           {photos.map((p) => (
             <figure key={p.id} className="wb-photo">
-              <a href={`/api/jobs/files/${enc(p.id)}`} target="_blank" rel="noopener noreferrer"><img src={`/api/jobs/files/${enc(p.id)}`} alt={p.caption || p.name} loading="lazy" /></a>
+              <a href={p.url ?? `/api/jobs/files/${enc(p.id)}`} target="_blank" rel="noopener noreferrer"><img src={p.url ?? `/api/jobs/files/${enc(p.id)}`} alt={p.caption || p.name} loading="lazy" /></a>
               {fill ? (
                 <figcaption className="stack" style={{ gap: 4 }}>
                   <input aria-label={t("Caption")} defaultValue={p.caption ?? ""} placeholder={t("Caption, e.g. worn star wheel")} onBlur={(e) => e.target.value !== (p.caption ?? "") && caption(p, { caption: e.target.value })} />
@@ -370,7 +372,7 @@ function Expenses({ job, rows, fill, me, billable, onChange }: { job: any; rows:
                   <td>{fmtDate(x.day)}</td><td>{x.who}</td><td>{t(x.type)}</td>
                   <td>{x.description}{x.receipt_file && <> · <a href={`/api/jobs/files/${enc(x.receipt_file)}`} target="_blank" rel="noopener noreferrer">{t("Receipt")}</a></>}</td>
                   <td>{t(x.pay)}</td><td>{x.billable === "Y" ? t("Yes") : t("No")}</td><td className="num">{money(x.amount_cents)}</td>
-                  <td>{fill && x.user_id === me.id && <button className="linkish" onClick={() => remove(x.id)}>{t("Remove")}</button>}</td>
+                  <td>{fill && (x.user_id === me.id || can(me, "jobs.schedule")) && <button className="linkish" onClick={() => remove(x.id)}>{t("Remove")}</button>}</td>
                 </tr>
               ))}
               <tr><td colSpan={6}><strong>{t("Total")}</strong></td><td className="num"><strong>{money(total)}</strong></td><td /></tr>
@@ -443,6 +445,7 @@ function SignOff({ jobId, report, fill, onSaved }: { jobId: string; report: any;
       onSaved();
     } catch (e) {
       toast((e as Error).message);
+      if ((e as { status?: number }).status === 409) onSaved();
     }
   }
   return (
@@ -483,7 +486,7 @@ function SubmitButton({ jobId, recipients, onDone }: { jobId: string; recipients
       setSure(true);
       toast(recipients.length
         ? t("Press Submit again to send the report to {names}. The report locks until a scheduler reopens it.", { names: recipients.map((r) => r.name).join(", ") })
-        : t("Press Submit again to submit. No one is set to get reports yet; an admin picks them on the Work orders page."));
+        : t("Press Submit again to submit. No one is set to get reports yet; an admin picks them on the Jobs page."));
       return;
     }
     setBusy(true);

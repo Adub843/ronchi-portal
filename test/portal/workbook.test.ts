@@ -44,6 +44,38 @@ describe("filling in a work order", () => {
     expect(wb.data.expenses[0]).toMatchObject({ type: "Hotel", amount_cents: 12900, billable: "Y", pay: "Credit" });
   });
 
+  it("an expense receipt stays out of the job's files and photos, and only people who see expenses can open it", async () => {
+    const meagan = await person("scheduling");
+    const aaron = await person("tech");
+    const viewer = await person("tech");
+    const id = await jobWith(meagan, [aaron.id]);
+    const form = new FormData();
+    form.append("files", new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], "receipt.jpg", { type: "image/jpeg" }));
+    const up = await aaron.form(`/api/jobs/${id}/files`, form);
+    expect(up.status).toBe(200);
+    const receipt = ((await up.json()) as any).ids[0];
+    expect((await aaron.json(`/api/workbook/${id}/expenses`, { body: { day: "2026-11-23", type: "Hotel", amount: "129.00", receipt_file: receipt } })).status).toBe(200);
+    const job = await viewer.json(`/api/jobs/${id}`);
+    expect(job.data.files.map((f: any) => f.id)).not.toContain(receipt);
+    expect((await viewer.json(`/api/workbook/${id}`)).data.photos.map((p: any) => p.id)).not.toContain(receipt);
+    expect((await viewer.fetch(`/api/jobs/files/${receipt}`)).status).toBe(404);
+    expect((await aaron.fetch(`/api/jobs/files/${receipt}`)).status).toBe(200);
+    expect((await meagan.fetch(`/api/jobs/files/${receipt}`)).status).toBe(200);
+  });
+
+  it("nothing can be added to the log, hours or expenses once the report is submitted", async () => {
+    const meagan = await person("scheduling");
+    const aaron = await person("tech");
+    const id = await jobWith(meagan, [aaron.id]);
+    const w = `/api/workbook/${id}`;
+    await aaron.json(`${w}/entries`, { body: { day: "2026-11-23", description: "Work" } });
+    expect((await aaron.json(`${w}/submit`, { body: {} })).status).toBe(200);
+    expect((await aaron.json(`${w}/submit`, { body: {} })).status).toBe(409);
+    expect((await aaron.json(`${w}/entries`, { body: { day: "2026-11-24", description: "Late" } })).status).toBe(409);
+    expect((await aaron.json(`${w}/hours`, { method: "PUT", body: { day: "2026-11-24", regular: 4 } })).status).toBe(409);
+    expect((await aaron.json(`${w}/expenses`, { body: { day: "2026-11-24", type: "Meals", amount: "12.00" } })).status).toBe(409);
+  });
+
   it("two people can't overwrite each other's report", async () => {
     const meagan = await person("scheduling");
     const aaron = await person("tech");

@@ -247,6 +247,9 @@ describe("parts orders", () => {
     page = (await sales.json(`/api/parts-orders/${data.id}`)).data;
     expect(page.lines.map((l: any) => l.qty_shipped)).toEqual([0, 0]);
     expect(page.shipments.find((s: any) => s.direction === "out").ship_date).toBeTruthy();
+    // ...and the order steps back to Ready to ship, so it shows as still to ship.
+    expect(page.order.status).toBe("ready");
+    expect(page.order.shipped_at).toBeNull();
   });
 
   it("lets a quote request become an order again after its order was removed", async () => {

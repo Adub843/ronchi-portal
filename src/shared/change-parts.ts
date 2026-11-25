@@ -64,7 +64,7 @@ export const CP_STATUSES = [
  * Statuses that mean the job is finished, so it drops off the Open list. Shipping doesn't finish a
  * job: it stays open until the customer approves the parts and someone marks it Completed.
  */
-const DONE = /^(closed|complete[d]?|cancel+ed|canceled|done)\b/i;
+const DONE = /^(closed|complete[d]?|cancel+ed|canceled|done|invoiced)\b/i;
 export const isOpen = (status: string | null | undefined) => !DONE.test((status ?? "").trim());
 
 /** Parts are on their way or with the customer (so a ship date in the past isn't late). */

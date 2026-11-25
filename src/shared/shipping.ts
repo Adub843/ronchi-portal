@@ -56,7 +56,7 @@ export const DONE_STATUSES: ReadonlySet<Status> = new Set(["delivered", "receive
 
 /** A receipt's status from what has been checked in so far (only once it has arrived). */
 export function receiveStatus(lines: { qty: number; qty_received: number }[]): Status {
-  if (lines.every((l) => l.qty_received >= l.qty)) return "received";
+  if (lines.length && lines.every((l) => l.qty_received >= l.qty)) return "received";
   if (lines.some((l) => l.qty_received > 0)) return "partly_received";
   return "arrived";
 }

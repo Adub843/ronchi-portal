@@ -340,7 +340,7 @@ function WorkbookSwitch({ on, onSwitches }: { on: boolean; onSwitches: (s: Switc
     <label className="row switchrow">
       <input type="checkbox" checked={on} onChange={async (e) => {
         const next = e.target.checked;
-        if (!next && !window.confirm(t("Switch the Ronchi workbook off for everyone? Work orders leave the menu. Jobs, job emails and job files keep working, and nothing is deleted."))) return;
+        if (!next && !window.confirm(t("Switch the Ronchi workbook off for everyone? The Work order tab leaves every job. Jobs, job emails and job files keep working, and nothing is deleted."))) return;
         try {
           const r = await api("/switches/workbook", { method: "PUT", body: { on: next } });
           onSwitches(r.switches);

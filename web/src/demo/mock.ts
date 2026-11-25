@@ -10,7 +10,7 @@ import { KbFail, kbRoute, resetKb } from "./kb-mock";
 import { demoJobs, JobsFail, jobsRoute, resetJobs, resetWorkbook, workbookRoute } from "./jobs-mock";
 import { resetShipping, ShippingFail, shippingRoute } from "./shipping-mock";
 import { resetSoftware, SoftwareFail, softwareRoute } from "./software-mock";
-import { PartsOrdersFail, partsOrdersFor, partsOrdersRoute, resetPartsOrders } from "./parts-orders-mock";
+import { demoPartsOrder, PartsOrdersFail, partsOrdersFor, partsOrdersRoute, resetPartsOrders } from "./parts-orders-mock";
 type Role = keyof typeof ROLES;
 
 // Ids for example records. Uses the browser's secure random source like the real server does.
@@ -527,7 +527,7 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   }
   if (seg[0] === "shipping") {
     try {
-      return shippingRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, users: db.users, orders: db.orders, jobs: demoJobs, machines: db.machines, newId: id, pdf: examplePdf });
+      return shippingRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, users: db.users, orders: db.orders, jobs: demoJobs, partsOrder: (pid: string) => demoPartsOrder(pid, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id }), machines: db.machines, newId: id, pdf: examplePdf });
     } catch (e) {
       if (e instanceof ShippingFail) throw new Fail(e.status, e.message);
       throw e;

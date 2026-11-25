@@ -73,6 +73,13 @@ export function partsOrdersFor(serial: string, c: Ctx) {
   return orders!.filter((o) => !o.removed_at && o.machine === serial).map((o) => ({ id: o.id, number: num(o.seq), customer: o.customer, status: o.status, customer_po: o.customer_po ?? null, updated_at: o.updated_at }));
 }
 
+/** One parts order with its lines, for the shipping preview (Ship this order). */
+export function demoPartsOrder(id: string, c: Ctx): Row | null {
+  if (!orders) seed(c);
+  const o = orders!.find((x) => x.id === id && !x.removed_at);
+  return o ? { ...o, number: num(o.seq) } : null;
+}
+
 export function resetPartsOrders() {
   orders = null;
   history = [];
@@ -138,6 +145,12 @@ export function partsOrdersRoute(method: string, seg: string[], q: URLSearchPara
       late: live.filter((o) => o.promised && o.promised < day(0) && ["inquiry", "quoted", "ordered", "sourcing", "ready"].includes(o.status)).length,
     };
   }
+  if (seg[1] === "part") {
+    const code = decodeURIComponent(seg[2] ?? "").toUpperCase();
+    const rows = live.flatMap((o) => o.lines.filter((l: Line) => (l.part_code ?? "").toUpperCase() === code).map((l: Line) => hide({ id: o.id, number: num(o.seq), customer: o.customer, machine: o.machine ?? null, status: o.status, qty: l.qty, unit_price: l.unit_price, updated_at: o.updated_at }, prices)));
+    return { orders: rows };
+  }
+  if (seg[1] === "from-quote") fail(400, "Making a parts order from a quote request isn't part of the preview. Use New order instead.");
   if (seg.length === 1 && method === "POST") {
     need("partsorders.add");
     const f = fields(body);

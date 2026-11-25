@@ -118,7 +118,10 @@ async function shippingReady(db: D1Database): Promise<boolean> {
 }
 
 /** What Shipping shipped and received for parts order lines (all of them, or one order's). */
-async function shippedFromShipping(db: D1Database, orderId?: string): Promise<Map<string, { shipped: number; received: number }>> {
+/** The orders the list shows (bind the machine twice, '' for all): newest 3000. */
+const LISTED = "SELECT id FROM parts_orders WHERE removed_at IS NULL AND (? = '' OR machine = ?) ORDER BY updated_at DESC LIMIT 3000";
+
+async function shippedFromShipping(db: D1Database, orderId?: string, machine?: string): Promise<Map<string, { shipped: number; received: number }>> {
   const out = new Map<string, { shipped: number; received: number }>();
   if (!(await shippingReady(db))) return out;
   const { results } = await db.prepare(
@@ -127,9 +130,11 @@ async function shippedFromShipping(db: D1Database, orderId?: string): Promise<Ma
             SUM(CASE WHEN s.direction = 'in' AND s.status != 'cancelled' THEN COALESCE(l.qty_received, 0) ELSE 0 END) AS received
        FROM shipment_lines l JOIN shipments s ON s.id = l.shipment_id
       WHERE l.source_type = 'parts_order_line' AND s.removed_at IS NULL
-        ${orderId ? "AND l.source_id IN (SELECT id FROM parts_order_lines WHERE order_id = ?)" : ""}
+        ${orderId
+          ? "AND l.source_id IN (SELECT id FROM parts_order_lines WHERE order_id = ?)"
+          : `AND l.source_id IN (SELECT id FROM parts_order_lines WHERE order_id IN (${LISTED}))`}
       GROUP BY l.source_id`,
-  ).bind(...(orderId ? [orderId] : [])).all<{ line_id: string; shipped: number; received: number }>();
+  ).bind(...(orderId ? [orderId] : [machine ?? "", machine ?? ""])).all<{ line_id: string; shipped: number; received: number }>();
   for (const r of results) out.set(r.line_id, { shipped: r.shipped ?? 0, received: r.received ?? 0 });
   return out;
 }
@@ -145,7 +150,16 @@ function merged(l: Row, ship: Map<string, { shipped: number; received: number }>
  * save on the order would (autoStatus: only forward, only from Customer PO received onward). Written to
  * the order's history as done by that shipment. Shipping calls this; nothing here changes a shipment.
  */
-export async function syncPartsOrdersForShipment(db: D1Database, shipmentId: string, userId: string, ip: string): Promise<void> {
+/** The parts orders a shipment carries lines for, as it is now. */
+export async function partsOrdersOnShipment(db: D1Database, shipmentId: string): Promise<string[]> {
+  if (!(await shippingReady(db))) return [];
+  const { results } = await db.prepare(
+    `SELECT DISTINCT p.order_id FROM shipment_lines l JOIN parts_order_lines p ON p.id = l.source_id WHERE l.shipment_id = ? AND l.source_type = 'parts_order_line'`,
+  ).bind(shipmentId).all<{ order_id: string }>();
+  return results.map((r) => r.order_id);
+}
+
+export async function syncPartsOrdersForShipment(db: D1Database, shipmentId: string, userId: string, ip: string, alsoOrders: string[] = []): Promise<void> {
   if (!(await shippingReady(db))) return;
   if ((await loadSettings(db)).sections.partsOrders === false) return; // section switched off: leave orders alone
   const s = await db.prepare("SELECT number FROM shipments WHERE id = ?").bind(shipmentId).first<{ number: string }>();
@@ -153,15 +167,23 @@ export async function syncPartsOrdersForShipment(db: D1Database, shipmentId: str
     `SELECT DISTINCT p.order_id FROM shipment_lines l JOIN parts_order_lines p ON p.id = l.source_id
       WHERE l.shipment_id = ? AND l.source_type = 'parts_order_line'`,
   ).bind(shipmentId).all<{ order_id: string }>();
-  for (const { order_id } of results) {
+  // alsoOrders: orders the shipment carried before this save, whose lines may have been cut from it.
+  for (const order_id of new Set([...results.map((r) => r.order_id), ...alsoOrders])) {
     const o = await db.prepare("SELECT * FROM parts_orders WHERE id = ? AND removed_at IS NULL").bind(order_id).first<Row>();
     if (!o) continue;
     const ship = await shippedFromShipping(db, order_id);
     const ls = (await db.prepare(`SELECT ${LINE_COLS} FROM parts_order_lines WHERE order_id = ?`).bind(order_id).all<Row>()).results;
-    const next = autoStatus(o.status as Status, ls.map((l) => merged({ ...l, drop_ship: !!l.drop_ship }, ship) as Line));
+    const mine = ls.map((l) => merged({ ...l, drop_ship: !!l.drop_ship }, ship) as Line);
+    let next = autoStatus(o.status as Status, mine);
+    // Shipped, but a shipment was cancelled, cut or removed so not everything has gone any more: step back
+    // to where the lines say the order is, so it shows up again as still to ship.
+    if (!next && o.status === "shipped" && mine.length && !mine.every((l) => l.qty_shipped >= l.qty)) {
+      next = autoStatus("ordered", mine) ?? "ordered";
+    }
     if (!next) continue;
     const t = now();
     const set: Row = { status: next };
+    if (o.status === "shipped") set.shipped_at = null;
     for (const stamp of stampsFor(next)) if (!o[stamp]) set[stamp] = t;
     const keys = Object.keys(set);
     const r = await db.prepare(`UPDATE parts_orders SET ${keys.map((k) => `${k} = ?, `).join("")}revision = revision + 1, updated_by = ?, updated_at = ? WHERE id = ? AND revision = ?`)
@@ -193,9 +215,9 @@ partsOrders.get("/", async (c) => {
   const lines = (await c.env.DB.prepare(
     `SELECT l.id, l.order_id, l.part_code, l.description, l.qty, l.unit_price, l.supplier, l.qty_received, l.qty_shipped
        FROM parts_order_lines l
-      WHERE l.order_id IN (SELECT id FROM parts_orders WHERE removed_at IS NULL AND (? = '' OR machine = ?) ORDER BY updated_at DESC LIMIT 3000)`,
+      WHERE l.order_id IN (${LISTED})`,
   ).bind(machine, machine).all<Row>()).results;
-  const ship = await shippedFromShipping(c.env.DB);
+  const ship = await shippedFromShipping(c.env.DB, undefined, machine);
   const byOrder = new Map<string, Row[]>();
   for (const l of lines) {
     const list = byOrder.get(l.order_id);
@@ -298,13 +320,14 @@ partsOrders.get("/:id", async (c) => {
       WHERE a.target_type = 'parts_order' AND a.target_id = ? ORDER BY a.at DESC LIMIT 200`,
   ).bind(id).all<{ at: string; action: string; detail: string | null; who: string | null }>();
   const history = results.map((h) => ({ at: h.at, action: h.action, who: h.who, changes: h.detail ? (JSON.parse(h.detail).changes ?? null) : null }));
-  const shipments = (await shippingReady(c.env.DB))
+  // Only for people who may see Shipping (taken away too when Shipping is switched off).
+  const shipments = has(u, "shipping.view") && (await shippingReady(c.env.DB))
     ? (await c.env.DB.prepare(
         `SELECT s.* FROM shipments s WHERE s.removed_at IS NULL AND (
             (s.source_type = 'parts_order' AND s.source_id = ?)
             OR s.id IN (SELECT l.shipment_id FROM shipment_lines l WHERE l.source_type = 'parts_order_line' AND l.source_id IN (SELECT id FROM parts_order_lines WHERE order_id = ?)))
           LIMIT 50`,
-      ).bind(id, id).all<Row>()).results.map((s) => ({ id: s.id, number: s.number, direction: s.direction, status: s.status, carrier: s.carrier ?? null, tracking: s.tracking ?? null, ship_date: s.shipped_date ?? null }))
+      ).bind(id, id).all<Row>()).results.map((s) => ({ id: s.id, number: s.number, direction: s.direction, status: s.status, carrier: s.carrier ?? null, carrier_other: s.carrier_other ?? null, tracking: s.tracking ?? null, ship_date: s.shipped_date ?? null }))
     : [];
   const order = { ...o, number: number(o.seq), open: isOpen(o.status), progress: progress(lines as Line[]) };
   return c.json({

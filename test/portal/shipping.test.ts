@@ -248,3 +248,16 @@ describe("shipping and receiving", () => {
     expect(results.map((x: any) => x.action)).toEqual(["shipment.create"]);
   });
 });
+
+describe("linking a shipment to an order", () => {
+  it("needs permission to see that kind of order", async () => {
+    const sales = await person("sales");
+    const cp = await sales.json("/api/change-parts", { body: { customer: "Acme", part: "Star wheels", status: "Ready to ship" } });
+    expect(cp.status, JSON.stringify(cp.data)).toBe(200);
+    const body = { direction: "out", kind: "change_parts", party: "Acme", source_type: "cp_order", source_id: cp.data.id, status: "shipped", lines: [{ description: "Star wheels", qty: 1 }] };
+    // Service ships things but can't see change-part orders, so it can't tie a shipment to one.
+    const service = await person("service");
+    expect((await service.json("/api/shipping", { body })).status).toBe(403);
+    expect((await sales.json("/api/shipping", { body })).status).toBe(200);
+  });
+});

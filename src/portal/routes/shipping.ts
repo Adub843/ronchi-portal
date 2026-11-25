@@ -21,11 +21,12 @@ import {
   MAX_LINES, nextNumber, packageTotals, receiveStatus, SHIP_MAX, SHIP_TEXT_FIELDS, trackingLinks, type Direction, type Package, type Source,
 } from "../../shared/shipping";
 import type { AppEnv, SessionUser } from "../env";
-import { syncPartsOrdersForShipment } from "./parts-orders";
+import { partsOrdersOnShipment, syncPartsOrdersForShipment } from "./parts-orders";
 import { audit, now } from "../lib/db";
 import { body, fail, has, requirePerm } from "../lib/http";
 import { isEmail } from "../lib/mail";
 import { serveFile } from "../lib/serve-file";
+import { loadSettings } from "../lib/settings-store";
 
 export const shipping = new Hono<AppEnv>();
 
@@ -195,6 +196,7 @@ async function loadShipment(db: D1Database, id: string): Promise<ShipmentRow> {
 async function tellChangePartOrder(c: Context<AppEnv>, s: ShipmentRow, u: SessionUser, event: "shipped" | "received") {
   if (s.source_type !== "cp_order" || !s.source_id) return;
   const db = c.env.DB;
+  if ((await loadSettings(db)).sections.changeParts === false) return; // Change parts switched off: leave its orders alone
   const o = await db.prepare("SELECT * FROM cp_orders WHERE id = ? AND removed_at IS NULL").bind(s.source_id).first<Record<string, any>>();
   if (!o || o.phase === "sale") return; // a sale not yet sold isn't an order to ship
   const set: Record<string, string> = {};
@@ -305,7 +307,7 @@ shipping.get("/prefill", async (c) => {
       kind: "spare_parts", party: src.customer, machine: src.machine ?? null, address: src.ship_to ?? null, reference: src.customer_po ?? (src.seq ? `P-${src.seq}` : null), label: sourceLabel(type, src),
       // Only what is still to ship: each line's quantity less what is already on other shipments.
       lines: (src.lines as Record<string, any>[])
-        .map((l) => ({ part_code: l.part_code ?? null, description: String(l.description ?? l.part_code ?? "Part").slice(0, 300), qty: Number(l.qty) - Number(l.already ?? 0), source_type: "parts_order_line", source_id: l.id }))
+        .map((l) => ({ part_code: l.part_code ?? null, description: String(l.description ?? l.part_code ?? "Part").slice(0, 300), qty: Math.ceil(Number(l.qty) - Number(l.already ?? 0)), source_type: "parts_order_line", source_id: l.id }))
         .filter((l) => l.qty > 0),
     });
   }
@@ -413,7 +415,9 @@ shipping.post("/", async (c) => {
   const lines = b.lines === undefined ? [] : cleanLines(b.lines);
   await checkPartsLinks(db, u, lines);
   if (b.source_type !== undefined && b.source_type !== null && b.source_type !== "") {
-    if (!isSource(b.source_type) || typeof b.source_id !== "string" || !(await loadSource(db, b.source_type, b.source_id))) fail(400, "The order or job this is for wasn't found.");
+    if (!isSource(b.source_type) || typeof b.source_id !== "string") fail(400, "The order or job this is for wasn't found.");
+    if (!mayRead(u, b.source_type)) fail(403, "Your role doesn't allow this.");
+    if (!(await loadSource(db, b.source_type, b.source_id))) fail(400, "The order or job this is for wasn't found.");
     f.source_type = b.source_type;
     f.source_id = b.source_id;
   }
@@ -453,10 +457,14 @@ shipping.patch("/:id", async (c) => {
   const b = await body(c);
   const before = await loadShipment(db, id);
   if (typeof b.revision !== "number" || b.revision !== before.revision) fail(409, STALE);
+  const hadOrders = await partsOrdersOnShipment(db, id);
   const f = clean(b, before.direction);
   if (b.source_type !== undefined) {
     if (b.source_type === null || b.source_type === "") f.source_type = f.source_id = null;
-    else if (!isSource(b.source_type) || typeof b.source_id !== "string" || !(await loadSource(db, b.source_type, b.source_id))) fail(400, "The order or job this is for wasn't found.");
+    else if (b.source_type === before.source_type && b.source_id === before.source_id) { /* unchanged: checked when it was set */ }
+    else if (!isSource(b.source_type) || typeof b.source_id !== "string") fail(400, "The order or job this is for wasn't found.");
+    else if (!mayRead(u, b.source_type)) fail(403, "Your role doesn't allow this.");
+    else if (!(await loadSource(db, b.source_type, b.source_id))) fail(400, "The order or job this is for wasn't found.");
     else (f.source_type = b.source_type), (f.source_id = b.source_id);
   }
   if (f.status === "received" && f.status !== before.status) {
@@ -504,7 +512,7 @@ shipping.patch("/:id", async (c) => {
   const after = await loadShipment(db, id);
   if (diff.status && after.direction === "out" && (after.status === "shipped" || after.status === "delivered")) await tellChangePartOrder(c, after, u, "shipped");
   if (diff.status && after.direction === "in" && after.status === "received") await tellChangePartOrder(c, after, u, "received");
-  await syncPartsOrdersForShipment(db, id, u.id, c.get("ip"));
+  await syncPartsOrdersForShipment(db, id, u.id, c.get("ip"), hadOrders);
   return c.json({ ok: true, revision: after.revision });
 });
 
@@ -591,5 +599,6 @@ shipping.delete("/:id", async (c) => {
   const r = await c.env.DB.prepare("UPDATE shipments SET removed_at = ?, updated_by = ? WHERE id = ? AND removed_at IS NULL").bind(now(), u.id, s.id).run();
   if (!r.meta.changes) fail(404, "Not found.");
   await audit(c.env.DB, { userId: u.id, action: "shipment.remove", targetType: "shipment", targetId: s.id, detail: { number: s.number }, ip: c.get("ip") });
+  await syncPartsOrdersForShipment(c.env.DB, s.id, u.id, c.get("ip")); // parts it carried no longer count as shipped
   return c.json({ ok: true });
 });
