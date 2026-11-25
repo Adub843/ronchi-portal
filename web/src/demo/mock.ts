@@ -22,7 +22,7 @@ const daysAgo = (n: number, h: number, m = 0) => {
   return d;
 };
 
-interface User { id: string; email: string; name: string; role: string; status: string; created_at: string; access?: AccessChanges; removed_at?: string | null }
+interface User { id: string; email: string; name: string; role: string; status: string; created_at: string; access?: AccessChanges; until?: Record<string, string>; removed_at?: string | null }
 interface RoleRow { id: string; name: string; perms: string }
 interface DB {
   users: User[];
@@ -396,18 +396,31 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     if (!t) throw new Fail(404, "Not found.");
     if (t.id === u.id) throw new Fail(400, "You can't change your own access. Ask another admin.");
     if (t.role === "admin") throw new Fail(400, "Admins always have everything. Change their role first.");
+    if (body.copyFrom) {
+      const from = db.users.find((x) => x.id === body.copyFrom);
+      if (!from || from.role === "admin") throw new Fail(400, "Pick someone else to copy.");
+      t.role = from.role;
+      t.access = { ...(from.access ?? {}) };
+      t.until = { ...(from.until ?? {}) };
+      log("user.access");
+      return { changes: t.access, role: t.role, permissions: [...effective(t.role, t.access, savedPerms(t.role))] };
+    }
     const next: AccessChanges = body.reset ? {} : { ...(t.access ?? {}) };
+    const until: Record<string, string> = body.reset ? {} : { ...(t.until ?? {}) };
     for (const [perm, on] of Object.entries(body.changes ?? {})) {
+      if (on === null || !body.until) delete until[perm];
+      else until[perm] = body.until;
       if (!isPermission(perm) || !adjustable(perm)) throw new Fail(400, "Managing people and the audit log stay with admins. Make them an admin instead.");
       if (on === null) delete next[perm];
       else next[perm] = !!on;
     }
     t.access = next;
+    t.until = until;
     log("user.access");
     return { changes: next, permissions: [...effective(t.role, next, savedPerms(t.role))] };
   }
   if (path === "/users" && method === "GET")
-    return { users: db.users.map((x) => ({ ...x, access: x.role === "admin" ? {} : (x.access ?? {}), permissions: [...effective(x.role, x.access, savedPerms(x.role))], passkeys: 1 + (x.id === u.id ? 1 : 0), sessions: x.status === "active" ? 1 : 0 })), invites: db.invites };
+    return { users: db.users.map((x) => ({ ...x, access: x.role === "admin" ? {} : (x.access ?? {}), until: x.until ?? {}, permissions: [...effective(x.role, x.access, savedPerms(x.role))], passkeys: 1 + (x.id === u.id ? 1 : 0), sessions: x.status === "active" ? 1 : 0 })), invites: db.invites };
   if (path === "/users/invite") {
     if (db.settings.people.invitesPaused) throw new Fail(403, "New invites are paused. The portal owner can turn them back on in Settings > Command center.");
     if (!body.name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email ?? "")) throw new Fail(400, "Enter a name and a valid email.");

@@ -585,3 +585,23 @@ span.tip{display:inline-flex}
 .sw-links label{font-size:13px;font-weight:600}
 .sw-links textarea{font:12.5px var(--mono);padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--solid);color:var(--ink);width:100%;resize:vertical}
 .sw-dialog{overflow:auto}
+/* Access panel extras (People > Access and Settings > Command center) */
+.btn.tiny{padding:2px 8px;font-size:11.5px}
+.access-group-head{gap:6px;align-items:center}
+.access-group-head h3{margin:4px 0}
+.access-why{display:block;font-size:11px;color:var(--muted);font-style:italic}
+.access-perm.changed .access-why{color:var(--accent);font-style:normal}
+.access-tools{gap:12px;margin:8px 0;align-items:center}
+.linklike{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left}
+.linklike:hover{text-decoration:underline}
+.access-center{display:grid;grid-template-columns:220px 1fr;gap:14px;align-items:start}
+.access-people{list-style:none;margin:0;padding:0;max-height:560px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.access-person{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:8px 10px;font:inherit;cursor:pointer;color:inherit}
+.access-person small{display:block}
+.access-person.on{background:color-mix(in srgb,var(--accent) 10%,transparent);box-shadow:inset 3px 0 0 var(--accent)}
+.access-sees{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.access-review td.lvl{font-size:12px;white-space:nowrap}
+.access-review .lvl-all{color:var(--ok,#1a7f37);font-weight:600}
+.access-review .lvl-none{color:var(--muted)}
+@media (max-width:760px){.access-center{grid-template-columns:1fr}.access-people{max-height:220px}}
+.lvl-stale{color:var(--accent)}

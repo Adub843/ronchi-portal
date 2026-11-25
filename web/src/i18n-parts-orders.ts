@@ -14,6 +14,7 @@ export const PARTS_ORDERS_DYNAMIC = [
   "Change parts orders", "Change an order's details, lines and status, and mark parts arrived or shipped.",
   "Remove parts orders", "Take a parts order off the list.",
   "See parts prices", "See and set prices, costs, discounts, margins and order totals.",
+  "Export parts orders", "Download the parts order list as a spreadsheet.",
   "Parts sales reports", "Sales by month, customer and part, and how long orders take. Also needs See parts prices.",
 ];
 
@@ -59,6 +60,8 @@ const PAIRS: [string, string, string][] = [
   ["See and set prices, costs, discounts, margins and order totals.", "Ver y fijar precios, costos, descuentos, márgenes y totales de pedidos.", "Vedere e impostare prezzi, costi, sconti, margini e totali degli ordini."],
   ["Parts sales reports", "Informes de ventas de repuestos", "Report vendite ricambi"],
   ["Sales by month, customer and part, and how long orders take. Also needs See parts prices.", "Ventas por mes, cliente y repuesto, y cuánto tardan los pedidos. También necesita Ver precios de repuestos.", "Vendite per mese, cliente e ricambio, e quanto durano gli ordini. Serve anche Vedere i prezzi dei ricambi."],
+  ["Export parts orders", "Exportar pedidos de repuestos", "Esportare ordini ricambi"],
+  ["Download the parts order list as a spreadsheet.", "Descargar la lista de pedidos de repuestos como hoja de cálculo.", "Scaricare l'elenco ordini ricambi come foglio di calcolo."],
   ["Prices", "Precios", "Prezzi"],
   ["Changed", "Cambiado", "Modificato"],
   ["Parts orders with this part", "Pedidos de repuestos con este repuesto", "Ordini ricambi con questo ricambio"],

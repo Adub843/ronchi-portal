@@ -128,7 +128,7 @@ function OrderList({ me }: { me: Me }) {
         </select>
         <button type="button" className={`btn${view === "open" ? " primary" : ""}`} onClick={() => setView("open")}>{t("Open {n}", { n: counts.open ?? 0 })}</button>
         <button type="button" className={`btn${view === "all" ? " primary" : ""}`} onClick={() => setView("all")}>{t("All {n}", { n: all.length })}</button>
-        <button className="btn" onClick={exportCsv} disabled={!shown.length}>{t("Export CSV")}</button>
+        {can(me, "partsorders.export") && <button className="btn" onClick={exportCsv} disabled={!shown.length}>{t("Export CSV")}</button>}
       </div>
       <div className="panel tbl">
         {data && !all.length && <Empty>{can(me, "partsorders.add") ? t("No parts orders yet. Press New order, or open a quote request and press Make parts order.") : t("No parts orders yet.")}</Empty>}

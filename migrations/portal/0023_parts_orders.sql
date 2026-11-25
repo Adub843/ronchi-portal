@@ -64,3 +64,18 @@ CREATE TABLE parts_order_lines (
 );
 CREATE INDEX parts_order_lines_order ON parts_order_lines(order_id, line_no);
 CREATE INDEX parts_order_lines_code ON parts_order_lines(part_code);
+
+-- A built-in role an admin already saved keeps its own list, so give it this section's defaults
+-- (the same as roles.ts) once. Roles nobody saved follow roles.ts and need nothing here.
+WITH defaults(role, perm) AS (VALUES
+  ('manager', 'partsorders.view'), ('manager', 'partsorders.add'), ('manager', 'partsorders.edit'), ('manager', 'partsorders.remove'),
+  ('manager', 'partsorders.prices'), ('manager', 'partsorders.reports'), ('manager', 'partsorders.export'),
+  ('sales', 'partsorders.view'), ('sales', 'partsorders.add'), ('sales', 'partsorders.edit'), ('sales', 'partsorders.remove'),
+  ('sales', 'partsorders.prices'), ('sales', 'partsorders.reports'), ('sales', 'partsorders.export'),
+  ('billing', 'partsorders.view'), ('billing', 'partsorders.edit'), ('billing', 'partsorders.prices'), ('billing', 'partsorders.reports'), ('billing', 'partsorders.export'),
+  ('scheduling', 'partsorders.view'), ('scheduling', 'partsorders.add'), ('scheduling', 'partsorders.edit'), ('scheduling', 'partsorders.export'))
+UPDATE roles SET perms = (
+    SELECT json_group_array(value) FROM (
+      SELECT value FROM json_each(roles.perms)
+      UNION SELECT perm FROM defaults WHERE defaults.role = roles.id))
+ WHERE json_valid(perms) AND id IN (SELECT role FROM defaults);

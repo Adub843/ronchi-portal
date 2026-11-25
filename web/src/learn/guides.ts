@@ -236,6 +236,16 @@ export const GUIDES: Guide[] = [
     tip: T("Each file can be up to 25 MB. Too big together? Send them in two messages.", "Cada archivo puede pesar hasta 25 MB. ¿Demasiado juntos? Envíelos en dos mensajes.", "Ogni file può pesare fino a 25 MB. Troppo grandi insieme? Inviali in due messaggi."),
   },
 
+  {
+    id: "export-chat", area: "chats", needs: ["boards.use", "boards.export"],
+    title: T("Save a copy of a chat", "Guardar una copia de un chat", "Salvare una copia di una chat"),
+    summary: T("Download a whole conversation as a text file.", "Descargue una conversación completa como archivo de texto.", "Scarica un'intera conversazione come file di testo."),
+    steps: [
+      T("Open the chat, or a board you started, and open its menu.", "Abra el chat, o un tablero que usted inició, y abra su menú.", "Apri la chat, o una bacheca che hai creato, e apri il suo menu."),
+      T("Press Export chat (.txt). The file names who wrote what, and when.", "Pulse Exportar chat (.txt). El archivo indica quién escribió qué y cuándo.", "Premi Esporta chat (.txt). Il file indica chi ha scritto cosa e quando."),
+    ],
+  },
+
   // ---------- Boards ----------
   {
     id: "use-boards", area: "boards", needs: ["boards.use"],
@@ -462,7 +472,7 @@ export const GUIDES: Guide[] = [
     tip: T("Add 3D from a STEP or GLB file on a drawing to give it a model customers can turn and take apart.", "Use Añadir 3D desde un archivo STEP o GLB en un dibujo para darle un modelo que los clientes puedan girar y desarmar.", "Usa Aggiungi 3D da un file STEP o GLB su un disegno per dargli un modello che i clienti possono ruotare e smontare."),
   },
   {
-    id: "publish-catalog", area: "catalog", needs: ["catalog.view", "catalog.edit"],
+    id: "publish-catalog", area: "catalog", needs: ["catalog.view", "catalog.publish"],
     title: T("Publish a catalog to customers", "Publicar un catálogo para clientes", "Pubblicare un catalogo per i clienti"),
     summary: T("Customers who own the machine see it on the parts site right away.", "Los clientes dueños de la máquina lo ven de inmediato en el sitio de piezas.", "I clienti che possiedono la macchina lo vedono subito sul sito ricambi."),
     steps: [
@@ -545,7 +555,16 @@ export const GUIDES: Guide[] = [
     steps: [
       T("Open Change parts. The counts at the top show open jobs, ones shipping soon and ones past their ship date.", "Abra Cambio de formato. Los totales de arriba muestran trabajos abiertos, próximos a enviar y atrasados.", "Apri Cambio formato. I conteggi in alto mostrano lavori aperti, in spedizione a breve e in ritardo."),
       T("Search by customer, machine, part, PO or notes, and filter by status.", "Busque por cliente, máquina, pieza, orden de compra o notas, y filtre por estado.", "Cerca per cliente, macchina, ricambio, ordine d'acquisto o note, e filtra per stato."),
-      T("Open an order to see its details and its History. Export CSV gives you a spreadsheet.", "Abra un pedido para ver sus datos y su Historial. Exportar CSV le da una hoja de cálculo.", "Apri un ordine per vederne i dati e la Cronologia. Esporta CSV ti dà un foglio di calcolo."),
+      T("Open an order to see its details and its History.", "Abra un pedido para ver sus datos y su Historial.", "Apri un ordine per vederne i dati e la Cronologia."),
+    ],
+  },
+  {
+    id: "export-orders", area: "change-parts", needs: ["orders.view", "orders.export"],
+    title: T("Download the orders as a spreadsheet", "Descargar los pedidos como hoja de cálculo", "Scaricare gli ordini come foglio di calcolo"),
+    summary: T("Get the orders you're looking at in Excel.", "Obtenga en Excel los pedidos que está viendo.", "Porta in Excel gli ordini che stai guardando."),
+    steps: [
+      T("Open Change parts and search or filter to the orders you want.", "Abra Cambio de formato y busque o filtre los pedidos que quiere.", "Apri Cambio formato e cerca o filtra gli ordini che vuoi."),
+      T("Press Export CSV. The file opens in Excel.", "Pulse Exportar CSV. El archivo se abre en Excel.", "Premi Esporta CSV. Il file si apre in Excel."),
     ],
   },
   {
@@ -637,6 +656,15 @@ export const GUIDES: Guide[] = [
     steps: [
       T("In Edit, type each line's price and our cost, plus any discount and freight for the order.", "En Editar, escriba el precio de cada línea y nuestro costo, más el descuento y el flete del pedido.", "In Modifica, scrivi il prezzo di ogni riga e il nostro costo, più eventuale sconto e trasporto dell'ordine."),
       T("The order shows its total and margin. A margin under 20% shows in red.", "El pedido muestra su total y margen. Un margen menor al 20% se ve en rojo.", "L'ordine mostra totale e margine. Un margine sotto il 20% appare in rosso."),
+    ],
+  },
+  {
+    id: "export-parts-orders", area: "parts-orders", needs: ["partsorders.view", "partsorders.export"],
+    title: T("Download parts orders as a spreadsheet", "Descargar los pedidos de repuestos como hoja de cálculo", "Scaricare gli ordini ricambi come foglio di calcolo"),
+    summary: T("Get the parts orders you're looking at in Excel.", "Obtenga en Excel los pedidos de repuestos que está viendo.", "Porta in Excel gli ordini ricambi che stai guardando."),
+    steps: [
+      T("Open Parts orders and search to the orders you want.", "Abra Pedidos de repuestos y busque los pedidos que quiere.", "Apri Ordini ricambi e cerca gli ordini che vuoi."),
+      T("Press Export CSV. The file opens in Excel. Totals are in it only if you can see parts prices.", "Pulse Exportar CSV. El archivo se abre en Excel. Los totales solo aparecen si puede ver los precios de repuestos.", "Premi Esporta CSV. Il file si apre in Excel. I totali ci sono solo se puoi vedere i prezzi dei ricambi."),
     ],
   },
   {

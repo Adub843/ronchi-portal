@@ -6,6 +6,7 @@ import { ErrorNote, Link, toast, useLoad } from "../components/ui";
 import { LANGS, t } from "../i18n";
 import { THEMES } from "../theme";
 import { STARTING_ROLES, type PortalSettings, type Section } from "../../../src/portal/lib/settings";
+import { AccessCenter } from "./AccessCenter";
 import "../styles/admin.css";
 
 type Role = PortalSettings["people"]["defaultRole"];
@@ -34,7 +35,7 @@ const LOCKED = () => [
 type Switches = { workbook: boolean };
 interface Loaded {
   settings: PortalSettings; defaults: PortalSettings; updatedAt: string | null; updatedBy: string | null;
-  sections: Record<string, { label: string; hint?: string }>;
+  sections: Record<string, { label: string; hint?: string; perms: readonly string[] }>;
   owner: { id: string; name: string } | null; admins: { id: string; name: string }[];
 }
 
@@ -171,8 +172,8 @@ export function AdminSettings({ onSaved, switches, onSwitches }: { onSaved: (s: 
         <WorkbookSwitch on={switches.workbook} onSwitches={onSwitches} />
       </Group>
 
-      <Group title={t("Roles and permissions")} sub={t("What each role can do, and changes for one person, are set on the People page so there's only one place to edit them.")}>
-        <div><Link to="/people" className="btn">{t("Open People")}</Link></div>
+      <Group title={t("Each person's access")} sub={t("Pick a person and switch every function of every page on or off for them, for good or for a set time. Roles themselves are edited on People > Roles.")}>
+        <AccessCenter switches={switches} sectionsOff={new Set(Object.entries(saved.sections).filter(([, on]) => !on).flatMap(([k]) => data.sections[k]?.perms ?? []))} />
       </Group>
 
       <Group title={t("Chats and boards")} onReset={() => reset("chats")}>
