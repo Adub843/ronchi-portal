@@ -7,7 +7,7 @@ import { ACCEPT, fileProblem, fmtSize, MAX_FILES_PER_MESSAGE, MAX_MESSAGE_BYTES 
 import { countsChanged, initials } from "../components/Alerts";
 import { Camera, Clip, Close, Dots, Download, FileBadge, Search, Send, BellOff } from "../components/icons";
 import { Menu, type MenuItem } from "../components/Menu";
-import { Empty, ErrorNote, Link, PageHead, toast, useLoad } from "../components/ui";
+import { Empty, ErrorNote, Link, PageHead, toast, useLoad, Tip } from "../components/ui";
 import { loc, t } from "../i18n";
 import { navigate } from "../router";
 import { roleIds, roleLabel, useRoleNames } from "../roles";
@@ -104,6 +104,7 @@ function ConversationList({ me, kind }: { me: Me; kind: Kind }) {
       <PageHead
         title={kind === "chat" ? t("Chats") : t("Message boards")}
         sub={kind === "chat" ? t("Private conversations with anyone on staff.") : t("Team rooms for service, engineering, sales and the office.")}
+        tip={kind === "chat" ? "chats.head" : "boards.head"}
       >
         {can(me, kind === "chat" ? "chats.start" : "boards.create") && <button className="btn primary" onClick={() => setCreating(!creating)}>{creating ? t("Cancel") : kind === "chat" ? t("New chat") : t("New board")}</button>}
         <Menu label={t("More options")} trigger={<Dots />} items={menu} />
@@ -167,7 +168,7 @@ function RolePicker({ roles, setRoles }: { roles: string[]; setRoles: (r: string
           </label>
         ))}
       </div>
-      <span className="muted">{t("Leave all unticked for everyone on staff. You can always see boards you create.")}</span>
+      <Tip id="boards.audience" as="span">{t("Leave all unticked for everyone on staff. You can always see boards you create.")}</Tip>
     </fieldset>
   );
 }

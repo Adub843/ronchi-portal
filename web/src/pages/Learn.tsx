@@ -3,7 +3,7 @@
 // Not the machine Training Center (OPLs and how-tos for the machines); those are in the knowledge base.
 import { useMemo, useState } from "react";
 import { api, can, type Me } from "../api";
-import { Link, PageHead, useLoad } from "../components/ui";
+import { Link, PageHead, Tip, useLoad } from "../components/ui";
 import { getLang, t } from "../i18n";
 import { AREAS, GUIDES, guidesFor, inLang, rolesThatCan, type Guide, type Text } from "../learn/guides";
 import { roleLabel } from "../roles";
@@ -77,6 +77,7 @@ export function Learn({ me }: { me: Me }) {
       <PageHead
         title={t("Portal training")}
         sub={t("How to use every part of Ronchi Portal, step by step. For machine One Point Lessons and how-tos, use the knowledge base.")}
+        tip="learn.head"
       />
       <div className="row learn-bar">
         <div className="seg" role="tablist" aria-label={t("Portal training")}>
@@ -96,7 +97,7 @@ export function Learn({ me }: { me: Me }) {
           <progress max={myTotal || 1} value={myDone} aria-label={t("Your progress")} />
         </div>
       )}
-      {tab === "function" && <p className="muted">{t("Every part of the portal. Guides marked Not in your access need a switch you don't have; ask an admin if your job needs it.")}</p>}
+      {tab === "function" && <Tip id="learn.function">{t("Every part of the portal. Guides marked Not in your access need a switch you don't have; ask an admin if your job needs it.")}</Tip>}
       {tab === "role" && (
         <div className="panel learn-progress">
           <div className="field">

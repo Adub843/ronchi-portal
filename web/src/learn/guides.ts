@@ -165,6 +165,15 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
+    id: "hide-tips", area: "basics", needs: [], open: "/settings",
+    title: T("Hide instruction notes you've read", "Ocultar las notas de instrucciones que ya leyó", "Nascondere le note di istruzioni già lette"),
+    summary: T("Grey instruction notes on each page have a small × to close them.", "Las notas grises de instrucciones de cada página tienen una pequeña × para cerrarlas.", "Le note grigie di istruzioni in ogni pagina hanno una piccola × per chiuderle."),
+    steps: [
+      T("Press the × next to a note. It stays closed on your phone and computer.", "Pulse la × junto a una nota. Queda cerrada en su teléfono y computadora.", "Premi la × accanto a una nota. Resta chiusa su telefono e computer."),
+      T("To bring them all back, open Settings and press Show hidden tips under Your look.", "Para recuperarlas todas, abra Configuración y pulse Mostrar notas ocultas en Su apariencia.", "Per farle tornare tutte, apri Impostazioni e premi Mostra note nascoste in Il tuo aspetto."),
+    ],
+  },
+  {
     id: "use-training", area: "basics", needs: [], open: "/learn",
     title: T("Use this training", "Usar esta capacitación", "Usare questa formazione"),
     summary: T("For me shows only what your access allows. By function shows every part of the portal.", "Para mí muestra solo lo que su acceso permite. Por función muestra todas las partes del portal.", "Per me mostra solo ciò che il tuo accesso consente. Per funzione mostra tutte le parti del portale."),

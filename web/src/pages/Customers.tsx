@@ -28,7 +28,7 @@ export function Customers({ me }: { me: Me }) {
 
   return (
     <>
-      <PageHead title={t("Customer logins")} sub={t("Who can sign in to the parts site, and which machines each company sees.")}>
+      <PageHead title={t("Customer logins")} sub={t("Who can sign in to the parts site, and which machines each company sees.")} tip="customers.head">
         {can(me, "quotes.manage") && <Link to="/quotes" className="btn">{t("Quote requests")}</Link>}
       </PageHead>
       <form className="row panel" onSubmit={add}>
@@ -159,7 +159,7 @@ export function Quotes({ id }: { id?: string }) {
   if (id) return <QuotePage id={id} />;
   return (
     <>
-      <PageHead title={t("Quote requests")} sub={t("Parts lists customers sent from the parts site.")}>
+      <PageHead title={t("Quote requests")} sub={t("Parts lists customers sent from the parts site.")} tip="quotes.head">
         <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label={t("Show")}>
           <option value="">{t("All")}</option>
           {Object.entries(QUOTE_STATUS).map(([k, v]) => <option key={k} value={k}>{t(v)}</option>)}
