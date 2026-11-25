@@ -1,7 +1,7 @@
 // DEMO ONLY. The knowledge base in the preview: the 128 Training Center documents, a few example
 // quick notes, and Publish that runs the same customer-data scan as the real portal.
 import docs from "./kb-docs.json";
-import { cleanContent, CONFIRMABLE, contentText, FIRST_TEAM_NUMBER, guessCategory, isMachineNumber, KB_KINDS, machineTypesFor, KIND_FROM_CODE, scanForCustomerData, type KbKind } from "../../../src/shared/kb";
+import { cleanContent, CONFIRMABLE, contentText, FIRST_TEAM_NUMBER, guessCategory, isMachineNumber, KB_KINDS, hideCustomerNames, machineTypesFor, KIND_FROM_CODE, scanForCustomerData, type KbKind } from "../../../src/shared/kb";
 
 export class KbFail extends Error {
   constructor(public status: number, message: string) {
@@ -68,7 +68,7 @@ export function kbRoute(method: string, seg: string[], q: URLSearchParams, body:
   const pub = (a: Article) => ({ title: a.title, summary: a.summary, issue: a.issue, fix: a.fix, body: a.body_text, machine_type: a.machine_type ?? "", category: a.category ?? "" });
   const scan = (a: Article, ok: string[]) => {
     const okl = new Set(ok.map((w) => w.toLowerCase()));
-    return scanForCustomerData(pub(a), names()).filter((h) => !(CONFIRMABLE.has(h.what) && okl.has(h.found.toLowerCase()))).map((h) => ({ ...h, canConfirm: CONFIRMABLE.has(h.what) }));
+    return scanForCustomerData(hideCustomerNames(pub(a), names()).fields, names()).filter((h) => !(CONFIRMABLE.has(h.what) && okl.has(h.found.toLowerCase()))).map((h) => ({ ...h, canConfirm: CONFIRMABLE.has(h.what) }));
   };
 
   if (seg.length === 1 && method === "GET") {
@@ -165,14 +165,14 @@ export function kbRoute(method: string, seg: string[], q: URLSearchParams, body:
     a.archived_at = now(); a.published_at = null;
     return { ok: true };
   }
-  if (seg[2] === "scan") return { hits: scan(a, a.scan_ok) };
+  if (seg[2] === "scan") return { hits: scan(a, a.scan_ok), hidden: hideCustomerNames(pub(a), names()).hidden };
   if (seg[2] === "publish") {
     need("kb.publish");
     if (a.audience !== "customer") throw new KbFail(400, "This article is staff only. Mark it for customers first.");
     const ok = [...new Set([...a.scan_ok, ...(body.notCustomer ?? [])])];
     if (scan(a, ok).length) throw new KbFail(409, "Take out the customer details below, then publish again.");
     a.scan_ok = ok; a.published_at = now();
-    return { ok: true };
+    return { ok: true, hidden: hideCustomerNames(pub(a), names()).hidden };
   }
   if (seg[2] === "unpublish") { need("kb.publish"); a.published_at = null; return { ok: true }; }
   throw new KbFail(404, "Not found.");

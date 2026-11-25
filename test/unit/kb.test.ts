@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanContent, contentText, isMachineNumber, scanForCustomerData } from "../../src/shared/kb";
+import { cleanContent, contentText, hideCustomerNames, isMachineNumber, scanForCustomerData } from "../../src/shared/kb";
 
 describe("customer-data scan", () => {
   const names = { customers: ["ALPLA", "Henkel", "L'Oreal"], sites: ["Chattanooga"], serials: ["3979MB"] };
@@ -58,5 +58,19 @@ describe("machine numbers", () => {
   it("knows a machine number from a speed or a voltage", () => {
     expect(["3069MB", "4222tp", "RA1018", "RA-1023TP", "4501XQ"].map(isMachineNumber)).toEqual([true, true, true, true, true]);
     expect(["2400RPM", "1500V", "1500 mm", "1022", "Henkel"].map(isMachineNumber)).toEqual([false, false, false, false, false]);
+  });
+});
+
+describe("the customer copy hides customer names and sites", () => {
+  const terms = { customers: ["Visual Pak", "Visual Pak Companies", "Method", "P&G", "UN"], sites: ["Waukegan (IL)"], serials: [] };
+  it("replaces whole names whatever their capitals or spacing, longest first, and lists what it hid", () => {
+    const r = hideCustomerNames({ title: "Chuck wear at THE visual  pak companies", body: "Method 1: back up. Same at Waukegan (IL) and for P&G." }, terms);
+    expect(r.fields).toEqual({ title: "Chuck wear at THE [customer]", body: "[customer] 1: back up. Same at [site] and for [customer]." });
+    expect(r.hidden.sort()).toEqual(["Method", "P&G", "Visual Pak Companies", "Waukegan (IL)"]);
+  });
+  it("leaves words that only contain a name, and names too short to match safely", () => {
+    const r = hideCustomerNames({ body: "Methods differ; the UN-capper; Visual Pakistan" }, terms);
+    expect(r.fields.body).toBe("Methods differ; the UN-capper; Visual Pakistan");
+    expect(r.hidden).toEqual([]);
   });
 });

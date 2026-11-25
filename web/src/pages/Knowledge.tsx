@@ -156,6 +156,10 @@ export function KbArticle({ id, me }: { id: string; me: Me }) {
 
 function KbView({ id, me }: { id: string; me: Me }) {
   const { data, error, reload } = useLoad(() => api(`/kb/${encodeURIComponent(id)}`), [id]);
+  // The names customers won't see in this article (they get [customer] or [site] instead).
+  const forCustomers = data?.article?.audience === "customer";
+  const preview = useLoad(() => (forCustomers ? api(`/kb/${encodeURIComponent(id)}/scan`, { body: {} }) : Promise.resolve(null)), [id, forCustomers, data?.article?.updated_at]);
+  const hiddenNames: string[] = preview.data?.hidden ?? [];
   const [editing, setEditing] = useState(false);
   const [sure, setSure] = useState(false);
   const [hits, setHits] = useState<any[] | null>(null);
@@ -169,9 +173,9 @@ function KbView({ id, me }: { id: string; me: Me }) {
   async function publish() {
     setBusy(true);
     try {
-      await api(`/kb/${a.id}/publish`, { body: { notCustomer: ok } });
+      const r = await api(`/kb/${a.id}/publish`, { body: { notCustomer: ok } });
       setHits(null);
-      toast(t("Published to the customer help center"));
+      toast(r?.hidden?.length ? t("Published to the customer help center. Customer names hidden: {n}", { n: r.hidden.length }) : t("Published to the customer help center"));
       reload();
     } catch (e) {
       const r = await api(`/kb/${a.id}/scan`, { body: {} }).catch(() => null);
@@ -236,15 +240,21 @@ function KbView({ id, me }: { id: string; me: Me }) {
         </p>
       )}
 
+      {data.canPublish && hiddenNames.length > 0 && (
+        <p className="note-inline">
+          {t("Customers see [customer] or [site] in place of these names: {names}. Staff see the whole article.", { names: hiddenNames.join(", ") })}
+        </p>
+      )}
+
       {hits && (
         <div className="panel kb-hits" role="alert">
           <h2>{t("Customer details found")}</h2>
-          <p className="muted">{t("Customers must never see another customer's name, site or machine numbers. Change the article, or tick the words that aren't customer details.")}</p>
+          <p className="muted">{t("Machine numbers and passwords must come out before customers can see this. Tick an email address or phone number only if it is Ronchi's own.")}</p>
           <ul>
             {hits.map((h, i) => (
               <li key={i}>
                 {h.canConfirm ? (
-                  <label><input type="checkbox" checked={ok.includes(h.found)} onChange={() => setOk(ok.includes(h.found) ? ok.filter((w) => w !== h.found) : [...ok, h.found])} /> <strong>{h.found}</strong> <span className="muted">{t(h.what)} · {t(FIELD[h.field] ?? h.field)} · {t("not a customer detail")}</span></label>
+                  <label><input type="checkbox" checked={ok.includes(h.found)} onChange={() => setOk(ok.includes(h.found) ? ok.filter((w) => w !== h.found) : [...ok, h.found])} /> <strong>{h.found}</strong> <span className="muted">{t(h.what)} · {t(FIELD[h.field] ?? h.field)} · {t("Ronchi's own, OK to show")}</span></label>
                 ) : (
                   <span><strong>{h.found}</strong> <span className="muted">{t(h.what)} · {t(FIELD[h.field] ?? h.field)} · {t("must be taken out")}</span></span>
                 )}
