@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { csvCell, toCsv } from "../../src/shared/csv";
-import { isOpen, mapHeader, normalDate, parseCsv } from "../../src/shared/change-parts";
+import { isOpen, isShipped, mapHeader, normalDate, parseCsv } from "../../src/shared/change-parts";
 import { parseServiceReportName } from "../../src/shared/service-report";
 import { scanForCustomerData } from "../../src/shared/privacy";
 import { can, PERMISSIONS } from "../../src/portal/lib/roles";
@@ -78,11 +78,21 @@ describe("change-part spreadsheet reading", () => {
     expect(map).toMatchObject({ customer_po: 0, machine: 1, customer: 2, samples_received: 3 });
     expect(unknown).toEqual([{ index: 4, name: "Whatever" }]);
   });
-  it("knows which statuses are finished", () => {
+  it("knows which statuses are finished: only when someone checks a job off, not when it ships", () => {
     expect(isOpen("In design")).toBe(true);
     expect(isOpen(null)).toBe(true);
-    expect(isOpen("Shipped")).toBe(false);
+    // Aaron 2026-11-25: a job is not complete until the customer approves and someone marks it Completed.
+    expect(isOpen("Shipped")).toBe(true);
+    expect(isOpen("Delivered 08/10/2026")).toBe(true);
+    expect(isOpen("Waiting on customer approval")).toBe(true);
+    expect(isOpen("Dry fit test")).toBe(true);
+    expect(isOpen("Trial completed")).toBe(true);
+    expect(isOpen("Completed")).toBe(false);
     expect(isOpen("cancelled")).toBe(false);
+  });
+  it("knows when parts have left, so a past ship date isn't late", () => {
+    for (const s of ["Shipped to customer", "Dry fit test", "Trial completed", "Waiting on customer approval"]) expect(isShipped(s), s).toBe(true);
+    for (const s of ["Being built", "Shipping", "Ready to ship"]) expect(isShipped(s), s).toBe(false);
   });
 });
 

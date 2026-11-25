@@ -40,7 +40,8 @@ describe("change-part orders", () => {
     const stale = await andrew.fetch(`/api/change-parts/${data.id}`, { method: "PATCH", body: { revision: first.revision, status: "On hold" } });
     expect(stale.status).toBe(409);
     const page = await andrew.json(`/api/change-parts/${data.id}`);
-    expect(page.data.order).toMatchObject({ status: "Shipped", open: false, updated_by_name: "Michele" });
+    // Shipped is not finished: it stays open until someone marks it Completed after the customer approves.
+    expect(page.data.order).toMatchObject({ status: "Shipped", open: true, updated_by_name: "Michele" });
     expect(page.data.history[0]).toMatchObject({ action: "cp_order.update", who: "Michele", changes: { status: ["In design", "Shipped"] } });
     expect(page.data.history.at(-1).action).toBe("cp_order.create");
   });

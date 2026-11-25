@@ -579,6 +579,7 @@ export const GUIDES: Guide[] = [
     steps: [
       T("Open the order and press Edit.", "Abra el pedido y pulse Editar.", "Apri l'ordine e premi Modifica."),
       T("Change the status, dates or notes and press Save.", "Cambie estado, fechas o notas y pulse Guardar.", "Cambia stato, date o note e premi Salva."),
+      T("A shipped job stays open. When the customer approves the parts, open it and press Mark completed.", "Un trabajo enviado sigue abierto. Cuando el cliente apruebe las piezas, ábralo y pulse Marcar completado.", "Un lavoro spedito resta aperto. Quando il cliente approva i ricambi, aprilo e premi Segna completato."),
     ],
     tip: T("If someone else saved the order while you were editing, the portal stops you so nothing is overwritten. Reload and try again.", "Si otra persona guardó el pedido mientras usted editaba, el portal lo detiene para no sobrescribir nada. Recargue e intente otra vez.", "Se qualcun altro ha salvato l'ordine mentre lo modificavi, il portale ti ferma per non sovrascrivere nulla. Ricarica e riprova."),
   },
