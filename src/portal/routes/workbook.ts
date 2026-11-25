@@ -25,7 +25,7 @@ import { audit, now } from "../lib/db";
 import { body, fail, has, requirePerm, str } from "../lib/http";
 import { mailTo, sendMail } from "../lib/mail";
 import { isOn } from "../lib/switches";
-import { ACCESS_LIVE, effective, readChanges } from "../lib/roles";
+import { ACCESS_LIVE, effective, readChanges, type Permission } from "../lib/roles";
 import { loadSettings } from "../lib/settings-store";
 import { addQuickNote } from "./kb";
 
@@ -62,7 +62,7 @@ async function onJob(db: D1Database, jobId: string, userId: string): Promise<boo
 }
 
 /** May this person see dollar amounts on a work order (expenses, receipts)? Schedulers and billing only. */
-export const seesMoney = (perms: ReadonlySet<string>) => perms.has("jobs.schedule") || perms.has("workbook.billing");
+export const seesMoney = (perms: ReadonlySet<Permission>) => perms.has("jobs.schedule") || perms.has("workbook.billing");
 
 /** May this person fill in this job's work order? */
 export async function canFill(db: D1Database, u: SessionUser, jobId: string): Promise<boolean> {
@@ -424,7 +424,8 @@ workbook.post("/:jobId/submit", async (c) => {
   const plainMail = reportText({ ...base, hours: [], expenses: [] });
   const mailFor = (r: { role: string; access: string | null; role_perms: string | null; on_job: number }) => {
     const p = effective(r.role, readChanges(r.access), r.role_perms);
-    return seesMoney(p) ? mail : r.on_job || p.has("workbook.billing") ? crewMail : plainMail;
+    if (seesMoney(p)) return mail;
+    return r.on_job ? crewMail : plainMail;
   };
   // Mark it submitted first, and only if it's still a draft, so pressing Submit twice sends one email and one set of notes.
   const claimed = await db.prepare(

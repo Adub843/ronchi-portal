@@ -287,7 +287,7 @@ export function workbookRoute(method: string, seg: string[], q: URLSearchParams,
     b.report = { ...b.report, status: "submitted", submitted_by: c.me.id, submitted_at: now, revision: b.report.revision + 1 };
     const mail = reportText({
       job: j, report: b.report, entries, hours: b.hours.map((h) => ({ ...h, who: nameOf(c, h.user_id) })),
-      expenses: b.expenses.map((x) => ({ ...x, who: nameOf(c, x.user_id) })), photos: files.filter((f) => f.job_id === j.id && !f.deleted && isPhoto(f.ext)).length,
+      expenses: b.expenses.map((x) => ({ ...x, who: nameOf(c, x.user_id) })), photos: files.filter((f) => f.job_id === j.id && !f.deleted && isPhoto(f.ext) && !isReceipt(f.id)).length,
       by: c.me.name, link: jobLink(location.origin, j.id, true), amounts: seesMoney(c),
     });
     return { ok: true, notes: [], sent: recipients.map((id) => ({ name: nameOf(c, id), to: null, status: "not_configured" })), subject: mail.subject, text: mail.text };
