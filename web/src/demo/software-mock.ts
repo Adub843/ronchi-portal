@@ -2,7 +2,7 @@
 // Allen-Bradley legacy set) whose files are tiny stand-ins kept in this browser, plus uploads that
 // work the same way as the real portal (start, send pieces, finish). Sizes shown are the real-world
 // sizes of those installers so the pop-up looks like the real thing.
-import { cleanFolder, PART_BYTES, softwareFileName } from "../../../src/shared/software";
+import { cleanFolder, PART_BYTES, sharePointLink, softwareFileName } from "../../../src/shared/software";
 
 export class SoftwareFail extends Error {
   constructor(public status: number, message: string) {
@@ -11,7 +11,7 @@ export class SoftwareFail extends Error {
 }
 
 interface Pkg { id: string; name: string; description: string; legacy: boolean; position: number; updated_at: string }
-interface File { id: string; package_id: string; folder: string; name: string; size: number; url: string | null; parts?: Blob[] }
+interface File { id: string; package_id: string; folder: string; name: string; size: number; url: string | null; parts?: Blob[]; link?: boolean }
 
 let pkgs: Pkg[] | null = null;
 let files: File[] = [];
@@ -22,7 +22,7 @@ const GB = 1024 * MB;
 function seed(newId: () => string) {
   const at = new Date(Date.now() - 2 * 86400000).toISOString();
   const laptop: Pkg = { id: "sw-laptop", name: "New laptop setup", description: "Everything a new field service laptop needs, in one place.", legacy: false, position: 1, updated_at: at };
-  const ab: Pkg = { id: "sw-ab", name: "Allen-Bradley (legacy)", description: "Older Rockwell programs for machines built before Studio 5000.", legacy: true, position: 2, updated_at: at };
+  const ab: Pkg = { id: "sw-ab", name: "Allen-Bradley (legacy)", description: "Older Rockwell programs. Kept on SharePoint (AB Studio 5000 Software folder); Download opens them from there.", legacy: true, position: 2, updated_at: at };
   const f = (p: Pkg, folder: string, name: string, size: number): File => ({
     id: newId(), package_id: p.id, folder, name, size,
     url: URL.createObjectURL(new Blob([`Example file for the Ronchi Portal preview: ${folder ? `${folder}/` : ""}${name}\r\n`], { type: "application/octet-stream" })),
@@ -49,7 +49,7 @@ function seed(newId: () => string) {
     f(ab, "FactoryTalk View ME 6.1", "FTViewME_6.10.iso", 2.2 * GB),
     f(ab, "ControlFLASH 15", "ControlFLASH 15.01.exe", 95 * MB),
     f(ab, "", "BOOTP-DHCP Tool 2.3.exe", 4 * MB),
-  ].map((x) => ({ ...x, size: Math.round(x.size) }));
+  ].map((x) => (x.package_id === ab.id ? { ...x, size: 0, link: true } : { ...x, size: Math.round(x.size) }));
 }
 
 export function resetSoftware() {
@@ -100,7 +100,7 @@ export function softwareRoute(method: string, seg: string[], body: any, ctx: { p
     need("software.view");
     const p = pkg(seg[1]!);
     const list = ready(p).sort((a, b) => a.folder.localeCompare(b.folder) || a.name.localeCompare(b.name));
-    return { package: shape(p), files: list.map((f) => ({ id: f.id, folder: f.folder, name: f.name, size: f.size, url: f.url })) };
+    return { package: shape(p), files: list.map((f) => ({ id: f.id, folder: f.folder, name: f.name, size: f.size, url: f.url, link: !!f.link })) };
   }
   if (seg.length === 2 && method === "PATCH") {
     need("software.manage");
@@ -116,6 +116,20 @@ export function softwareRoute(method: string, seg: string[], body: any, ctx: { p
     pkgs = pkgs!.filter((x) => x !== p);
     files = files.filter((f) => f.package_id !== p.id);
     return { ok: true };
+  }
+  if (seg[2] === "links" && method === "POST") {
+    need("software.manage");
+    const p = pkg(seg[1]!);
+    const folder = cleanFolder(body.folder);
+    if (folder === null) throw new SoftwareFail(400, "That folder name can't be used.");
+    const list: string[] = Array.isArray(body.links) ? body.links : [];
+    for (const url of list) {
+      const l = sharePointLink(url);
+      if (!l || !l.name) throw new SoftwareFail(400, `That isn't a link to one file on Ronchi's SharePoint: ${url.slice(0, 120)}`);
+      files.push({ id: ctx.newId(), package_id: p.id, folder, name: softwareFileName(l.name), size: 0, link: true,
+        url: URL.createObjectURL(new Blob([`Preview stand-in. In the real portal this downloads from SharePoint: ${url}\r\n`], { type: "application/octet-stream" })) });
+    }
+    return { added: list.length };
   }
   if (seg[2] === "files" && method === "POST") {
     need("software.manage");

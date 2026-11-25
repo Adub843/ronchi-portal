@@ -13,7 +13,9 @@ import { navigate } from "../router";
 import { cleanFolder, fmtBytes, groupByFolder, type SoftwareFile } from "../../../src/shared/software";
 
 interface Pkg { id: string; name: string; description: string; legacy: boolean; files: number; size: number }
-type FileRow = SoftwareFile & { url?: string };
+type FileRow = SoftwareFile & { url?: string; link?: boolean };
+/** A file's size, or "SharePoint" for a file that is only a link (its size isn't known). */
+const sizeOf = (f: { size: number; link?: boolean }) => (f.link && !f.size ? t("on SharePoint") : fmtBytes(f.size));
 
 const nFiles = (n: number) => (n === 1 ? t("1 file") : t("{n} files", { n }));
 const fileHref = (f: FileRow) => f.url ?? `/api/software/files/${encodeURIComponent(f.id)}`;
@@ -49,7 +51,7 @@ export function SoftwareShelf({ me }: { me: Me }) {
             <span className="sw-tile-ic" aria-hidden="true">⬇</span>
             <span className="sw-tile-name">{p.name}{p.legacy && <span className="pill p-warn">{t("Legacy")}</span>}</span>
             {p.description && <span className="muted sw-tile-desc">{p.description}</span>}
-            <span className="muted mono sw-tile-meta">{nFiles(p.files)} · {fmtBytes(p.size)}</span>
+            <span className="muted mono sw-tile-meta">{nFiles(p.files)} · {p.size ? fmtBytes(p.size) : t("on SharePoint")}</span>
           </button>
         ))}
       </div>
@@ -106,7 +108,7 @@ export function SoftwarePicker({ pkg, onClose }: { pkg: Pkg; onClose: () => void
     if (!chosen.length) return;
     stop.current = false;
     let dir: any = null;
-    if (canPickFolder()) {
+    if (canPickFolder() && chosen.some((f) => !f.link)) {
       try {
         dir = await (window as any).showDirectoryPicker({ id: "ronchi-software", mode: "readwrite", startIn: "downloads" });
       } catch (e) {
@@ -122,7 +124,8 @@ export function SoftwarePicker({ pkg, onClose }: { pkg: Pkg; onClose: () => void
       p.current = f.folder ? `${f.folder}/${f.name}` : f.name;
       setProgress({ ...p });
       try {
-        if (root) await saveInto(root, f, (n) => { p.bytes += n; setProgress({ ...p }); });
+        // Files kept on SharePoint always go through the browser, which uses the person's own Microsoft sign-in.
+        if (root && !f.link) await saveInto(root, f, (n) => { p.bytes += n; setProgress({ ...p }); });
         else { await clickDownload(f); p.bytes += f.size; }
       } catch {
         p.failed.push(p.current);
@@ -158,7 +161,7 @@ export function SoftwarePicker({ pkg, onClose }: { pkg: Pkg; onClose: () => void
               <>
                 <div className="row sw-allrow">
                   <label className="sw-check"><input type="checkbox" checked={chosen.length === files.length && files.length > 0} ref={(el) => { if (el) el.indeterminate = chosen.length > 0 && chosen.length < files.length; }} onChange={(e) => toggle(files.map((f) => f.id), e.target.checked)} /> <strong>{t("Select all")}</strong></label>
-                  <span className="muted small-note">{t("{n} folders and files", { n: lines.length })} · {fmtBytes(data.package.size)}</span>
+                  <span className="muted small-note">{t("{n} folders and files", { n: lines.length })}{data.package.size ? ` · ${fmtBytes(data.package.size)}` : ""}</span>
                 </div>
                 <ul className="sw-list">
                   {lines.map((l) => {
@@ -172,7 +175,7 @@ export function SoftwarePicker({ pkg, onClose }: { pkg: Pkg; onClose: () => void
                             <span className="sw-ic" aria-hidden="true">{l.folder ? "📁" : "📄"}</span>
                             <span className="sw-name">{l.label}</span>
                           </label>
-                          <span className="muted mono sw-size">{l.folder ? `${nFiles(l.files.length)} · ` : ""}{fmtBytes(l.size)}</span>
+                          <span className="muted mono sw-size">{l.folder ? `${nFiles(l.files.length)} · ` : ""}{l.size || !l.files.some((f) => f.link) ? fmtBytes(l.size) : t("on SharePoint")}</span>
                           {l.folder && (
                             <button className="linkish small" aria-expanded={expanded} onClick={() => setOpenLines((o) => { const n = new Set(o); expanded ? n.delete(l.key) : n.add(l.key); return n; })}>
                               {expanded ? t("Hide files") : t("Show files")}
@@ -184,7 +187,7 @@ export function SoftwarePicker({ pkg, onClose }: { pkg: Pkg; onClose: () => void
                             {l.files.map((f) => (
                               <li key={f.id}>
                                 <label className="sw-check"><input type="checkbox" checked={picked.has(f.id)} onChange={(e) => toggle([f.id], e.target.checked)} /> <span className="mono sw-path">{f.folder.split("/").slice(1).concat(f.name).join(" / ")}</span></label>
-                                <span className="muted mono sw-size">{fmtBytes(f.size)}</span>
+                                <span className="muted mono sw-size">{sizeOf(f)}</span>
                               </li>
                             ))}
                           </ul>
@@ -194,14 +197,16 @@ export function SoftwarePicker({ pkg, onClose }: { pkg: Pkg; onClose: () => void
                   })}
                 </ul>
                 <p className="muted small-note sw-how">
-                  {canPickFolder()
+                  {chosen.length > 0 && chosen.every((f) => f.link)
+                    ? t("These come straight from SharePoint with your own Microsoft sign-in, into your Downloads folder.")
+                    : canPickFolder()
                     ? t("You choose a folder on your computer and everything is saved there, folders and all.")
                     : t("Each file goes to your Downloads folder. If the browser asks, allow it to download several files.")}
                 </p>
               </>
             )}
             <div className="row sw-foot">
-              <span className="sw-count">{chosen.length ? t("{n} files selected · {size}", { n: chosen.length, size: fmtBytes(chosenBytes) }) : t("Tick the folders or files you want")}</span>
+              <span className="sw-count">{chosen.length ? chosenBytes ? t("{n} files selected · {size}", { n: chosen.length, size: fmtBytes(chosenBytes) }) : nFiles(chosen.length) : t("Tick the folders or files you want")}</span>
               <button className="btn" onClick={onClose}>{t("Cancel")}</button>
               <button className="btn primary" disabled={!chosen.length} onClick={download}>{t("Download")}</button>
             </div>
@@ -221,7 +226,7 @@ export function SoftwarePicker({ pkg, onClose }: { pkg: Pkg; onClose: () => void
                 : t("Downloading {n} of {total}: {file}", { n: Math.min(progress.done + 1, progress.total), total: progress.total, file: progress.current })}
             </p>
             {progress.finished && progress.failed.length > 0 && <ul className="mono small-note">{progress.failed.map((f) => <li key={f}>{f}</li>)}</ul>}
-            <p className="muted small-note mono">{fmtBytes(progress.bytes)} / {fmtBytes(progress.totalBytes)}</p>
+            <p className="muted small-note mono">{progress.totalBytes ? `${fmtBytes(progress.bytes)} / ${fmtBytes(progress.totalBytes)}` : ""}</p>
             <div className="row sw-foot">
               {progress.finished
                 ? <><button className="btn" onClick={() => setProgress(null)}>{t("Pick more")}</button><button className="btn primary" onClick={onClose}>{t("Done")}</button></>
@@ -317,7 +322,7 @@ export function SoftwareManage({ me }: { me: Me }) {
               <li key={p.id}>
                 <button className={`sw-pkg${p.id === sel ? " on" : ""}`} onClick={() => setSel(p.id)}>
                   <span>{p.name}{p.legacy && <span className="pill p-warn">{t("Legacy")}</span>}</span>
-                  <span className="muted mono">{nFiles(p.files)} · {fmtBytes(p.size)}</span>
+                  <span className="muted mono">{nFiles(p.files)} · {p.size ? fmtBytes(p.size) : t("on SharePoint")}</span>
                 </button>
               </li>
             ))}
@@ -421,6 +426,12 @@ export function UploadDialog({ startPkg, onClose, onUploaded }: { startPkg?: str
   const [folder, setFolder] = useState("");
   const [newFolder, setNewFolder] = useState("");
   const [chosen, setChosen] = useState<File[]>([]);
+  // Aaron, 2026-11-25: "we dont have to store the software ... tunnel that file from share point for now".
+  // Linking to SharePoint is the default; copying into portal storage stays for later.
+  const [source, setSource] = useState<"sharepoint" | "copy">("sharepoint");
+  const [links, setLinks] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [added, setAdded] = useState<number | null>(null);
   const [uploads, setUploads] = useState<Upload[]>([]);
   const filesIn = useRef<HTMLInputElement>(null);
   const folderIn = useRef<HTMLInputElement>(null);
@@ -438,19 +449,44 @@ export function UploadDialog({ startPkg, onClose, onUploaded }: { startPkg?: str
     if (folderIn.current) folderIn.current.value = "";
   }
 
-  async function start() {
+  async function resolveTarget(): Promise<{ target: string; base: string } | null> {
     const base = folder === NEW ? cleanFolder(newFolder) : folder;
-    if (base === null || (folder === NEW && !base)) return toast(t("That folder name can't be used."));
+    if (base === null || (folder === NEW && !base)) { toast(t("That folder name can't be used.")); return null; }
     let target = pick;
     if (target === NEW) {
-      if (!newPkg.name.trim()) return toast(t("Give the new package a name."));
+      if (!newPkg.name.trim()) { toast(t("Give the new package a name.")); return null; }
       try {
         target = (await api<{ id: string }>("/software", { body: { name: newPkg.name, legacy: newPkg.legacy } })).id;
         setPkgId(target);
       } catch (e) {
-        return toast((e as Error).message);
+        toast((e as Error).message);
+        return null;
       }
     }
+    return { target, base };
+  }
+
+  async function addLinks() {
+    const lines = links.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+    if (!lines.length) return;
+    setSaving(true);
+    const r = await resolveTarget();
+    if (!r) return setSaving(false);
+    try {
+      const res = await api<{ added: number }>(`/software/${encodeURIComponent(r.target)}/links`, { body: { folder: r.base, links: lines } });
+      setAdded(res.added);
+      setLinks("");
+      onUploaded();
+    } catch (e) {
+      toast((e as Error).message);
+    }
+    setSaving(false);
+  }
+
+  async function start() {
+    const r = await resolveTarget();
+    if (!r) return;
+    const { target, base } = r;
     const jobs = chosen.map((f, i) => {
       // A folder upload keeps the folders it came in (webkitRelativePath is "Folder/Sub/file.exe").
       const rel = (f as any).webkitRelativePath as string | undefined;
@@ -514,7 +550,22 @@ export function UploadDialog({ startPkg, onClose, onUploaded }: { startPkg?: str
               {folder === NEW && <input id="up-newfolder" value={newFolder} maxLength={200} placeholder={t("For example: Studio 5000 v33")} aria-label={t("New folder name")} onChange={(e) => setNewFolder(e.target.value)} />}
             </fieldset>
 
-            <div className="sw-drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); add([...e.dataTransfer.files]); }}>
+            <fieldset className="sw-source">
+              <legend>{t("How")}</legend>
+              <label className="sw-check"><input type="radio" name="up-source" checked={source === "sharepoint"} onChange={() => setSource("sharepoint")} /> {t("Link to files on SharePoint (nothing is copied)")}</label>
+              <label className="sw-check"><input type="radio" name="up-source" checked={source === "copy"} onChange={() => setSource("copy")} /> {t("Copy files into portal storage (uses Cloudflare space)")}</label>
+            </fieldset>
+
+            {source === "sharepoint" && (
+              <div className="sw-links">
+                <label htmlFor="up-links">{t("SharePoint links, one per line")}</label>
+                <textarea id="up-links" rows={4} value={links} onChange={(e) => { setLinks(e.target.value); setAdded(null); }} placeholder="https://ronchiam.sharepoint.com/sites/HelpReferenceDocuments/…/Studio 5000 v32.iso" />
+                <p className="muted small-note">{t("In SharePoint, open the file's menu and copy its link, or copy the address while the file is open. Links to a whole folder can't be used; add the files inside it. People download with their own Microsoft sign-in.")}</p>
+                {added !== null && <p className="small-note sw-goes">{t("{n} links added to {where}", { n: added, where })}</p>}
+              </div>
+            )}
+
+            {source === "copy" && <div className="sw-drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); add([...e.dataTransfer.files]); }}>
               <div className="row">
                 <button className="btn" onClick={() => filesIn.current?.click()}>{t("Choose files")}</button>
                 <button className="btn" onClick={() => folderIn.current?.click()}>{t("Choose a whole folder")}</button>
@@ -522,11 +573,13 @@ export function UploadDialog({ startPkg, onClose, onUploaded }: { startPkg?: str
                 <input ref={folderIn} type="file" multiple hidden {...({ webkitdirectory: "", directory: "" } as any)} onChange={(e) => add([...(e.target.files ?? [])])} />
               </div>
               <p className="muted small-note">{chosen.length ? `${nFiles(chosen.length)} · ${fmtBytes(chosenBytes)}` : t("Or drag files here. Any kind of file, up to 50 GB each. A whole folder keeps its folders.")}</p>
-            </div>
-            {chosen.length > 0 && <p className="small-note sw-goes">{t("Goes to: {where}", { where })}</p>}
+            </div>}
+            {(source === "copy" ? chosen.length > 0 : !!links.trim()) && <p className="small-note sw-goes">{t("Goes to: {where}", { where })}</p>}
             <div className="row sw-foot">
-              <button className="btn" onClick={onClose}>{t("Cancel")}</button>
-              <button className="btn primary" disabled={!chosen.length} onClick={start}>{t("Upload")}</button>
+              <button className="btn" onClick={onClose}>{added !== null ? t("Done") : t("Cancel")}</button>
+              {source === "copy"
+                ? <button className="btn primary" disabled={!chosen.length} onClick={start}>{t("Upload")}</button>
+                : <button className="btn primary" disabled={!links.trim() || saving} onClick={addLinks}>{t("Add links")}</button>}
             </div>
           </>
         )}
@@ -563,7 +616,7 @@ function FileLine({ f, onRemove }: { f: FileRow; onRemove: () => void }) {
   return (
     <li className="sw-fileline">
       <span className="mono sw-path">{f.folder ? `${f.folder}/` : ""}{f.name}</span>
-      <span className="muted mono">{fmtBytes(f.size)}</span>
+      <span className="muted mono">{sizeOf(f)}</span>
       <button className="linkish small" onClick={() => (sure ? onRemove() : setSure(true))}>{sure ? t("Yes, remove") : t("Remove")}</button>
     </li>
   );

@@ -8,6 +8,15 @@ export const SOFTWARE_DYNAMIC = [
 ];
 
 export const SOFTWARE_ES: Record<string, string> = {
+  "These come straight from SharePoint with your own Microsoft sign-in, into your Downloads folder.": "Estos vienen directamente de SharePoint con su propio inicio de sesión de Microsoft, a su carpeta de Descargas.",
+  "on SharePoint": "en SharePoint",
+  "How": "Cómo",
+  "Link to files on SharePoint (nothing is copied)": "Enlazar archivos de SharePoint (no se copia nada)",
+  "Copy files into portal storage (uses Cloudflare space)": "Copiar archivos al almacenamiento del portal (usa espacio de Cloudflare)",
+  "SharePoint links, one per line": "Enlaces de SharePoint, uno por línea",
+  "In SharePoint, open the file's menu and copy its link, or copy the address while the file is open. Links to a whole folder can't be used; add the files inside it. People download with their own Microsoft sign-in.": "En SharePoint, abra el menú del archivo y copie su enlace, o copie la dirección con el archivo abierto. No se pueden usar enlaces a una carpeta completa; agregue los archivos que contiene. Cada persona descarga con su propio inicio de sesión de Microsoft.",
+  "{n} links added to {where}": "{n} enlaces agregados a {where}",
+  "Add links": "Agregar enlaces",
   "Upload": "Subir",
   "Upload files or a folder": "Subir archivos o una carpeta",
   "Where should the files go?": "¿Adónde van los archivos?",
@@ -78,6 +87,15 @@ export const SOFTWARE_ES: Record<string, string> = {
 };
 
 export const SOFTWARE_IT: Record<string, string> = {
+  "These come straight from SharePoint with your own Microsoft sign-in, into your Downloads folder.": "Questi arrivano direttamente da SharePoint con il tuo accesso Microsoft, nella cartella Download.",
+  "on SharePoint": "su SharePoint",
+  "How": "Come",
+  "Link to files on SharePoint (nothing is copied)": "Collega i file su SharePoint (non si copia niente)",
+  "Copy files into portal storage (uses Cloudflare space)": "Copia i file nello spazio del portale (usa spazio Cloudflare)",
+  "SharePoint links, one per line": "Link di SharePoint, uno per riga",
+  "In SharePoint, open the file's menu and copy its link, or copy the address while the file is open. Links to a whole folder can't be used; add the files inside it. People download with their own Microsoft sign-in.": "In SharePoint apri il menu del file e copia il suo link, oppure copia l'indirizzo con il file aperto. Non si possono usare link a un'intera cartella; aggiungi i file che contiene. Ognuno scarica con il proprio accesso Microsoft.",
+  "{n} links added to {where}": "{n} link aggiunti a {where}",
+  "Add links": "Aggiungi link",
   "Upload": "Carica",
   "Upload files or a folder": "Carica file o una cartella",
   "Where should the files go?": "Dove vanno i file?",

@@ -559,3 +559,9 @@ span.tip{display:inline-flex}
 .sw-dialog .sw-drop{margin:4px 0}
 .sw-uploads li>*{min-width:0}
 @media (max-width:760px){.sw-uploads li{grid-template-columns:1fr auto}.sw-uploads .sw-path{grid-column:1/-1}}
+.sw-source{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.sw-source legend{font-weight:600;margin-bottom:4px;padding:0}
+.sw-links{display:flex;flex-direction:column;gap:6px}
+.sw-links label{font-size:13px;font-weight:600}
+.sw-links textarea{font:12.5px var(--mono);padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--solid);color:var(--ink);width:100%;resize:vertical}
+.sw-dialog{overflow:auto}
