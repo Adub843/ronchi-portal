@@ -11,6 +11,7 @@ import { Empty, ErrorNote, Link, PageHead, toast, useLoad, Tip } from "../compon
 import { loc, t } from "../i18n";
 import { navigate } from "../router";
 import { roleIds, roleLabel, useRoleNames } from "../roles";
+import { NEW_POSTS_EVENT, POLL } from "../poll";
 
 type Kind = "board" | "chat";
 const base = (k: Kind) => (k === "chat" ? "/chats" : "/boards");
@@ -77,10 +78,16 @@ function ConversationList({ me, kind }: { me: Me; kind: Kind }) {
   const [archived, setArchived] = useState(false);
   const [q, setQ] = useState("");
 
-  // The list stays current on its own, like a phone's chat list.
+  // The list stays current on its own, like a phone's chat list: it reloads when the alerts check
+  // sees a new message, with a slow check as a backstop for renames and archived boards.
   useEffect(() => {
-    const id = window.setInterval(() => document.visibilityState === "visible" && reload(), 8000);
-    return () => window.clearInterval(id);
+    const onNew = () => reload();
+    window.addEventListener(NEW_POSTS_EVENT, onNew);
+    const id = window.setInterval(() => document.visibilityState === "visible" && reload(), POLL.idle);
+    return () => {
+      window.removeEventListener(NEW_POSTS_EVENT, onNew);
+      window.clearInterval(id);
+    };
   }, [kind]);
 
   async function readAll() {
@@ -306,10 +313,16 @@ export function BoardPage({ id, me }: { id: string; me: Me }) {
     };
   }, [!!data, panel]);
 
-  // New messages show up without refreshing (checks every few seconds while the page is open).
+  // New messages show up without refreshing: the alerts check says when this chat has something new.
+  // A slower check also picks up edits, removed messages and people added or removed.
   useEffect(() => {
-    const t = window.setInterval(() => document.visibilityState === "visible" && reload(), 5000);
-    return () => window.clearInterval(t);
+    const onNew = (e: Event) => ((e as CustomEvent<string[]>).detail ?? []).includes(id) && reload();
+    window.addEventListener(NEW_POSTS_EVENT, onNew);
+    const t = window.setInterval(() => document.visibilityState === "visible" && reload(), 30_000);
+    return () => {
+      window.removeEventListener(NEW_POSTS_EVENT, onNew);
+      window.clearInterval(t);
+    };
   }, [id]);
 
   // Photo previews for files waiting to be sent are freed when they're sent or removed.
