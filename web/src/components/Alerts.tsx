@@ -8,6 +8,7 @@ import { api, type Me } from "../api";
 import { t } from "../i18n";
 import { navigate } from "../router";
 import { NEW_POSTS_EVENT, pollDelay } from "../poll";
+import { handleRevs } from "../live";
 import { Clip, Close } from "./icons";
 
 export interface Unread { boards: number; chats: number }
@@ -65,7 +66,7 @@ export const countsChanged = () => window.dispatchEvent(new Event(READ_EVENT));
 let lastActivity = Date.now();
 const markActive = () => (lastActivity = Date.now());
 for (const e of ["pointerdown", "keydown", "wheel", "touchstart"]) window.addEventListener(e, markActive, { passive: true });
-const nextDelay = () => pollDelay({ visible: document.visibilityState === "visible", idleMs: Date.now() - lastActivity });
+export const nextDelay = () => pollDelay({ visible: document.visibilityState === "visible", idleMs: Date.now() - lastActivity });
 
 export function Alerts({ me, path, popups, onUnread }: { me: Me; path: string; popups: boolean; onUnread: (u: Unread) => void }) {
   const [shown, setShown] = useState<Update[]>([]);
@@ -81,10 +82,11 @@ export function Alerts({ me, path, popups, onUnread }: { me: Me; path: string; p
     async function tick() {
       try {
         const q = since.current ? `?since=${encodeURIComponent(since.current)}` : "";
-        const r = await api<{ now: string; posts: Update[]; unread: Unread }>(`/boards/updates${q}`);
+        const r = await api<{ now: string; posts: Update[]; unread: Unread; revs?: Record<string, number> }>(`/boards/updates${q}`);
         if (stop) return;
         since.current = r.now;
         onUnread(r.unread);
+        handleRevs(r.revs); // live updates for the page that is open (live.ts)
         // Let an open chat list or chat reload once, instead of each one checking on its own.
         if (r.posts.length) window.dispatchEvent(new CustomEvent(NEW_POSTS_EVENT, { detail: r.posts.map((p) => p.board_id) }));
         const total = r.unread.boards + r.unread.chats;
@@ -158,4 +160,35 @@ function AlertBox({ p, onClose }: { p: Update; onClose: () => void }) {
       <button type="button" className="alert-close" onClick={onClose} aria-label={t("Dismiss")}><Close size={16} /></button>
     </div>
   );
+}
+
+/** Live updates for people without chats and boards (they have no alerts check): ask GET /api/live
+ *  on the same schedule as the alerts check (poll.ts), so their open pages still update. */
+export function LivePoll() {
+  useEffect(() => {
+    let stop = false;
+    let timer: number | undefined;
+    async function tick() {
+      try {
+        const r = await api<{ revs: Record<string, number> }>("/live");
+        if (!stop) handleRevs(r.revs);
+      } catch {
+        /* offline: try again next time */
+      }
+      if (!stop) timer = window.setTimeout(tick, nextDelay());
+    }
+    tick();
+    const onShow = () => {
+      if (document.visibilityState !== "visible") return;
+      window.clearTimeout(timer);
+      tick();
+    };
+    document.addEventListener("visibilitychange", onShow);
+    return () => {
+      stop = true;
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onShow);
+    };
+  }, []);
+  return null;
 }

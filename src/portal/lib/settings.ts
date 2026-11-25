@@ -27,6 +27,9 @@ export const SECTIONS = {
   changeParts: { label: "Change parts", perms: ["orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import"] },
   knowledge: { label: "Knowledge base", perms: ["kb.view", "kb.write", "kb.edit_all", "kb.import", "kb.publish"] },
   software: { label: "Software downloads", perms: ["software.view", "software.manage"] },
+  reports: { label: "Time sheets and service reports", perms: ["reports.write", "reports.review"], hint: "The field service engineers' time sheets and service reports on each work order, and approving them." },
+  partsSales: { label: "Parts orders and sales", perms: ["psales.view", "psales.edit"], hint: "Spare parts quotes, orders, backorders and the sales tracker." },
+  shipping: { label: "Shipping and receiving", perms: ["ship.view", "ship.edit"], hint: "Shipments coming in from Italy and suppliers, orders going out, tracking and stock." },
 } as const satisfies Record<string, { label: string; perms: Permission[]; hint?: string }>;
 export type Section = keyof typeof SECTIONS;
 export const SECTION_IDS = Object.keys(SECTIONS) as Section[];

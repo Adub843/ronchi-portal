@@ -12,6 +12,7 @@ import type { AppEnv } from "./env";
 import { fail } from "./lib/http";
 import { loadSession } from "./lib/session";
 import { loadSettings } from "./lib/settings-store";
+import { bump, topicFor } from "./lib/live";
 import { auth } from "./routes/auth";
 import { boards } from "./routes/boards";
 import { catalog } from "./routes/catalog";
@@ -19,6 +20,7 @@ import { customers, quotes } from "./routes/customers";
 import { changeParts } from "./routes/change-parts";
 import { files } from "./routes/files";
 import { jobs } from "./routes/jobs";
+import { live } from "./routes/live";
 import { switches } from "./routes/switches";
 import { kb } from "./routes/kb";
 import { links } from "./routes/links";
@@ -58,6 +60,14 @@ app.use("/api/*", async (c, next) => {
     if (!success) fail(429, "Too many requests. Wait a minute and try again.");
   }
   await next();
+  // Live updates: a change that worked tells everyone's open pages to reload that area (lib/live.ts).
+  if (!SAFE_METHODS.has(c.req.method) && c.res.status < 400) {
+    const topic = topicFor(c.req.path);
+    if (topic) {
+      const done = bump(c.env.DB, topic).catch(() => undefined);
+      try { c.executionCtx.waitUntil(done); } catch { await done; }
+    }
+  }
   // API answers are never cached, except files (routes/files.ts), which set their own private rule.
   if (!c.res.headers.get("Cache-Control")) c.header("Cache-Control", "no-store");
 });
@@ -76,6 +86,7 @@ app.route("/api/change-parts", changeParts);
 app.route("/api/kb", kb);
 app.route("/api/jobs", jobs);
 app.route("/api/switches", switches);
+app.route("/api/live", live);
 app.route("/api/links", links);
 app.route("/api/software", software);
 

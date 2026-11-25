@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { t } from "../i18n";
 import { hrefFor, navigate } from "../router";
 import { hideTip, useTipHidden } from "../tips";
+import { LIVE_EVENT, pageTopics, typing } from "../live";
 
 export function Link({ to, children, className, current }: { to: string; children: ReactNode; className?: string; current?: boolean }) {
   return (
@@ -49,6 +50,27 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[] = []): { data
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  // Live updates (live.ts): when someone changes what this page shows, load it again in place.
+  // Never while a field on the page is being typed in; then it waits until the field is left.
+  useEffect(() => {
+    let waiting = false;
+    const again = () => {
+      if (typing()) {
+        if (!waiting) {
+          waiting = true;
+          document.addEventListener("focusout", () => { waiting = false; window.setTimeout(again, 50); }, { once: true });
+        }
+        return;
+      }
+      setTick((n) => n + 1);
+    };
+    const on = (e: Event) => {
+      const changed = (e as CustomEvent<string[]>).detail ?? [];
+      if (pageTopics(window.location.pathname).some((t) => changed.includes(t))) again();
+    };
+    window.addEventListener(LIVE_EVENT, on);
+    return () => window.removeEventListener(LIVE_EVENT, on);
+  }, []);
   useEffect(() => {
     let live = true;
     setError(null);

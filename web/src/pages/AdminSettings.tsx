@@ -17,6 +17,7 @@ const roleName = (r: string) =>
 const SECTION_NAMES: Partial<Record<string, () => string>> = {
   chats: () => t("Chats and boards"), jobs: () => t("Jobs (field service scheduling)"), machines: () => t("Machines"), catalog: () => t("Parts catalog"),
   customers: () => t("Customers and quote requests"), cpSales: () => t("Change-part sales"), changeParts: () => t("Change parts"), knowledge: () => t("Knowledge base"), software: () => t("Software downloads"),
+  reports: () => t("Time sheets and service reports"), partsSales: () => t("Parts orders and sales"), shipping: () => t("Shipping and receiving"),
 };
 const sectionName = (s: string, label?: string) => SECTION_NAMES[s]?.() ?? label ?? s;
 const LOCKED = () => [

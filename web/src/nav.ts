@@ -15,6 +15,8 @@ export const NAV: NavItem[] = [
   { to: "/jobs", label: "Jobs", perm: "jobs.view" },
   // Hidden when an admin switches the Ronchi workbook off in Settings.
   { to: "/work-orders", label: "Work orders", perm: "jobs.view", workbook: true },
+  // Everyone's time sheets and service reports, for the people who approve them. Part of the workbook.
+  { to: "/reports", label: "Time sheets and reports", perm: "reports.review", workbook: true },
   { to: "/kb", label: "Knowledge base", perm: "kb.view" },
   { to: "/machines", label: "Machines", perm: "machines.view" },
   { to: "/catalog", label: "Parts catalog", perm: "catalog.view" },
@@ -24,6 +26,9 @@ export const NAV: NavItem[] = [
   { to: "/quotes", label: "Quote requests", perm: "quotes.manage", unless: "customers.manage" },
   // Sales people and order people both use it, so either permission shows it.
   { to: "/change-parts", label: "Change parts", perm: "orders.view|cpsales.view" },
+  // Spare parts quotes and orders, with the sales tracker (Aaron, 2026-11-25).
+  { to: "/parts-orders", label: "Parts orders", perm: "psales.view" },
+  { to: "/shipping", label: "Shipping and receiving", perm: "ship.view" },
   { to: "/people", label: "People", perm: "users.manage" },
   // On phones Portal training and Settings live in the account menu (top right), so the tab bar keeps room for the rest.
   { to: "/learn", label: "Portal training", phone: false },

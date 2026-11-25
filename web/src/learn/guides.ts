@@ -35,6 +35,8 @@ export interface Guide {
   open?: string;
 }
 
+import { EXTRA_AREAS, EXTRA_GUIDES } from "./guides-extra";
+
 const T = (en: string, es: string, it: string): Text => ({ en, es, it });
 
 export const AREAS: Area[] = [
@@ -667,6 +669,10 @@ export const GUIDES: Guide[] = [
     ],
   },
 ];
+
+// Parts orders, shipping and receiving, time sheets and reports (learn/guides-extra.ts).
+AREAS.push(...EXTRA_AREAS);
+GUIDES.push(...EXTRA_GUIDES);
 
 /** The guides a person can follow with these permissions. */
 export function guidesFor(perms: readonly string[]): Guide[] {

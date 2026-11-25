@@ -3,7 +3,7 @@ import logoUrl from "./assets/ronchi-logo.png";
 // tab bar on phones), new-message alerts, and the page for the current address.
 import { useEffect, useState } from "react";
 import { api, can, type Me } from "./api";
-import { Alerts, initials, setSound, soundOn, type Unread } from "./components/Alerts";
+import { Alerts, LivePoll, initials, setSound, soundOn, type Unread } from "./components/Alerts";
 import { Chevron } from "./components/icons";
 import { Menu, type MenuItem } from "./components/Menu";
 import { Link, toast } from "./components/ui";
@@ -24,7 +24,11 @@ import { Settings } from "./pages/Settings";
 import { JobList, JobPage, NewJob } from "./pages/Jobs";
 import { WorkOrderPage, WorkOrders } from "./pages/WorkOrders";
 import { Learn } from "./pages/Learn";
+import { PartsOrders } from "./pages/PartsOrders";
+import { Shipping } from "./pages/Shipping";
+import { Reports } from "./pages/Reports";
 import { menuFor } from "./nav";
+import { LIVE_EVENT } from "./live";
 import { roleLabel, useRoleNames } from "./roles";
 
 export const DEFAULT_PREFS: Prefs = { theme: "ronchi", mode: "auto", layout: "L2", tiles: null, lang: "en", popups: true };
@@ -51,6 +55,21 @@ export function App() {
       if (isLang(p.lang)) setLang(p.lang);
     });
   }, [me]);
+
+  // Live updates (live.ts): when an admin flips a switch in the Command center, everyone's menu follows.
+  useEffect(() => {
+    if (!me) return;
+    const on = (e: Event) => {
+      const changed = (e as CustomEvent<string[]>).detail ?? [];
+      if (changed.includes("settings") || changed.includes("users")) {
+        api<{ switches: { workbook: boolean } }>("/switches").then((r) => setSwitches(r.switches), () => undefined);
+        refresh();
+      }
+    };
+    window.addEventListener(LIVE_EVENT, on);
+    return () => window.removeEventListener(LIVE_EVENT, on);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.id]);
 
   async function savePrefs(next: Partial<Prefs> | { reset: true }) {
     try {
@@ -108,6 +127,9 @@ export function App() {
   else if (section === "/change-parts") page = <ChangeParts me={me} />;
   else if (section === "/people") page = <People me={me} />;
   else if (section === "/learn") page = <Learn me={me} />;
+  else if (section === "/parts-orders") page = <PartsOrders me={me} path={path} />;
+  else if (section === "/shipping") page = <Shipping me={me} path={path} />;
+  else if (section === "/reports" && switches.workbook) page = <Reports me={me} path={path} />;
   else if (section === "/settings") page = <Settings me={me} admin={path === "/settings/admin"} prefs={prefs} switches={switches} onSwitches={setSwitches} onPrefs={savePrefs} onSignOut={signOut} sound={sound} onSound={(on) => { setSound(on); setSoundState(on); }} onSettings={(s) => setMe({ ...me, settings: s })} />;
   else page = <Home me={me} unread={unread} />;
 
@@ -189,7 +211,7 @@ export function App() {
           </main>
         </div>
       </div>
-      {can(me, "boards.use") && <Alerts me={me} path={path} popups={popups} onUnread={setUnread} />}
+      {can(me, "boards.use") ? <Alerts me={me} path={path} popups={popups} onUnread={setUnread} /> : <LivePoll />}
     </>
   );
 }

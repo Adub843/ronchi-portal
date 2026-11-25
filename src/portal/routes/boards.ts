@@ -10,6 +10,7 @@
 // that board or chat (see routes/files.ts).
 import { Hono, type Context } from "hono";
 import { randomId } from "../../shared/crypto";
+import { readRevs } from "../lib/live";
 import { cleanName, fileInfo, fileProblem, MAX_MESSAGE_BYTES } from "../../shared/files";
 import { getSettings } from "../lib/settings-store";
 import type { AppEnv, SessionUser } from "../env";
@@ -118,7 +119,8 @@ boards.get("/updates", async (c) => {
   const [boardList, chatList] = await Promise.all([listFor(c.env.DB, u, "board"), listFor(c.env.DB, u, "chat")]);
   const unread = { boards: boardList.reduce((n, b) => n + b.unread, 0), chats: chatList.reduce((n, b) => n + b.unread, 0) };
   const since = c.req.query("since") ?? "";
-  if (!/^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(since)) return c.json({ now: at, posts: [], unread });
+  const revs = await readRevs(c.env.DB); // live updates for the other pages (lib/live.ts)
+  if (!/^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(since)) return c.json({ now: at, posts: [], unread, revs });
   const floor = new Date(Date.now() - 10 * 60000).toISOString(); // never more than the last 10 minutes
   const { results } = await c.env.DB.prepare(
     `SELECT p.id, p.board_id, substr(p.body, 1, 160) AS body, p.created_at, u.name AS author, b.name AS board_name, b.kind, b.audience,
@@ -133,7 +135,7 @@ boards.get("/updates", async (c) => {
     .filter((p) => !p.muted && canSee(u, p, !!p.member))
     .slice(0, 5)
     .map(({ audience: _a, muted: _m, member: _x, ...p }) => p);
-  return c.json({ now: at, posts, unread });
+  return c.json({ now: at, posts, unread, revs });
 });
 
 /** Mark every board and chat read. */

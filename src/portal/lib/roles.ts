@@ -45,7 +45,13 @@ export type Permission =
   | "software.view"       // open software packages (installers, program folders) and download them
   | "software.manage"     // make software packages, upload and remove installers and folders
   | "jobs.view"           // see field service jobs and their machine history, and add files to them
-  | "jobs.schedule";      // schedule jobs, choose the field service engineers, send the job emails
+  | "jobs.schedule"       // schedule jobs, choose the field service engineers, send the job emails
+  | "reports.write"       // fill in time sheets and service reports for the jobs they are on (the Ronchi workbook)
+  | "reports.review"      // read everyone's time sheets and service reports, and approve or send them back
+  | "psales.view"         // see parts orders and the sales tracker (spare parts, not change parts)
+  | "psales.edit"         // start quotes, turn them into orders, and change parts orders
+  | "ship.view"           // see shipping and receiving: what is coming in, going out, and where it is
+  | "ship.edit";          // receive shipments, pack and ship orders, add tracking numbers
 
 const ALL: Permission[] = [
   "settings.manage", "users.manage", "audit.view", "machines.view", "machines.add", "machines.edit",
@@ -54,10 +60,11 @@ const ALL: Permission[] = [
   "cpsales.view", "cpsales.edit", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import",
   "kb.view", "kb.write", "kb.edit_all", "kb.import", "kb.publish",
   "software.view", "software.manage",
-  "jobs.view", "jobs.schedule",
+  "jobs.view", "jobs.schedule", "reports.write", "reports.review",
+  "psales.view", "psales.edit", "ship.view", "ship.edit",
 ];
 
-const STAFF_BASE: Permission[] = ["boards.use", "boards.create", "chats.start", "files.send", "machines.view", "catalog.view", "kb.view", "kb.write", "software.view", "jobs.view"];
+const STAFF_BASE: Permission[] = ["boards.use", "boards.create", "chats.start", "files.send", "machines.view", "catalog.view", "kb.view", "kb.write", "software.view", "jobs.view", "reports.write", "ship.view"];
 
 // Managers (Aaron, 2026-11-24: "paolo, steve, michele, and morad should all be manager level log
 // ins i am the only admin") get everything except managing people and reading the audit log.
@@ -66,10 +73,10 @@ const MANAGER: Permission[] = ALL.filter((p) => p !== "users.manage" && p !== "a
 export const PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
   admin: new Set(ALL),
   manager: new Set(MANAGER),
-  billing: new Set([...STAFF_BASE, "quotes.manage"]),
-  scheduling: new Set([...STAFF_BASE, "jobs.schedule"]),
-  service: new Set([...STAFF_BASE, "machines.add", "machines.edit", "boards.moderate", "catalog.edit", "customers.manage", "customers.invite", "quotes.manage", "kb.edit_all", "kb.import", "kb.publish", "jobs.schedule"]),
-  sales: new Set([...STAFF_BASE, "customers.manage", "customers.invite", "quotes.manage", "cpsales.view", "cpsales.edit", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import"]),
+  billing: new Set([...STAFF_BASE, "quotes.manage", "psales.view", "ship.edit"]),
+  scheduling: new Set([...STAFF_BASE, "jobs.schedule", "reports.review"]),
+  service: new Set([...STAFF_BASE, "machines.add", "machines.edit", "boards.moderate", "catalog.edit", "customers.manage", "customers.invite", "quotes.manage", "kb.edit_all", "kb.import", "kb.publish", "jobs.schedule", "reports.review", "psales.view", "ship.edit"]),
+  sales: new Set([...STAFF_BASE, "customers.manage", "customers.invite", "quotes.manage", "cpsales.view", "cpsales.edit", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import", "psales.view", "psales.edit", "ship.edit"]),
   engineering: new Set([...STAFF_BASE, "machines.add", "machines.edit", "catalog.edit", "kb.edit_all", "kb.import", "kb.publish", "software.manage"]),
   tech: new Set([...STAFF_BASE]),
 };
@@ -154,7 +161,7 @@ export function readChanges(list: string | null | undefined): AccessChanges {
 }
 
 /** Seeing, without changing anything: what "View only" on the access screen keeps on. */
-export const VIEW_PERMS: ReadonlySet<Permission> = new Set(["boards.use", "machines.view", "catalog.view", "kb.view", "software.view", "cpsales.view", "orders.view", "jobs.view"]);
+export const VIEW_PERMS: ReadonlySet<Permission> = new Set(["boards.use", "machines.view", "catalog.view", "kb.view", "software.view", "cpsales.view", "orders.view", "jobs.view", "psales.view", "ship.view"]);
 
 /** Plain-English names for the access screen, grouped the way the menu is. */
 export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label: string; hint: string }[] }[] = [
@@ -202,6 +209,18 @@ export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label:
   { group: "Field service jobs", perms: [
     { id: "jobs.view", label: "See jobs", hint: "Field service jobs, each job's machine history, and adding files to a job." },
     { id: "jobs.schedule", label: "Schedule jobs", hint: "Make and change jobs, choose the field service engineers and send the job emails." },
+  ] },
+  { group: "Ronchi workbook", perms: [
+    { id: "reports.write", label: "Fill in time sheets and service reports", hint: "Their own time sheet and service report for the jobs they are on." },
+    { id: "reports.review", label: "Review time sheets and service reports", hint: "Read everyone's, approve them or send them back with a note." },
+  ] },
+  { group: "Parts orders and sales", perms: [
+    { id: "psales.view", label: "See parts orders", hint: "Spare parts quotes, orders and the sales tracker." },
+    { id: "psales.edit", label: "Work parts orders", hint: "Start quotes, turn them into orders, change lines and status." },
+  ] },
+  { group: "Shipping and receiving", perms: [
+    { id: "ship.view", label: "See shipping and receiving", hint: "What is coming in, what is going out, and tracking." },
+    { id: "ship.edit", label: "Ship and receive", hint: "Receive shipments, pack and ship orders, add tracking numbers." },
   ] },
   { group: "Admin only", perms: [
     { id: "users.manage", label: "Manage people", hint: "Invites, roles, access and sign-outs. Admins only." },
