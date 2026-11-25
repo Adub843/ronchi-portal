@@ -464,6 +464,6 @@ partsOrders.post("/from-quote/:quoteId", async (c) => {
   }
   await audit(c.env.DB, { userId: u.id, action: "parts_order.create", targetType: "parts_order", targetId: made.id, detail: { changes: { quote_request: [null, quote.number], customer: [null, f.customer], lines: ["none", linesSummary(lines)] } }, ip: c.get("ip") });
   // Let the customer's request show "received" on their side.
-  if (quote.status === "sent") await partsCall(c.env, `/quotes/${encodeURIComponent(qid)}`, { method: "PATCH", body: { status: "received", by: u.name } }).catch(() => undefined);
+  if (quote.status === "sent") await partsCall(c.env, `/quotes/${encodeURIComponent(qid)}`, { method: "PATCH", body: { status: "received", by: u.id } }).catch(() => undefined);
   return c.json({ id: made.id, number: number(made.seq) });
 });

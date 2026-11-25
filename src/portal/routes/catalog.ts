@@ -517,7 +517,7 @@ catalog.post("/machines/:id/publish", async (c) => {
   for (const r of rows) (bySheet.get(r.sheet_id) ?? bySheet.set(r.sheet_id, []).get(r.sheet_id)!).push(r);
   const res = await partsCall<{ sheets: number; parts: number }>(c.env, "/publish", {
     body: {
-      by: u.name,
+      by: u.id,
       machine: { serial: m.serial, model: m.model },
       sheets: sheets.map((s) => ({
         id: s.id, parentId: s.parent_id, section: s.section, grp: s.grp, code: s.code, rev: s.rev, title: s.title, titleIt: s.title_it,

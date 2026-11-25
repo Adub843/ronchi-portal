@@ -202,6 +202,10 @@ describe("parts orders", () => {
       expect(again.data).toMatchObject({ id: r.data.id, existing: true });
       const quote = await db.prepare("SELECT status FROM quotes WHERE id = ?").bind(q).first<{ status: string }>();
       expect(quote!.status).toBe("received");
+      // The parts site is told who by id, never by name (the wall between staff and customers).
+      const log = await db.prepare("SELECT detail FROM audit_log WHERE action = 'quote.status' AND target = ?").bind(q).first<{ detail: string }>();
+      expect(JSON.parse(log!.detail).by).toBe(sales.id);
+      expect(log!.detail).not.toContain(sales.name);
       // Scheduling can make orders but doesn't read quote requests.
       expect((await (await person("scheduling")).fetch(`/api/parts-orders/from-quote/${q}`, { body: {} })).status).toBe(403);
     } finally {

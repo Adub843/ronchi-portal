@@ -9,6 +9,9 @@ import { partsCall } from "../lib/parts-site";
 
 export const customers = new Hono<AppEnv>();
 
+// Changes sent to the parts site carry the staff id (by: u.id), never a staff name: parts-db must hold no
+// staff names (README, "The wall"). The portal's own audit log says who it was.
+
 const ID = /^[A-Za-z0-9_-]{8,40}$/;
 const id = (v: string) => (ID.test(v) ? v : fail(404, "Not found."));
 
@@ -20,7 +23,7 @@ customers.get("/", async (c) => {
 customers.post("/", async (c) => {
   const u = requirePerm(c, "customers.manage");
   const b = await body(c);
-  const res = await partsCall(c.env, "/companies", { body: { name: b.name, by: u.name } });
+  const res = await partsCall(c.env, "/companies", { body: { name: b.name, by: u.id } });
   await audit(c.env.DB, { userId: u.id, action: "customer.company.create", targetType: "parts_company", targetId: res.id, ip: c.get("ip") });
   return c.json(res);
 });
@@ -28,7 +31,7 @@ customers.post("/", async (c) => {
 customers.patch("/:id", async (c) => {
   const u = requirePerm(c, "customers.manage");
   const b = await body(c);
-  const res = await partsCall(c.env, `/companies/${id(c.req.param("id"))}`, { method: "PATCH", body: { name: b.name, status: b.status, by: u.name } });
+  const res = await partsCall(c.env, `/companies/${id(c.req.param("id"))}`, { method: "PATCH", body: { name: b.name, status: b.status, by: u.id } });
   await audit(c.env.DB, { userId: u.id, action: "customer.company.update", targetType: "parts_company", targetId: c.req.param("id"), detail: { status: b.status }, ip: c.get("ip") });
   return c.json(res);
 });
@@ -42,7 +45,7 @@ customers.put("/:id/machines", async (c) => {
   for (const m of list) {
     if (!(await c.env.DB.prepare("SELECT 1 FROM machines WHERE serial = ?").bind(m.serial).first())) fail(400, `${m.serial || "That machine"} isn't in the machine list.`);
   }
-  const res = await partsCall(c.env, `/companies/${id(c.req.param("id"))}/machines`, { method: "PUT", body: { machines: list, by: u.name } });
+  const res = await partsCall(c.env, `/companies/${id(c.req.param("id"))}/machines`, { method: "PUT", body: { machines: list, by: u.id } });
   await audit(c.env.DB, { userId: u.id, action: "customer.machines", targetType: "parts_company", targetId: c.req.param("id"), detail: { serials: list.map((m) => m.serial) }, ip: c.get("ip") });
   return c.json(res);
 });
@@ -51,7 +54,7 @@ customers.put("/:id/machines", async (c) => {
 customers.post("/:id/invites", async (c) => {
   const u = requirePerm(c, "customers.invite");
   const b = await body(c);
-  const res = await partsCall(c.env, `/companies/${id(c.req.param("id"))}/invites`, { body: { email: b.email, name: b.name, role: b.role, by: u.name } });
+  const res = await partsCall(c.env, `/companies/${id(c.req.param("id"))}/invites`, { body: { email: b.email, name: b.name, role: b.role, by: u.id } });
   await audit(c.env.DB, { userId: u.id, action: "customer.invite", targetType: "parts_company", targetId: c.req.param("id"), detail: { role: b.role }, ip: c.get("ip") });
   return c.json(res);
 });
@@ -59,7 +62,7 @@ customers.post("/:id/invites", async (c) => {
 customers.patch("/users/:id", async (c) => {
   const u = requirePerm(c, "customers.invite");
   const b = await body(c);
-  const res = await partsCall(c.env, `/users/${id(c.req.param("id"))}`, { method: "PATCH", body: { role: b.role, status: b.status, by: u.name } });
+  const res = await partsCall(c.env, `/users/${id(c.req.param("id"))}`, { method: "PATCH", body: { role: b.role, status: b.status, by: u.id } });
   await audit(c.env.DB, { userId: u.id, action: "customer.user.update", targetType: "parts_user", targetId: c.req.param("id"), detail: { role: b.role, status: b.status }, ip: c.get("ip") });
   return c.json(res);
 });
@@ -90,7 +93,7 @@ quotes.get("/:id", async (c) => {
 quotes.patch("/:id", async (c) => {
   const u = requirePerm(c, "quotes.manage");
   const b = await body(c);
-  const res = await partsCall(c.env, `/quotes/${id(c.req.param("id"))}`, { method: "PATCH", body: { status: b.status, by: u.name } });
+  const res = await partsCall(c.env, `/quotes/${id(c.req.param("id"))}`, { method: "PATCH", body: { status: b.status, by: u.id } });
   await audit(c.env.DB, { userId: u.id, action: "quote.status", targetType: "parts_quote", targetId: c.req.param("id"), detail: { status: b.status }, ip: c.get("ip") });
   return c.json(res);
 });
