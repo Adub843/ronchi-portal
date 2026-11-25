@@ -5,6 +5,8 @@
 // versions are in i18n-dict.ts, keyed by the English text. A test (test/unit/i18n.test.ts)
 // fails if any t("...") is missing a Spanish or Italian version.
 // Messages people type are never translated; they show exactly as written.
+// One exception: the Portal training guides (learn/guides.ts) are long, so each guide carries its own
+// English, Spanish and Italian side by side; test/unit/learn.test.ts checks none is missing.
 import { useEffect, useState } from "react";
 import { ES, IT } from "./i18n-dict";
 
