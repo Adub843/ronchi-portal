@@ -14,7 +14,12 @@ import { cleanName, fileInfo, fileProblem, MAX_FILES_PER_MESSAGE, MAX_MESSAGE_BY
 import type { AppEnv, SessionUser } from "../env";
 import { audit, now } from "../lib/db";
 import { body, fail, mustStr, requirePerm, str, has } from "../lib/http";
-import { isRole } from "../lib/roles";
+import { roleExists } from "../lib/role-store";
+
+async function allRoles(db: D1Database, list: unknown[]) {
+  for (const r of list) if (typeof r !== "string" || !(await roleExists(db, r))) return false;
+  return true;
+}
 
 export const boards = new Hono<AppEnv>();
 
@@ -151,7 +156,7 @@ boards.post("/", async (c) => {
   const description = str(b.description, 500);
   let audience: string | null = null;
   if (Array.isArray(b.audience) && b.audience.length) {
-    if (!b.audience.every(isRole)) fail(400, "Unknown role in who can see it.");
+    if (!(await allRoles(c.env.DB, b.audience))) fail(400, "Unknown role in who can see it.");
     const roles = [...new Set([...(b.audience as string[]), u.role])]; // the creator can always see their board
     audience = JSON.stringify(roles);
   }
@@ -281,7 +286,7 @@ boards.patch("/:id", async (c) => {
     const description = b.description === undefined ? board.description : str(b.description, 500);
     let audience = board.audience;
     if (b.audience !== undefined) {
-      if (!Array.isArray(b.audience) || !b.audience.every(isRole)) fail(400, "Unknown role in who can see it.");
+      if (!Array.isArray(b.audience) || !(await allRoles(c.env.DB, b.audience))) fail(400, "Unknown role in who can see it.");
       audience = b.audience.length ? JSON.stringify([...new Set([...(b.audience as string[]), u.role])]) : null;
     }
     const locked = b.locked === undefined ? board.locked : b.locked === true ? 1 : 0;

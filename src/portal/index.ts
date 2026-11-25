@@ -20,6 +20,7 @@ import { files } from "./routes/files";
 import { jobs } from "./routes/jobs";
 import { switches } from "./routes/switches";
 import { kb } from "./routes/kb";
+import { links } from "./routes/links";
 import { machines } from "./routes/machines";
 import { prefs } from "./routes/prefs";
 import { users } from "./routes/users";
@@ -69,6 +70,7 @@ app.route("/api/change-parts", changeParts);
 app.route("/api/kb", kb);
 app.route("/api/jobs", jobs);
 app.route("/api/switches", switches);
+app.route("/api/links", links);
 
 app.all("/api/*", () => fail(404, "Not found."));
 
