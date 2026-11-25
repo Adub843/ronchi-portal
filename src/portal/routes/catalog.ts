@@ -11,8 +11,7 @@ import { cleanPartCode, SECTIONS } from "../../shared/catalog/model";
 import { scanForCustomerData } from "../../shared/privacy";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
-import { body, fail, mustStr, requirePerm, str } from "../lib/http";
-import { can } from "../lib/roles";
+import { body, fail, mustStr, requirePerm, str, has } from "../lib/http";
 import { partsCall, partsSiteReady } from "../lib/parts-site";
 
 export const catalog = new Hono<AppEnv>();
@@ -249,7 +248,7 @@ catalog.get("/sheets/:id", async (c) => {
       path,
     },
     rows: rows.map((r: any) => ({ ...r, hotspots: r.hotspots ? JSON.parse(r.hotspots) : [], wear: !!r.wear })),
-    canEdit: can(u.role, "catalog.edit"),
+    canEdit: has(u, "catalog.edit"),
   });
 });
 
@@ -453,7 +452,7 @@ catalog.delete("/notes/:id", async (c) => {
   const u = requirePerm(c, "catalog.view");
   const n = await c.env.DB.prepare("SELECT id, user_id FROM catalog_notes WHERE id = ? AND deleted_at IS NULL").bind(c.req.param("id")).first<{ id: string; user_id: string }>();
   if (!n) fail(404, "Not found.");
-  if (n.user_id !== u.id && !can(u.role, "catalog.edit")) fail(403, "Only the writer or a catalog editor can remove a note.");
+  if (n.user_id !== u.id && !has(u, "catalog.edit")) fail(403, "Only the writer or a catalog editor can remove a note.");
   await c.env.DB.prepare("UPDATE catalog_notes SET deleted_at = ? WHERE id = ?").bind(now(), n.id).run();
   await audit(c.env.DB, { userId: u.id, action: "catalog.note.delete", targetType: "catalog_note", targetId: n.id, ip: c.get("ip") });
   return c.json({ ok: true });

@@ -7,11 +7,10 @@ import {
   cleanContent, CONFIRMABLE, contentText, FIRST_TEAM_NUMBER, guessCategory, HELP_KIND, isKbKind, isMachineNumber, machineTypesFor, KB_CATEGORIES, KB_CODE, KB_KINDS,
   KIND_FROM_CODE, scanForCustomerData, toFtsQuery, type KbContent, type KbKind, type PrivateTerms,
 } from "../../shared/kb";
-import type { AppEnv } from "../env";
+import type { AppEnv, SessionUser } from "../env";
 import { audit, now } from "../lib/db";
 import { helpCall } from "../lib/help-site";
-import { body, fail, requirePerm, str } from "../lib/http";
-import { can } from "../lib/roles";
+import { body, fail, requirePerm, str, has } from "../lib/http";
 
 export const kb = new Hono<AppEnv>();
 
@@ -117,13 +116,13 @@ kb.get("/:id", async (c) => {
   return c.json({
     article: { ...rest, content: JSON.parse(content || "{}") as KbContent, created_by_name: nameOf(a.created_by), updated_by_name: nameOf(a.updated_by) },
     canEdit: canEdit(user, a),
-    canPublish: can(user.role, "kb.publish"),
+    canPublish: has(user, "kb.publish"),
     changedSincePublish: !!a.published_at && a.updated_at > a.published_at,
   });
 });
 
-function canEdit(user: { id: string; role: Parameters<typeof can>[0] }, a: Pick<Row, "created_by">): boolean {
-  return can(user.role, "kb.publish") || (can(user.role, "kb.write") && a.created_by === user.id);
+function canEdit(user: SessionUser, a: Pick<Row, "created_by">): boolean {
+  return has(user, "kb.publish") || (has(user, "kb.write") && a.created_by === user.id);
 }
 
 // ---------- Add and change ----------

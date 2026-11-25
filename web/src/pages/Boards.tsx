@@ -105,7 +105,7 @@ function ConversationList({ me, kind }: { me: Me; kind: Kind }) {
         title={kind === "chat" ? t("Chats") : t("Message boards")}
         sub={kind === "chat" ? t("Private conversations with anyone on staff.") : t("Team rooms for service, engineering, sales and the office.")}
       >
-        <button className="btn primary" onClick={() => setCreating(!creating)}>{creating ? t("Cancel") : kind === "chat" ? t("New chat") : t("New board")}</button>
+        {can(me, kind === "chat" ? "chats.start" : "boards.create") && <button className="btn primary" onClick={() => setCreating(!creating)}>{creating ? t("Cancel") : kind === "chat" ? t("New chat") : t("New board")}</button>}
         <Menu label={t("More options")} trigger={<Dots />} items={menu} />
       </PageHead>
       {creating && (kind === "chat" ? <NewChat /> : <NewBoard />)}
@@ -326,6 +326,7 @@ export function BoardPage({ id, me }: { id: string; me: Me }) {
   });
 
   function addFiles(list: FileList | File[] | null) {
+    if (!can(me, "files.send")) return;
     if (!list) return;
     const next = [...files];
     for (const f of Array.from(list)) {
@@ -573,7 +574,7 @@ export function BoardPage({ id, me }: { id: string; me: Me }) {
           )}
           <ErrorNote error={err} />
           <div className="compose-row">
-            {!editing && (
+            {!editing && can(me, "files.send") && (
               <>
                 <button type="button" className="iconbtn compose-btn" aria-label={t("Attach photos or files")} title={t("Attach photos or files")} onClick={() => attach.current?.click()}><Clip /></button>
                 <button type="button" className="iconbtn compose-btn touch-only" aria-label={t("Take a photo")} onClick={() => camera.current?.click()}><Camera /></button>

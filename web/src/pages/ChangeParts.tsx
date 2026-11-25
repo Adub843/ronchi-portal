@@ -97,7 +97,7 @@ export function ChangeParts({ me }: { me: Me }) {
     <>
       <PageHead title={t("Change-part orders")} sub={t("Every change-part job, from quote to shipped.")}>
         <button className="btn" onClick={exportCsv} disabled={!shown.length}>{t("Export CSV")}</button>
-        {edit && <button className="btn" onClick={() => setPanel(panel === "import" ? null : "import")}>{panel === "import" ? t("Cancel") : t("Import CSV")}</button>}
+        {can(me, "orders.import") && <button className="btn" onClick={() => setPanel(panel === "import" ? null : "import")}>{panel === "import" ? t("Cancel") : t("Import CSV")}</button>}
         {edit && <button className="btn primary" onClick={() => setPanel(panel === "new" ? null : "new")}>{panel === "new" ? t("Cancel") : t("New order")}</button>}
       </PageHead>
       {panel === "new" && <OrderForm onSaved={(id) => navigate(`/change-parts/${id}`)} onCancel={() => setPanel(null)} />}

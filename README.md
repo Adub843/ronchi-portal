@@ -130,6 +130,10 @@ peer list. All peers the project needs are listed directly in `package.json`.)
   Changing someone's role or disabling them signs them out everywhere at once.
 - **Deny by default.** Every API route asks `requirePerm(...)`; the role table is in
   `src/portal/lib/roles.ts`. Boards limited to some roles return "not found" to others.
+- **Per-person access.** On People, the Access button switches any single permission on or off
+  for one person, on top of their role (table `user_access`, migration 0009). It applies on
+  their next click. Admins always keep everything, nobody can change their own access, and
+  managing people and the audit log stay admin-only. Every change goes in the audit log.
 - **Changes must come from the portal's own pages**: `Origin` must match and the
   `X-Ronchi: 1` header must be present, on top of the SameSite cookie.
 - **Headers**: strict Content Security Policy (only our own files), HSTS, no framing,

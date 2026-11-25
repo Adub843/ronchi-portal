@@ -1,4 +1,4 @@
-import type { Role } from "./lib/roles";
+import type { Permission, Role } from "./lib/roles";
 
 export type { Role };
 
@@ -28,6 +28,8 @@ export interface SessionUser {
   email: string;
   name: string;
   role: Role;
+  /** Everything this person may do: their role plus any per-person changes. */
+  perms: ReadonlySet<Permission>;
   sessionHash: string;
 }
 
