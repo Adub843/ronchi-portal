@@ -26,7 +26,7 @@ export function Machines({ me }: { me: Me }) {
   return (
     <>
       <PageHead title={t("Machines")} sub={t("Every Ronchi machine in the field, by machine number.")}>
-        {can(me, "machines.edit") && <button className="btn primary" onClick={() => setAdding(!adding)}>{adding ? t("Cancel") : t("Add machine")}</button>}
+        {can(me, "machines.add") && <button className="btn primary" onClick={() => setAdding(!adding)}>{adding ? t("Cancel") : t("Add machine")}</button>}
       </PageHead>
       {adding && (
         <form className="panel grid g2" onSubmit={add}>

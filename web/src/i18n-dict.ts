@@ -169,7 +169,25 @@ export const DYNAMIC: string[] = [
  "Schedule jobs",
  "Make and change jobs, choose the field service engineers and send the job emails.",
  "Jobs",
- "Work orders"
+ "Work orders",
+ "Add machines",
+ "Put a new machine on the list.",
+ "Change machines",
+ "Change a machine's model, customer, site, notes and SharePoint link.",
+ "Customer companies",
+ "Add, rename or turn off companies, and choose which machines each one sees.",
+ "Make sign-up links, and turn a customer's login on or off.",
+ "Add orders",
+ "Start a new change-part order.",
+ "Change orders",
+ "Change an order's details and status.",
+ "Remove orders",
+ "Take an order off the list.",
+ "Change anyone's articles",
+ "Change or archive articles other people wrote.",
+ "Import documents",
+ "Bring in documents from the import file.",
+ "Put articles on the customer help center, or take them down."
 ];
 
 export const ES: Record<string, string> = {
@@ -902,7 +920,26 @@ export const ES: Record<string, string> = {
   "See jobs": "Ver trabajos",
   "Field service jobs, each job's machine history, and adding files to a job.": "Trabajos de servicio de campo, el historial de la máquina de cada trabajo y añadir archivos a un trabajo.",
   "Schedule jobs": "Programar trabajos",
-  "Make and change jobs, choose the field service engineers and send the job emails.": "Crear y cambiar trabajos, elegir a los ingenieros de servicio de campo y enviar los correos."
+  "Make and change jobs, choose the field service engineers and send the job emails.": "Crear y cambiar trabajos, elegir a los ingenieros de servicio de campo y enviar los correos.",
+  "Add machines": "Agregar máquinas",
+  "Put a new machine on the list.": "Poner una máquina nueva en la lista.",
+  "Change machines": "Cambiar máquinas",
+  "Change a machine's model, customer, site, notes and SharePoint link.": "Cambiar el modelo, cliente, planta, notas y enlace de SharePoint de una máquina.",
+  "Customer companies": "Empresas cliente",
+  "Add, rename or turn off companies, and choose which machines each one sees.": "Agregar, renombrar o desactivar empresas, y elegir qué máquinas ve cada una.",
+  "Make sign-up links, and turn a customer's login on or off.": "Crear enlaces de registro y activar o desactivar el acceso de un cliente.",
+  "Add orders": "Agregar pedidos",
+  "Start a new change-part order.": "Iniciar un pedido nuevo de piezas de cambio.",
+  "Change orders": "Cambiar pedidos",
+  "Change an order's details and status.": "Cambiar los datos y el estado de un pedido.",
+  "Remove orders": "Quitar pedidos",
+  "Take an order off the list.": "Quitar un pedido de la lista.",
+  "Change anyone's articles": "Cambiar artículos de cualquiera",
+  "Change or archive articles other people wrote.": "Cambiar o archivar artículos escritos por otros.",
+  "Import documents": "Importar documentos",
+  "Bring in documents from the import file.": "Traer documentos desde el archivo de importación.",
+  "Put articles on the customer help center, or take them down.": "Publicar artículos en el centro de ayuda para clientes, o quitarlos.",
+  "View only": "Solo ver"
 };
 
 export const IT: Record<string, string> = {
@@ -1635,5 +1672,24 @@ export const IT: Record<string, string> = {
   "See jobs": "Vedere i lavori",
   "Field service jobs, each job's machine history, and adding files to a job.": "Lavori di assistenza sul campo, la storia della macchina di ogni lavoro e l'aggiunta di file a un lavoro.",
   "Schedule jobs": "Programmare i lavori",
-  "Make and change jobs, choose the field service engineers and send the job emails.": "Creare e modificare lavori, scegliere i tecnici dell'assistenza sul campo e inviare le email."
+  "Make and change jobs, choose the field service engineers and send the job emails.": "Creare e modificare lavori, scegliere i tecnici dell'assistenza sul campo e inviare le email.",
+  "Add machines": "Aggiungere macchine",
+  "Put a new machine on the list.": "Inserire una nuova macchina nell'elenco.",
+  "Change machines": "Modificare le macchine",
+  "Change a machine's model, customer, site, notes and SharePoint link.": "Modificare modello, cliente, stabilimento, note e link SharePoint di una macchina.",
+  "Customer companies": "Aziende clienti",
+  "Add, rename or turn off companies, and choose which machines each one sees.": "Aggiungere, rinominare o disattivare aziende, e scegliere quali macchine vede ciascuna.",
+  "Make sign-up links, and turn a customer's login on or off.": "Creare link di registrazione e attivare o disattivare l'accesso di un cliente.",
+  "Add orders": "Aggiungere ordini",
+  "Start a new change-part order.": "Aprire un nuovo ordine di parti di cambio formato.",
+  "Change orders": "Modificare ordini",
+  "Change an order's details and status.": "Modificare i dati e lo stato di un ordine.",
+  "Remove orders": "Rimuovere ordini",
+  "Take an order off the list.": "Togliere un ordine dall'elenco.",
+  "Change anyone's articles": "Modificare gli articoli di chiunque",
+  "Change or archive articles other people wrote.": "Modificare o archiviare articoli scritti da altri.",
+  "Import documents": "Importare documenti",
+  "Bring in documents from the import file.": "Importare documenti dal file di importazione.",
+  "Put articles on the customer help center, or take them down.": "Pubblicare articoli nel centro assistenza clienti, o toglierli.",
+  "View only": "Solo visualizzazione"
 };

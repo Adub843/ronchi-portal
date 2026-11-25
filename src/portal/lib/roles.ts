@@ -1,12 +1,13 @@
 // Who can do what. Deny by default: anything not listed here is refused.
 // To change what a role can do, edit this one table (and its test in test/roles.test.ts).
-export type Role = "admin" | "billing" | "scheduling" | "service" | "sales" | "engineering" | "tech";
+export type Role = "admin" | "manager" | "billing" | "scheduling" | "service" | "sales" | "engineering" | "tech";
 
 export const ROLES: Record<Role, string> = {
-  admin: "Admin: everything (Paolo, Aaron)",
+  admin: "Admin: everything (Aaron)",
+  manager: "Manager (Paolo, Steve, Michele, Morad)",
   billing: "Billing (Lola)",
   scheduling: "Scheduling (Meagan)",
-  service: "Service workbook side (Steve)",
+  service: "Service",
   sales: "Sales",
   engineering: "Engineering",
   tech: "Field technician",
@@ -16,7 +17,8 @@ export type Permission =
   | "users.manage"        // invite people, change roles, disable, sign out everywhere
   | "audit.view"
   | "machines.view"
-  | "machines.edit"
+  | "machines.add"        // add a machine to the list
+  | "machines.edit"       // change a machine's model, customer, site, notes and link
   | "boards.use"          // read and post on boards they can see
   | "boards.create"       // start a new board
   | "chats.start"         // start a private chat (they can still answer chats others add them to)
@@ -24,35 +26,45 @@ export type Permission =
   | "boards.moderate"     // pin, archive, remove anyone's post
   | "catalog.view"        // the parts catalog: drawings, 3D, parts lists, where-used, staff notes
   | "catalog.edit"        // import manuals, fix tables, upload drawings and 3D, publish to customers
-  | "customers.manage"    // customer parts logins: companies, their machines, sign-up links
+  | "customers.manage"    // customer companies and which machines each one sees
+  | "customers.invite"    // customer sign-up links, and turning a customer person on or off
   | "quotes.manage"       // read customer quote requests and set their status
   | "orders.view"         // see change-part orders (sales side)
-  | "orders.edit"         // add, change and remove change-part orders
+  | "orders.add"          // add a change-part order
+  | "orders.edit"         // change an order's details and status
+  | "orders.remove"       // remove an order
   | "orders.import"       // bring in orders from a CSV spreadsheet
   | "kb.view"             // search and read the knowledge base
   | "kb.write"            // add quick notes and articles, change your own
-  | "kb.publish"          // change anyone's article, import documents, publish to the customer help center
-  | "jobs.view"           // see tech jobs and their machine history, and add files to them
-  | "jobs.schedule";      // schedule jobs, choose the techs, send the job emails
+  | "kb.edit_all"         // change or archive anyone's article
+  | "kb.import"           // bring in documents from the import file
+  | "kb.publish"          // publish to and take down from the customer help center
+  | "jobs.view"           // see field service jobs and their machine history, and add files to them
+  | "jobs.schedule";      // schedule jobs, choose the field service engineers, send the job emails
 
 const ALL: Permission[] = [
-  "users.manage", "audit.view", "machines.view", "machines.edit",
+  "users.manage", "audit.view", "machines.view", "machines.add", "machines.edit",
   "boards.use", "boards.create", "chats.start", "files.send", "boards.moderate",
-  "catalog.view", "catalog.edit", "customers.manage", "quotes.manage",
-  "orders.view", "orders.edit", "orders.import",
-  "kb.view", "kb.write", "kb.publish",
+  "catalog.view", "catalog.edit", "customers.manage", "customers.invite", "quotes.manage",
+  "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import",
+  "kb.view", "kb.write", "kb.edit_all", "kb.import", "kb.publish",
   "jobs.view", "jobs.schedule",
 ];
 
 const STAFF_BASE: Permission[] = ["boards.use", "boards.create", "chats.start", "files.send", "machines.view", "catalog.view", "kb.view", "kb.write", "jobs.view"];
 
+// Managers (Aaron, 2026-11-24: "paolo, steve, michele, and morad should all be manager level log
+// ins i am the only admin") get everything except managing people and reading the audit log.
+const MANAGER: Permission[] = ALL.filter((p) => p !== "users.manage" && p !== "audit.view");
+
 export const PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
   admin: new Set(ALL),
+  manager: new Set(MANAGER),
   billing: new Set([...STAFF_BASE, "quotes.manage"]),
   scheduling: new Set([...STAFF_BASE, "jobs.schedule"]),
-  service: new Set([...STAFF_BASE, "machines.edit", "boards.moderate", "catalog.edit", "customers.manage", "quotes.manage", "kb.publish", "jobs.schedule"]),
-  sales: new Set([...STAFF_BASE, "customers.manage", "quotes.manage", "orders.view", "orders.edit", "orders.import"]),
-  engineering: new Set([...STAFF_BASE, "machines.edit", "catalog.edit", "kb.publish"]),
+  service: new Set([...STAFF_BASE, "machines.add", "machines.edit", "boards.moderate", "catalog.edit", "customers.manage", "customers.invite", "quotes.manage", "kb.edit_all", "kb.import", "kb.publish", "jobs.schedule"]),
+  sales: new Set([...STAFF_BASE, "customers.manage", "customers.invite", "quotes.manage", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import"]),
+  engineering: new Set([...STAFF_BASE, "machines.add", "machines.edit", "catalog.edit", "kb.edit_all", "kb.import", "kb.publish"]),
   tech: new Set([...STAFF_BASE]),
 };
 
@@ -104,6 +116,9 @@ export function readChanges(list: string | null | undefined): AccessChanges {
   return out;
 }
 
+/** Seeing, without changing anything: what "View only" on the access screen keeps on. */
+export const VIEW_PERMS: ReadonlySet<Permission> = new Set(["boards.use", "machines.view", "catalog.view", "kb.view", "orders.view", "jobs.view"]);
+
 /** Plain-English names for the access screen, grouped the way the menu is. */
 export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label: string; hint: string }[] }[] = [
   { group: "Chats and boards", perms: [
@@ -115,25 +130,31 @@ export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label:
   ] },
   { group: "Machines", perms: [
     { id: "machines.view", label: "See machines", hint: "The machine list and each machine's page." },
-    { id: "machines.edit", label: "Add and change machines", hint: "Add machines, change models, customers and sites." },
+    { id: "machines.add", label: "Add machines", hint: "Put a new machine on the list." },
+    { id: "machines.edit", label: "Change machines", hint: "Change a machine's model, customer, site, notes and SharePoint link." },
   ] },
   { group: "Parts catalog", perms: [
     { id: "catalog.view", label: "See the parts catalog", hint: "Drawings, 3D, parts lists and staff notes." },
     { id: "catalog.edit", label: "Build the parts catalog", hint: "Import manuals, fix tables, upload drawings and 3D, publish to customers." },
   ] },
   { group: "Customers", perms: [
-    { id: "customers.manage", label: "Customer logins", hint: "Customer companies, their machines and sign-up links." },
+    { id: "customers.manage", label: "Customer companies", hint: "Add, rename or turn off companies, and choose which machines each one sees." },
+    { id: "customers.invite", label: "Customer logins", hint: "Make sign-up links, and turn a customer's login on or off." },
     { id: "quotes.manage", label: "Quote requests", hint: "Read customer quote requests and set their status." },
   ] },
   { group: "Change-part orders", perms: [
     { id: "orders.view", label: "See orders", hint: "The change-part order tracker." },
-    { id: "orders.edit", label: "Add and change orders", hint: "Add, change and remove orders." },
+    { id: "orders.add", label: "Add orders", hint: "Start a new change-part order." },
+    { id: "orders.edit", label: "Change orders", hint: "Change an order's details and status." },
+    { id: "orders.remove", label: "Remove orders", hint: "Take an order off the list." },
     { id: "orders.import", label: "Import orders", hint: "Bring in orders from a CSV spreadsheet." },
   ] },
   { group: "Knowledge base", perms: [
     { id: "kb.view", label: "Search the knowledge base", hint: "Read articles and quick notes." },
     { id: "kb.write", label: "Write notes and articles", hint: "Add quick notes and articles, and change their own." },
-    { id: "kb.publish", label: "Publish to customers", hint: "Change anyone's article, import documents, publish to the help center." },
+    { id: "kb.edit_all", label: "Change anyone's articles", hint: "Change or archive articles other people wrote." },
+    { id: "kb.import", label: "Import documents", hint: "Bring in documents from the import file." },
+    { id: "kb.publish", label: "Publish to customers", hint: "Put articles on the customer help center, or take them down." },
   ] },
   { group: "Field service jobs", perms: [
     { id: "jobs.view", label: "See jobs", hint: "Field service jobs, each job's machine history, and adding files to a job." },

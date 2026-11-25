@@ -3,7 +3,7 @@
 // can be clicked through without a server. Signed in as Aaron Lewis, admin.
 import logoUrl from "../assets/ronchi-logo.png";
 import { cleanName, fileInfo, fileProblem } from "../../../src/shared/files";
-import { adjustable, effective, isPermission, PERMISSION_GROUPS, PERMISSIONS, ROLES, type AccessChanges } from "../../../src/portal/lib/roles";
+import { adjustable, effective, isPermission, PERMISSION_GROUPS, PERMISSIONS, ROLES, VIEW_PERMS, type AccessChanges } from "../../../src/portal/lib/roles";
 import { CP_FIELDS, isOpen, readOrdersCsv } from "../../../src/shared/change-parts";
 import { KbFail, kbRoute, resetKb } from "./kb-mock";
 import { JobsFail, jobsRoute, resetJobs } from "./jobs-mock";
@@ -59,14 +59,14 @@ function seed(): DB {
   const u = (name: string, role: Role, email: string): User => ({ id: id(), name, role, email, status: "active", created_at: t0 });
   const users = [
     u("Aaron Lewis", "admin", "a_lewis@ronchiamerica.com"),
-    u("Paolo Ferla", "admin", "paolo@ronchiamerica.com"),
+    u("Paolo Ferla", "manager", "paolo@ronchiamerica.com"),
     u("Lola Parker", "billing", "lola@ronchiamerica.com"),
     u("Meagan Hooper", "scheduling", "meagan@ronchiamerica.com"),
     u("Patrick Morgan", "tech", "PatrickM"),
-    u("Steve Williams", "service", "steve@ronchiamerica.com"),
+    u("Steve Williams", "manager", "steve@ronchiamerica.com"),
     u("Andrew Yang", "sales", "andrew@ronchiamerica.com"),
-    u("Michele Falsini", "sales", "michele@ronchiamerica.com"),
-    u("Morad Rabah", "engineering", "morad@ronchiamerica.com"),
+    u("Michele Falsini", "manager", "michele@ronchiamerica.com"),
+    u("Morad Rabah", "manager", "morad@ronchiamerica.com"),
     // The rest of the field team (Aaron, 2026-11-24), and the visiting techs from Erre Enne in Italy.
     u("Elim Ramirez", "tech", "ElimR"),
     u("Andrew Jackson", "tech", "AndrewJ"),
@@ -213,7 +213,7 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   // --- people ---
   if (path === "/users/roles") return { roles: ROLES };
   if (path === "/users/permissions")
-    return { groups: PERMISSION_GROUPS.map((g) => ({ ...g, perms: g.perms.map((p) => ({ ...p, adjustable: adjustable(p.id) })) })), byRole: Object.fromEntries(Object.entries(PERMISSIONS).map(([r, s]) => [r, [...s]])) };
+    return { groups: PERMISSION_GROUPS.map((g) => ({ ...g, perms: g.perms.map((p) => ({ ...p, adjustable: adjustable(p.id), view: VIEW_PERMS.has(p.id) })) })), byRole: Object.fromEntries(Object.entries(PERMISSIONS).map(([r, s]) => [r, [...s]])) };
   if (seg[0] === "users" && seg[2] === "access" && method === "PUT") {
     const t = db.users.find((x) => x.id === seg[1]);
     if (!t) throw new Fail(404, "Not found.");
