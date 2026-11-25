@@ -1,13 +1,13 @@
 // My look, language and alerts (saved to my login), and my devices.
 import { useState } from "react";
-import { api, fmtTime, type Me } from "../api";
+import { api, can, fmtTime, type Me } from "../api";
 import { PageHead, toast, useLoad, Tip } from "../components/ui";
 import { showAllTips, useHiddenTipCount } from "../tips";
 import { LANGS, t } from "../i18n";
 import { THEMES, type Prefs } from "../theme";
 
-export function Settings({ me, prefs, onPrefs, onSignOut, sound, onSound }: {
-  me: Me; prefs: Prefs | null; onPrefs: (p: Partial<Prefs> | { reset: true }) => void; onSignOut: () => void; sound: boolean; onSound: (on: boolean) => void;
+export function Settings({ me, prefs, onPrefs, onSignOut, sound, onSound, switches, onSwitches }: {
+  me: Me; prefs: Prefs | null; switches: { workbook: boolean }; onSwitches: (s: { workbook: boolean }) => void; onPrefs: (p: Partial<Prefs> | { reset: true }) => void; onSignOut: () => void; sound: boolean; onSound: (on: boolean) => void;
 }) {
   const devices = useLoad(() => api("/users/me/devices"));
   const [deviceLink, setDeviceLink] = useState<string | null>(null);
@@ -61,6 +61,25 @@ export function Settings({ me, prefs, onPrefs, onSignOut, sound, onSound }: {
           <Tip id="settings.mute">{t("To silence one chat or board, open it and choose Mute alerts in its menu.")}</Tip>
         </div>
       </div>
+      {can(me, "users.manage") && (
+        <div className="panel stack">
+          <h2 style={{ margin: 0 }}>{t("Ronchi workbook")}</h2>
+          <label className="row switchrow">
+            <input type="checkbox" checked={switches.workbook} onChange={async (e) => {
+              const on = e.target.checked;
+              if (!on && !window.confirm(t("Switch the Ronchi workbook off for everyone? Work orders leave the menu. Jobs, job emails and job files keep working, and nothing is deleted."))) return;
+              try {
+                const r = await api("/switches/workbook", { method: "PUT", body: { on } });
+                onSwitches(r.switches);
+                toast(on ? t("The Ronchi workbook is on") : t("The Ronchi workbook is off"));
+              } catch (x) {
+                toast((x as Error).message);
+              }
+            }} />
+            <span><b>{t("Use the Ronchi workbook (Work orders)")}</b><small className="muted">{t("On: each job has a work order with the machine's log of past work orders, and the field service engineer's email opens it. Off: for teams that keep their Excel sheets. Jobs, job emails and files keep working; switching back on brings everything back.")}</small></span>
+          </label>
+        </div>
+      )}
       <div className="panel stack">
         <div className="row">
           <h2 style={{ margin: 0 }}>{t("Your look")}</h2>

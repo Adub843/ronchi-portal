@@ -6,6 +6,7 @@ import { cleanName, fileInfo, fileProblem } from "../../../src/shared/files";
 import { adjustable, effective, isPermission, PERMISSION_GROUPS, PERMISSIONS, rolePermissions, ROLES, VIEW_PERMS, type AccessChanges } from "../../../src/portal/lib/roles";
 import { CP_FIELDS, isOpen, readOrdersCsv } from "../../../src/shared/change-parts";
 import { KbFail, kbRoute, resetKb } from "./kb-mock";
+import { JobsFail, jobsRoute, resetJobs } from "./jobs-mock";
 type Role = keyof typeof ROLES;
 
 // Ids for example records. Uses the browser's secure random source like the real server does.
@@ -372,10 +373,19 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     if (t.id === u.id && (body.status === "disabled" || (body.role && body.role !== "admin"))) throw new Fail(400, "You can't remove your own admin access. Ask another admin.");
     if (body.role) t.role = body.role;
     if (body.status) t.status = body.status;
+    if (body.notify_email !== undefined) (t as any).notify_email = body.notify_email || null;
     log("user.update");
     return { ok: true };
   }
   // --- parts catalog (the preview has no manuals or customer parts site, so it starts empty) ---
+  if (seg[0] === "jobs" || seg[0] === "switches") {
+    try {
+      return jobsRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, users: db.users, machines: db.machines, newId: id, pdf: examplePdf });
+    } catch (e) {
+      if (e instanceof JobsFail) throw new Fail(e.status, e.message);
+      throw e;
+    }
+  }
   if (seg[0] === "kb") {
     try {
       return kbRoute(method, seg, q, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, machines: db.machines, nameOf: (x) => (x ? name(x) || null : null), newId: id }, db.users);
@@ -699,5 +709,6 @@ export function installDemo() {
 export function resetDemo() {
   db = seed();
   resetKb();
+  resetJobs();
   save();
 }

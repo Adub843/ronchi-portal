@@ -195,6 +195,27 @@ The parts site:
 `test/unit/wall.test.ts` checks all of these on every build, so a change that breaks
 the wall fails the build.
 
+## Jobs, job emails and the Ronchi workbook
+
+- **Jobs** (`/jobs`): a scheduled field service visit. Job number, customer, machine, the customer's
+  location (opens in Google Maps, Waze or Apple Maps), point of contact, days of work, the field service
+  engineers going, a free text box, and files. Schedulers (`jobs.schedule`: scheduling, service, admins)
+  make and change jobs. Everyone with `jobs.view` sees them; the engineers on a job always see it.
+  Code: `src/portal/routes/jobs.ts`, `src/shared/jobs.ts`, `web/src/pages/Jobs.tsx`. Files go in R2 under `jobs/<id>`.
+- **Work orders** (`/work-orders/<job>`): the Ronchi workbook page. The current work order on top, then the
+  log of past work orders for the same machine with their notes and files, and the machine's record.
+  `web/src/pages/WorkOrders.tsx`.
+- **The workbook switch**: Settings > Ronchi workbook (admins). Off = Work orders leave the menu, their API
+  answers "Not found", and the job email links to the plain job page. Jobs, emails and files keep working.
+  Stored in table `feature_switches` (`src/portal/lib/switches.ts`).
+- **Job emails** go out through Cloudflare Email Service. Until it is set up, nothing is sent: the job
+  page says so and offers "Send it from my email", which opens the scheduler's own email app with the same message.
+  To turn it on (needs the sending domain's DNS on Cloudflare, so after the ronchiamerica.com move):
+  1. `npx wrangler email sending enable ronchiamerica.com` (or Cloudflare dashboard > Email Service).
+  2. In `wrangler.portal.jsonc` under `env.production`, add `"send_email": [{ "name": "EMAIL" }]` and the var
+     `"MAIL_FROM": "jobs@ronchiamerica.com"`, then deploy.
+  3. People whose login is a username (no email) need an "email for job notices", set on the People page.
+
 ## Going live
 
 See [docs/REBUILD.md](docs/REBUILD.md). In short: create the three D1 databases and two R2

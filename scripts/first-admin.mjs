@@ -51,7 +51,7 @@ d1(
 // Read with a regex: stripping // comments would also cut the "//" in "https://".
 const origins = [...readFileSync("wrangler.portal.jsonc", "utf8").matchAll(/"ORIGIN":\s*"([^"]+)"/g)].map((m) => m[1]);
 const origin = local ? "http://localhost:8787" : origins.at(-1);
-if (!origin?.startsWith("https://")) {
+if (!local && !origin?.startsWith("https://")) {
   console.error("Couldn't find the live ORIGIN in wrangler.portal.jsonc.");
   process.exit(1);
 }

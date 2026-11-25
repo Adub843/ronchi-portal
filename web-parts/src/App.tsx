@@ -1,7 +1,9 @@
 // Ronchi Parts: the catalog customers sign in to. They see only their own machines.
 //
 //   /                 my machines and favorites
-//   /m/<serial>       one machine: its drawings, and suggested spares
+//   /m/<serial>       one machine: its available content (catalogue, suggested spares, parts book)
+//   /m/<serial>/catalog[/<section>[/<group>]]   the spare parts catalogue, one level of tiles at a time
+//   /m/<serial>/spares  wear parts to keep on the shelf
 //   /s/<sheet id>     one drawing or 3D assembly with its parts list
 //   /book/<serial>    a parts book: chosen drawings with their parts lists, to print or save as PDF
 //   /p/<part code>    one part: where it's used on my machines
@@ -17,10 +19,12 @@ import logoUrl from "./logo.png";
 import { api, type Me } from "./api";
 import { fmtTime, getLang, LANGS, setLang, t, useLang } from "./i18n";
 import { Link, navigate, usePath } from "./router";
-import { CatalogTree, type TreeSheet } from "../../web/catalog/CatalogTree";
+import type { TreeSheet } from "../../web/catalog/CatalogTree";
+import { CatalogBrowse, Crumbs, levelFrom, SECTION_WORD, Tile, TilePage } from "../../web/catalog/Browse";
+import { IC, TILE } from "../../web/catalog/icons";
 import { SheetView } from "../../web/catalog/SheetView";
 import type { Row } from "../../web/catalog/PartsList";
-import { partName } from "../../web/catalog/words";
+import { partName, w, type Lang, type Word } from "../../web/catalog/words";
 
 const enc = encodeURIComponent;
 
@@ -75,6 +79,26 @@ async function addToCart(code: string, serial: string | null, qty = 1) {
 
 // ---------- the app ----------
 
+// The machine the person is looking at, for the "Select machine" bar. Pages set it.
+let currentMachine: string | null = null;
+const machineListeners = new Set<() => void>();
+function useCurrentMachine(serial: string | null | undefined) {
+  useEffect(() => {
+    if (serial === undefined) return;
+    currentMachine = serial;
+    machineListeners.forEach((f) => f());
+  }, [serial]);
+}
+function useShownMachine(): string | null {
+  const [m, setM] = useState(currentMachine);
+  useEffect(() => {
+    const on = () => setM(currentMachine);
+    machineListeners.add(on);
+    return () => void machineListeners.delete(on);
+  }, []);
+  return m;
+}
+
 export function App() {
   const path = usePath();
   const lang = useLang();
@@ -95,10 +119,15 @@ export function App() {
   if (me === undefined) return <div className="boot" aria-busy="true" />;
   if (me === null) return <SignIn onDone={refresh} />;
 
-  const m = /^\/(m|s|p|lists|quotes|book)\/([A-Za-z0-9_-]+)$/.exec(route);
+  const parts = route.split("/").filter(Boolean);
+  const m = /^\/(s|p|lists|quotes|book)\/([A-Za-z0-9_-]+)$/.exec(route);
   let page: ReactNode;
-  if (m?.[1] === "m") page = <Machine key={m[2]} serial={m[2]!} />;
-  else if (m?.[1] === "s") page = <Sheet key={m[2]} id={m[2]!} />;
+  if (parts[0] === "m" && parts[1] && /^[A-Za-z0-9_-]+$/.test(parts[1])) {
+    const serial = parts[1].toUpperCase();
+    if (parts[2] === "catalog") page = <MachineCatalog key={route} serial={serial} rest={parts.slice(3)} />;
+    else if (parts[2] === "spares") page = <Spares key={serial} serial={serial} />;
+    else page = <Machine key={serial} serial={serial} />;
+  } else if (m?.[1] === "s") page = <Sheet key={m[2]} id={m[2]!} />;
   else if (m?.[1] === "book") page = <Book key={m[2]} serial={m[2]!} />;
   else if (m?.[1] === "p") page = <Part key={m[2]} code={m[2]!} />;
   else if (m?.[1] === "lists") page = <List key={m[2]} id={m[2]!} />;
@@ -110,43 +139,108 @@ export function App() {
   else if (route === "/account") page = <Account me={me} onSignOut={refresh} />;
   else page = <Home />;
 
-  const section = "/" + (route.split("/")[1] ?? "");
-  const nav = [
-    { to: "/", label: t("My machines"), on: section === "/" || section === "/m" || section === "/s" || section === "/book" },
-    { to: "/search", label: t("Search"), on: section === "/search" || section === "/p" },
-    { to: "/cart", label: cartCount ? t("Cart ({n})", { n: cartCount }) : t("Cart"), on: section === "/cart" },
-    { to: "/lists", label: t("Lists"), on: section === "/lists" },
-    { to: "/quotes", label: t("Quotes"), on: section === "/quotes" },
-  ];
-
   return (
     <>
-      <header className="top">
-        <div className="wrap">
-          <Link to="/" className="brand">
-            <img src={logoUrl} alt="Ronchi" />
-            <span>Ronchi Parts<small>{me.company}</small></span>
-          </Link>
-          <span className="spacer" />
-          <form className="pp-search" role="search" onSubmit={(e) => {
-            e.preventDefault();
-            const q = new FormData(e.currentTarget).get("q");
-            if (typeof q === "string" && q.trim()) navigate(`/search?q=${enc(q.trim())}`);
-          }}>
-            <input name="q" type="search" placeholder={t("Part number or name")} aria-label={t("Search parts")} />
-          </form>
-          <Link to="/account" className="who">{me.name}</Link>
-        </div>
-      </header>
+      <TopBar me={me} cartCount={cartCount} route={route} lang={lang} />
       <div className="wrap" key={lang}>
-        <div className="shell">
-          <nav className="side" aria-label={t("Main")}>
-            {nav.map((n) => <Link key={n.to} to={n.to} current={n.on}>{n.label}</Link>)}
-          </nav>
-          <main>{page}</main>
-        </div>
+        <main className="mv-main">{page}</main>
       </div>
     </>
+  );
+}
+
+/** The header, laid out like the Ronchi Mario portal: brand, greeting, language, search and icons,
+ *  then the "Select machine" bar with the machine-number box and the favorite star. */
+function TopBar({ me, cartCount, route, lang }: { me: Me; cartCount: number; route: string; lang: Lang }) {
+  const shown = useShownMachine();
+  const serial = route.startsWith("/m/") || route.startsWith("/book/") || route.startsWith("/s/") ? shown : null;
+  const [open, setOpen] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const machines = useLoad(() => api("/machines"));
+  const fav = useFavorites();
+  useEffect(() => { setOpen(false); setMenu(false); }, [route]);
+  const list: any[] = machines.data?.machines ?? [];
+  const go = (q: string) => {
+    const v = q.trim().toUpperCase();
+    if (!v) return;
+    const hit = list.find((x) => x.serial.toUpperCase() === v) ?? (list.filter((x) => x.serial.toUpperCase().includes(v)).length === 1 ? list.find((x) => x.serial.toUpperCase().includes(v)) : null);
+    navigate(hit ? `/m/${hit.serial}` : `/search?q=${enc(q.trim())}`);
+  };
+  return (
+    <header className="mh">
+      <div className="mh-top">
+        <Link to="/" className="mh-brand"><img src={logoUrl} alt="Ronchi" /><span><b>Ronchi Parts</b><small>{me.company}</small></span></Link>
+        <span className="mh-hello">{t("Hello {name}", { name: me.name })}</span>
+        <label className="mh-lang">
+          <span className="sr">{t("Language")}</span>
+          <select value={lang} onChange={(e) => setLang(e.target.value as Lang)}>{LANGS.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select>
+        </label>
+        <span className="spacer" />
+        <form className="mh-search" role="search" onSubmit={(e) => {
+          e.preventDefault();
+          const q = new FormData(e.currentTarget).get("q");
+          if (typeof q === "string" && q.trim()) navigate(`/search?q=${enc(q.trim())}`);
+        }}>
+          <input name="q" type="search" placeholder={serial ? t("Search in {machine}", { machine: serial }) : t("Search in all my machines")} aria-label={t("Search parts")} />
+          <button type="submit" aria-label={t("Search")}>{IC.search}</button>
+        </form>
+        <Link to="/" className="mh-ic" current={route === "/"}><span className="sr">{t("Home")}</span>{IC.home}</Link>
+        <Link to="/lists" className="mh-ic" current={route.startsWith("/lists")}><span className="sr">{t("Lists")}</span>{IC.bookmarks}</Link>
+        <Link to="/cart" className="mh-ic mh-cart" current={route === "/cart"}>
+          <span className="sr">{t("Cart")}</span>{IC.cart}{cartCount > 0 && <span className="mh-count">{cartCount}</span>}
+        </Link>
+        <div className="mh-menu">
+          <button type="button" className="mh-ic" aria-expanded={menu} aria-label={t("Menu")} onClick={() => setMenu(!menu)}>{IC.menu}</button>
+          {menu && (
+            <nav className="mh-drop" aria-label={t("Main")}>
+              <Link to="/">{t("My machines")}</Link>
+              <Link to="/search">{t("Search")}</Link>
+              <Link to="/cart">{cartCount ? t("Cart ({n})", { n: cartCount }) : t("Cart")}</Link>
+              <Link to="/lists">{t("Lists")}</Link>
+              <Link to="/quotes">{t("Quotes")}</Link>
+              <Link to="/account">{t("Account")}</Link>
+            </nav>
+          )}
+        </div>
+      </div>
+      <div className="mh-bar">
+        <button type="button" className="mh-pick" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {serial ?? t("Select machine")} {IC.caret}
+        </button>
+        <form className="mh-sn" onSubmit={(e) => { e.preventDefault(); go(String(new FormData(e.currentTarget).get("sn") ?? "")); }}>
+          <input name="sn" list="mh-serials" placeholder={t("Machine number")} aria-label={t("Machine number")} />
+          <datalist id="mh-serials">{list.map((x) => <option key={x.serial} value={x.serial}>{x.label ?? x.model ?? ""}</option>)}</datalist>
+        </form>
+        {serial && <Star kind="machine" refId={serial} on={fav.has("machine", serial)} onChange={fav.reload} />}
+      </div>
+      {open && (
+        <div className="mh-panel">
+          <MachinePicker machines={list} current={serial} onClose={() => setOpen(false)} />
+        </div>
+      )}
+    </header>
+  );
+}
+
+function MachinePicker({ machines, current, onClose }: { machines: any[]; current: string | null; onClose: () => void }) {
+  const [q, setQ] = useState("");
+  const s = q.trim().toLowerCase();
+  const shown = machines.filter((m) => !s || [m.serial, m.model, m.label].some((v) => v && String(v).toLowerCase().includes(s)));
+  return (
+    <TilePage title={t("My machines")} lang={getLang()} filter={q} onFilter={setQ} tools={<button type="button" className="mv-ib" aria-label={t("Close")} onClick={onClose}>{IC.close}</button>}>
+      {shown.map((m) => <Tile key={m.serial} to={`/m/${m.serial}`} L={Link} pic={TILE.filler} label={m.serial} sub={m.label ?? m.model ?? undefined} current={m.serial === current} />)}
+      {!machines.length && <p className="mv-none">{t("No machines on your account yet. Ronchi America adds them for you.")}</p>}
+    </TilePage>
+  );
+}
+
+function QtyCart({ code, serial, qty }: { code: string; serial: string | null; qty: number }) {
+  const [n, setN] = useState(String(qty));
+  return (
+    <span className="qc">
+      <input inputMode="numeric" value={n} onChange={(e) => setN(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))} aria-label={t("How many")} />
+      <button type="button" title={t("Add to cart")} aria-label={t("Add {code} to cart", { code })} onClick={() => addToCart(code, serial, Math.max(1, Number(n) || 1))}>{IC.cart}</button>
+    </span>
   );
 }
 
@@ -241,46 +335,63 @@ function Welcome({ onDone }: { onDone: () => void }) {
 // ---------- machines ----------
 
 function Home() {
+  useCurrentMachine(null);
   const { data, error } = useLoad(() => Promise.all([api("/machines"), api("/favorites")]));
-  const favs = data?.[1].favorites ?? [];
+  const machines: any[] = data?.[0].machines ?? [];
+  const favs: any[] = data?.[1].favorites ?? [];
+  const recent = machines.filter((m) => m.published_at).sort((a, b) => String(b.published_at).localeCompare(String(a.published_at))).slice(0, 5);
+  const lang = getLang();
   return (
-    <>
-      <Head title={t("My machines")} sub={t("Open a machine to see its drawings, 3D models and parts.")} />
-      <Err error={error} />
-      {data && !data[0].machines.length && <p className="empty">{t("No machines on your account yet. Ronchi America adds them for you.")}</p>}
-      <div className="tiles">
-        {data?.[0].machines.map((m: any) => (
-          <Link key={m.serial} to={`/m/${m.serial}`} className="panel tile">
-            <h2 className="mono">{m.serial}</h2>
-            <span>{[m.model, m.label].filter(Boolean).join(" · ") || " "}</span>
-            <span className="muted">{m.sheets ? t("{n} drawings", { n: m.sheets }) : t("Catalog coming soon")}{m.models ? ` · ${t("{n} in 3D", { n: m.models })}` : ""}</span>
-          </Link>
-        ))}
-      </div>
-      {favs.length > 0 && (
-        <div className="panel">
-          <h2>{t("Favorites")}</h2>
-          {favs.map((f: any) => (
-            <p key={`${f.kind}-${f.ref}`}>
-              <Link to={f.kind === "machine" ? `/m/${f.ref}` : `/s/${f.ref}`}>{f.label || f.name}</Link> <span className="muted mono">{f.serial}</span>
-            </p>
+    <div className="mh-home">
+      <div>
+        <h2 className="mh-h">{t("Favorite machines")}</h2>
+        {!favs.length && <p className="muted small">{t("No favorites yet. Open a machine or a parts list and press the star.")}</p>}
+        {favs.length > 0 && (
+          <div className="mv-tiles">
+            {favs.map((f) => (
+              <Tile key={`${f.kind}-${f.ref}`} to={f.kind === "machine" ? `/m/${f.ref}` : `/s/${f.ref}`} L={Link} pic={f.kind === "machine" ? TILE.filler : TILE.partsList} label={f.kind === "machine" ? f.ref : (f.label || f.name)} sub={f.kind === "machine" ? (f.label || undefined) : f.serial} />
+            ))}
+          </div>
+        )}
+        <h2 className="mh-h">{t("My machines")}</h2>
+        <Err error={error} />
+        {data && !machines.length && <p className="empty">{t("No machines on your account yet. Ronchi America adds them for you.")}</p>}
+        <div className="mv-tiles">
+          {machines.map((m) => (
+            <Tile key={m.serial} to={`/m/${m.serial}`} L={Link} pic={TILE.filler} label={m.serial}
+              sub={[m.label ?? m.model, m.sheets ? t("{n} parts lists", { n: m.sheets }) : t("Catalogue being prepared")].filter(Boolean).join(" · ")} />
           ))}
         </div>
-      )}
-    </>
+      </div>
+      <aside>
+        <h2 className="mh-h">{t("What's new")}</h2>
+        {!recent.length && <p className="muted small">{t("Nothing new yet.")}</p>}
+        {recent.map((m) => (
+          <p key={m.serial} className="mh-news"><b>{fmtTime(m.published_at)}</b> – <Link to={`/m/${m.serial}/catalog`}>{t("The {serial} spare parts catalogue was updated.", { serial: m.serial })}</Link></p>
+        ))}
+        <h2 className="mh-h">{t("Help")}</h2>
+        <p className="small">{t("Pick a machine, open its Spare parts catalogue, then a group and a parts list. Click a part on the drawing or 3D model to find it in the list, set how many you need and press the cart. Send the cart to Ronchi America as a quote request.")}</p>
+        <h2 className="mh-h">{t("Important links")}</h2>
+        <p className="mh-links">
+          <a href="https://www.ronchiamerica.com" target="_blank" rel="noopener noreferrer">Ronchi America</a>
+          <a href="https://www.ronchi.it" target="_blank" rel="noopener noreferrer">Ronchi Mario (Italia)</a>
+        </p>
+        <span hidden>{lang}</span>
+      </aside>
+    </div>
   );
 }
 
 function Star({ kind, refId, on, onChange }: { kind: "machine" | "sheet"; refId: string; on: boolean; onChange: () => void }) {
   return (
-    <button className="btn" aria-pressed={on} onClick={async () => {
+    <button className="mv-ib mh-star" aria-pressed={on} title={on ? t("Favorite") : t("Add to favorites")} aria-label={on ? t("Favorite") : t("Add to favorites")} onClick={async () => {
       try {
         await api(`/favorites/${kind}/${enc(refId)}`, { method: on ? "DELETE" : "PUT", body: on ? undefined : {} });
         onChange();
       } catch (e) {
         toast(t((e as Error).message));
       }
-    }}>{on ? `★ ${t("Favorite")}` : `☆ ${t("Add to favorites")}`}</button>
+    }}>{on ? IC.starOn : IC.star}<span className="mh-star-word">{on ? t("Saved") : t("Save")}</span></button>
   );
 }
 
@@ -290,50 +401,68 @@ function useFavorites() {
   return { has, reload: f.reload };
 }
 
+const machineCrumbs = (serial: string) => [{ label: t("All machines"), to: "/" }, { label: serial, to: `/m/${serial}` }];
+
+/** One machine: its "Available content", like the Mario portal's machine page. */
 function Machine({ serial }: { serial: string }) {
+  useCurrentMachine(serial);
   const { data, error } = useLoad(() => api(`/machines/${enc(serial)}`), [serial]);
-  const [tab, setTab] = useState<"drawings" | "spares">("drawings");
-  const spares = useLoad(() => (tab === "spares" ? api(`/machines/${enc(serial)}/spares`) : Promise.resolve(null)), [tab, serial]);
-  const fav = useFavorites();
   if (error) return <Err error={error} />;
   if (!data) return null;
   const m = data.machine;
+  const n = data.sheets.length;
   return (
     <>
-      <Head title={m.serial} sub={[m.model, m.label].filter(Boolean).join(" · ") || undefined}>
-        {data.sheets.length > 0 && <Link to={`/book/${m.serial}`} className="btn">{t("Parts book (PDF)")}</Link>}
-        <Star kind="machine" refId={m.serial} on={fav.has("machine", m.serial)} onChange={fav.reload} />
-      </Head>
-      <div className="cv-tabs" role="tablist">
-        <button role="tab" aria-selected={tab === "drawings"} onClick={() => setTab("drawings")}>{t("Drawings")}</button>
-        <button role="tab" aria-selected={tab === "spares"} onClick={() => setTab("spares")}>{t("Suggested spares")}</button>
-      </div>
-      {tab === "drawings" && (
-        <div className="panel">
-          {!data.sheets.length ? <p className="empty">{t("This machine's catalog isn't ready yet. Ronchi America is preparing it.")}</p> : (
-            <CatalogTree sheets={data.sheets as TreeSheet[]} lang={getLang()} link={(s) => <Link to={`/s/${s.id}`}>{s.title}</Link>} />
-          )}
-        </div>
-      )}
-      {tab === "spares" && (
-        <div className="panel tbl stack">
-          <p className="muted">{t("Parts on this machine that wear out. Keeping these on the shelf saves a stop.")}</p>
-          {spares.data && !spares.data.spares.length && <p className="empty">{t("No wear parts marked for this machine yet.")}</p>}
-          {!!spares.data?.spares.length && (
-            <table>
-              <thead><tr><th>{t("Part number")}</th><th>{t("Description")}</th><th>{t("Used on machine")}</th><th /></tr></thead>
-              <tbody>
-                {spares.data.spares.map((p: any) => (
-                  <tr key={p.code}>
-                    <td className="mono"><Link to={`/p/${p.code}`}>{p.code}</Link></td>
-                    <td><Link to={`/s/${p.sheet_id}`}>{partName(getLang(), p)}</Link></td>
-                    <td>{p.qty}{p.unit === "m" ? " m" : ""}</td>
-                    <td><button className="btn small" onClick={() => addToCart(p.code, serial, p.qty || 1)}>{t("Add to cart")}</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+      <Crumbs items={[...machineCrumbs(m.serial), { label: t("Available content") }]} L={Link} label={t("Where you are")} />
+      <TilePage title={t("Available content")} lang={getLang()} tools={<span className="muted small">{[m.model, m.label].filter(Boolean).join(" · ")}</span>}>
+        <Tile to={`/m/${m.serial}/catalog`} L={Link} pic={TILE.catalogue} label={t("Spare parts catalogue")} sub={n ? t("{n} parts lists", { n }) : t("Being prepared")} />
+        <Tile to={`/m/${m.serial}/spares`} L={Link} pic={TILE.spares} label={t("Suggested spares")} sub={t("Wear parts to keep on the shelf")} />
+        {n > 0 && <Tile to={`/book/${m.serial}`} L={Link} pic={TILE.book} label={t("Parts book (PDF)")} sub={t("Print or save drawings with their lists")} />}
+      </TilePage>
+      {!n && <p className="mv-note">{t("This machine's catalog isn't ready yet. Ronchi America is preparing it.")}</p>}
+    </>
+  );
+}
+
+function MachineCatalog({ serial, rest }: { serial: string; rest: string[] }) {
+  useCurrentMachine(serial);
+  const { data, error } = useLoad(() => api(`/machines/${enc(serial)}`), [serial]);
+  if (error) return <Err error={error} />;
+  if (!data) return null;
+  return (
+    <CatalogBrowse
+      sheets={data.sheets as TreeSheet[]}
+      level={levelFrom(rest)}
+      base={`/m/${data.machine.serial}/catalog`}
+      sheetTo={(s) => `/s/${s.id}`}
+      thumb={(s) => (s.has_drawing ? `/api/sheets/${enc(s.id)}/drawing` : null)}
+      L={Link}
+      lang={getLang()}
+      crumbs={[...machineCrumbs(data.machine.serial), { label: t("Available content"), to: `/m/${data.machine.serial}` }]}
+    />
+  );
+}
+
+function Spares({ serial }: { serial: string }) {
+  useCurrentMachine(serial);
+  const spares = useLoad(() => api(`/machines/${enc(serial)}/spares`), [serial]);
+  return (
+    <>
+      <Crumbs items={[...machineCrumbs(serial), { label: t("Available content"), to: `/m/${serial}` }, { label: t("Suggested spares") }]} L={Link} label={t("Where you are")} />
+      <TilePage title={t("Suggested spares")} lang={getLang()}>{null}</TilePage>
+      <Err error={spares.error} />
+      <p className="muted">{t("Parts on this machine that wear out. Keeping these on the shelf saves a stop.")}</p>
+      {spares.data && !spares.data.spares.length && <p className="empty">{t("No wear parts marked for this machine yet.")}</p>}
+      {!!spares.data?.spares.length && (
+        <div className="pl">
+          {spares.data.spares.map((p: any) => (
+            <div key={p.code} className="pl-row">
+              <span className="pl-pos" />
+              <span className="pl-pic" aria-hidden="true">{IC.gearPart}</span>
+              <span className="pl-what"><span className="pl-code"><b className="mono"><Link to={`/p/${p.code}`}>{p.code}</Link></b></span><small>{partName(getLang(), p)}</small><Link to={`/s/${p.sheet_id}`} className="cv-link">{t("Open its parts list")} ›</Link></span>
+              <span className="pl-qty"><span>{t("Used on machine")}: {p.qty}{p.unit === "m" ? " m" : ""}</span><QtyCart code={p.code} serial={serial} qty={p.unit === "m" ? 1 : p.qty || 1} /></span>
+            </div>
+          ))}
         </div>
       )}
     </>
@@ -342,20 +471,29 @@ function Machine({ serial }: { serial: string }) {
 
 function Sheet({ id }: { id: string }) {
   const { data, error } = useLoad(() => api(`/sheets/${enc(id)}`), [id]);
+  const tree = useLoad(() => (data ? api(`/machines/${enc(data.sheet.serial)}`) : Promise.resolve(null)), [data?.sheet.serial]);
   const fav = useFavorites();
+  useCurrentMachine(data?.sheet.serial);
   if (error) return <Err error={error} />;
   if (!data) return null;
   const s = data.sheet;
   const rows: Row[] = data.rows;
+  const all: TreeSheet[] = tree.data?.sheets ?? [];
+  const grp = (x: { grp?: string | null; group?: string | null }) => (x.grp ?? x.group ?? "").trim() || "-";
+  const siblings = all.filter((x) => x.section === s.section && grp(x) === grp(s)).map((x) => ({ id: x.id, code: x.code, title: x.title }));
+  const base = `/m/${s.serial}/catalog`;
+  const trail = [
+    ...machineCrumbs(s.serial),
+    { label: t("Available content"), to: `/m/${s.serial}` },
+    { label: t("Spare parts catalogue"), to: base },
+    { label: w(getLang(), SECTION_WORD[s.section as keyof typeof SECTION_WORD] as Word), to: `${base}/${s.section}` },
+    ...(s.group ? [{ label: s.group, to: `${base}/${s.section}/${enc(grp(s))}` }] : []),
+    ...s.path.map((p: any) => ({ label: [p.code, p.title].filter(Boolean).join(" - "), to: `/s/${p.id}` })),
+    { label: [s.code, s.title].filter(Boolean).join(" - ") },
+  ];
   return (
     <>
-      <nav className="crumbs" aria-label={t("Where this drawing sits")}>
-        <Link to={`/m/${s.serial}`}>{s.serial}</Link>
-        {s.path.map((p: any) => <span key={p.id}> › <Link to={`/s/${p.id}`}>{p.title}</Link></span>)}
-      </nav>
-      <Head title={s.title} sub={s.code ?? undefined}>
-        <Star kind="sheet" refId={s.id} on={fav.has("sheet", s.id)} onChange={fav.reload} />
-      </Head>
+      <Crumbs items={trail} L={Link} label={t("Where this drawing sits")} />
       <SheetView
         sheet={s}
         rows={rows}
@@ -363,7 +501,11 @@ function Sheet({ id }: { id: string }) {
         fileUrl={(kind) => `/api/sheets/${enc(id)}/${kind}`}
         onOpenSheet={(sid) => navigate(`/s/${sid}`)}
         partLink={(code) => <Link to={`/p/${code}`}>{code}</Link>}
-        action={(r) => <button type="button" className="btn small" onClick={() => addToCart(r.code, s.serial, r.qty && r.unit !== "m" ? r.qty : 1)}>{t("Add to cart")}</button>}
+        whereUsed={(code) => <Link to={`/p/${code}`}>{t("Show where this part is used")}</Link>}
+        siblings={siblings}
+        subtitle={s.rev ? `${t("Rev.")} ${s.rev}` : undefined}
+        tools={<Star kind="sheet" refId={s.id} on={fav.has("sheet", s.id)} onChange={fav.reload} />}
+        action={(r) => <QtyCart code={r.code} serial={s.serial} qty={r.qty && r.unit !== "m" ? r.qty : 1} />}
       />
     </>
   );
@@ -371,6 +513,7 @@ function Sheet({ id }: { id: string }) {
 
 /** A parts book: pick drawings, then print them with their parts lists (or save as PDF from the print window). */
 function Book({ serial }: { serial: string }) {
+  useCurrentMachine(serial);
   const { data, error } = useLoad(() => api(`/machines/${enc(serial)}`), [serial]);
   const [chosen, setChosen] = useState<Set<string> | null>(null);
   const [pages, setPages] = useState<{ sheet: any; rows: Row[] }[] | null>(null);
@@ -490,13 +633,18 @@ function Search({ q }: { q: string }) {
   const { data, error } = useLoad(() => (q.length >= 2 ? api(`/search?q=${enc(q)}`) : Promise.resolve({ results: [] })), [q]);
   return (
     <>
-      <Head title={t("Search")} sub={t("Find a part on any of your machines by its number, name, or the maker's part number.")} />
+      <Head title={t("Search")} sub={t("Find a machine by its number, or a part on any of your machines by its number, name, or the maker's part number.")} />
       <form className="row" onSubmit={(e) => { e.preventDefault(); navigate(`/search?q=${enc(text.trim())}`); }}>
-        <input className="panel" style={{ flex: 1, padding: "10px 12px", font: "inherit" }} value={text} onChange={(e) => setText(e.target.value)} placeholder={t("Part number or name")} aria-label={t("Search parts")} />
+        <input className="panel" style={{ flex: 1, padding: "10px 12px", font: "inherit" }} value={text} onChange={(e) => setText(e.target.value)} placeholder={t("Company, machine number, part number or name")} aria-label={t("Search parts")} />
         <button className="btn" type="submit">{t("Search")}</button>
       </form>
       <Err error={error} />
-      {q && data && !data.results.length && <p className="empty">{t("Nothing found on your machines for \"{q}\".", { q })}</p>}
+      {q && data && !data.results.length && !data.machines?.length && <p className="empty">{t("Nothing found on your machines for \"{q}\".", { q })}</p>}
+      {!!data?.machines?.length && (
+        <div className="mv-tiles">
+          {data.machines.map((m: any) => <Tile key={m.serial} to={`/m/${m.serial}`} L={Link} pic={TILE.filler} label={m.serial} sub={m.label ?? m.model ?? undefined} />)}
+        </div>
+      )}
       {!!data?.results.length && (
         <div className="panel tbl">
           <table>
@@ -508,7 +656,7 @@ function Search({ q }: { q: string }) {
                   <td>{partName(getLang(), r)}</td>
                   <td className="mono">{r.serial}</td>
                   <td><Link to={`/s/${r.sheet_id}`}>{r.sheet_title}</Link> <span className="muted">· {t("Pos.")} {r.pos}</span></td>
-                  <td><button className="btn small" onClick={() => addToCart(r.code, r.serial)}>{t("Add to cart")}</button></td>
+                  <td><QtyCart code={r.code} serial={r.serial} qty={1} /></td>
                 </tr>
               ))}
             </tbody>

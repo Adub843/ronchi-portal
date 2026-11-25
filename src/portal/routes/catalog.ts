@@ -30,8 +30,8 @@ interface SheetRec {
 }
 
 async function machineById(db: Db, id: string) {
-  const m = await db.prepare("SELECT id, serial, model, customer, site, catalog_published_at FROM machines WHERE id = ?").bind(id).first<{
-    id: string; serial: string; model: string | null; customer: string | null; site: string | null; catalog_published_at: string | null;
+  const m = await db.prepare("SELECT id, serial, model, customer, site, notes, catalog_published_at FROM machines WHERE id = ?").bind(id).first<{
+    id: string; serial: string; model: string | null; customer: string | null; site: string | null; notes: string | null; catalog_published_at: string | null;
   }>();
   if (!m) fail(404, "Not found.");
   return m;
@@ -94,7 +94,7 @@ const fileKey = (sheetId: string, file: string) => `catalog/${sheetId}/${file ==
 catalog.get("/machines", async (c) => {
   requirePerm(c, "catalog.view");
   const { results } = await c.env.DB.prepare(
-    `SELECT m.id, m.serial, m.model, m.catalog_published_at,
+    `SELECT m.id, m.serial, m.model, m.customer, m.site, m.catalog_published_at,
             (SELECT COUNT(*) FROM catalog_sheets s WHERE s.machine_id = m.id) AS sheets,
             (SELECT COUNT(*) FROM catalog_sheets s WHERE s.machine_id = m.id AND s.model_size IS NOT NULL) AS models,
             (SELECT MAX(updated_at) FROM catalog_sheets s WHERE s.machine_id = m.id) AS updated_at
@@ -117,7 +117,7 @@ catalog.get("/machines/:id", async (c) => {
        FROM catalog_imports i JOIN users u ON u.id = i.user_id WHERE i.machine_id = ? ORDER BY i.created_at DESC LIMIT 20`,
   ).bind(m.id).all();
   return c.json({
-    machine: { id: m.id, serial: m.serial, model: m.model, catalog_published_at: m.catalog_published_at },
+    machine: { id: m.id, serial: m.serial, model: m.model, customer: m.customer, site: m.site, notes: m.notes, catalog_published_at: m.catalog_published_at },
     sheets,
     imports: imports.map((i: any) => ({ ...i, warnings: i.warnings ? JSON.parse(i.warnings) : [] })),
   });
@@ -167,8 +167,14 @@ catalog.post("/machines/:id/import", async (c) => {
     db.prepare("DELETE FROM catalog_sheets WHERE machine_id = ? AND source = 'manual'").bind(m.id),
   ];
   const parts = new Map<string, { code: string; rev: string | null; nameEn: string | null; nameIt: string | null }>();
-  // Parents go in before children, so the parent_id reference always exists.
-  const order = [...incoming].sort((a, b2) => (a.parentKey ? 1 : 0) - (b2.parentKey ? 1 : 0));
+  // Parents go in before children at every depth, so the parent_id reference always exists. A sheet
+  // whose parent is missing, or that sits in a loop, goes to the top level.
+  const kids = new Map<string, typeof incoming>();
+  for (const s of incoming) if (s.parentKey && s.parentKey !== s.key && byKey.has(s.parentKey)) kids.set(s.parentKey, [...(kids.get(s.parentKey) ?? []), s]);
+  const order: typeof incoming = incoming.filter((s) => !s.parentKey || s.parentKey === s.key || !byKey.has(s.parentKey));
+  const placed = new Set(order.map((s) => s.key));
+  for (let i = 0; i < order.length; i++) for (const k of kids.get(order[i]!.key) ?? []) if (!placed.has(k.key)) { placed.add(k.key); order.push(k); }
+  for (const s of incoming) if (!placed.has(s.key)) { s.parentKey = null; order.push(s); }
   for (const s of order) {
     const sort = (base?.n ?? -1) + 1 + incoming.indexOf(s);
     const parentId = s.parentKey ? (byKey.get(s.parentKey) ?? null) : null;
@@ -237,7 +243,7 @@ catalog.get("/sheets/:id", async (c) => {
     parent = p.parent_id;
   }
   return c.json({
-    machine: { id: m.id, serial: m.serial, model: m.model },
+    machine: { id: m.id, serial: m.serial, model: m.model, customer: m.customer },
     sheet: {
       id: s.id, serial: m.serial, section: s.section, group: s.grp, code: s.code, rev: s.rev, title: s.title, titleIt: s.title_it,
       source: s.source, page: s.page,
@@ -392,7 +398,14 @@ catalog.get("/search", async (c) => {
       WHERE r.code LIKE ? ESCAPE '\\' OR p.name_en LIKE ? ESCAPE '\\' OR p.name_it LIKE ? ESCAPE '\\' OR p.maker_pn LIKE ? ESCAPE '\\'
       ORDER BY (r.code = ?) DESC, r.code, m.serial LIMIT 300`,
   ).bind(like, like, like, like, q.toUpperCase()).all();
-  return c.json({ results });
+  // Machines too: a machine number, model or customer finds the machine even before it has a catalog.
+  const { results: machines } = await c.env.DB.prepare(
+    `SELECT m.id, m.serial, m.model, m.customer, m.site, (SELECT COUNT(*) FROM catalog_sheets s WHERE s.machine_id = m.id) AS sheets
+       FROM machines m
+      WHERE m.serial LIKE ? ESCAPE '\\' OR m.model LIKE ? ESCAPE '\\' OR m.customer LIKE ? ESCAPE '\\' OR m.site LIKE ? ESCAPE '\\'
+      ORDER BY (m.serial = ?) DESC, m.serial LIMIT 50`,
+  ).bind(like, like, like, like, q.toUpperCase()).all();
+  return c.json({ results, machines });
 });
 
 catalog.get("/parts/:code", async (c) => {
