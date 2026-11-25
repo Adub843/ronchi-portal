@@ -36,7 +36,7 @@ const NAV: { to: string; label: string; perm?: string; count?: keyof Unread; pho
   { to: "/settings", label: "Settings", phone: false },
 ];
 
-const ROLE_NAMES: Record<string, string> = { admin: "Admin", manager: "Manager", billing: "Billing", scheduling: "Scheduling", service: "Service", sales: "Sales", engineering: "Engineering", tech: "Field technician" };
+const ROLE_NAMES: Record<string, string> = { admin: "Admin", manager: "Manager", billing: "Billing", scheduling: "Scheduling", service: "Service", sales: "Sales", engineering: "Engineering", tech: "Field service engineer" };
 export const DEFAULT_PREFS: Prefs = { theme: "ronchi", mode: "auto", layout: "L2", tiles: null, lang: "en", popups: true };
 
 export function App() {
