@@ -169,7 +169,7 @@ export function People({ me }: { me: Me }) {
                 </div></td>
               </tr>
               {open === u.id && permList.data && (
-                <tr className="access-row"><td colSpan={5}><Access person={u} roleName={roleNames[u.role] ?? u.role} list={permList.data} onSaved={reload} onClose={() => setOpen(null)} /></td></tr>
+                <tr className="access-row"><td colSpan={5}><Access person={u} roleName={roleNames[u.role] ?? u.role} list={permList.data} people={data.users} onSaved={reload} onClose={() => setOpen(null)} /></td></tr>
               )}
               </Fragment>
               );
@@ -224,19 +224,41 @@ export function People({ me }: { me: Me }) {
   );
 }
 
-type PermList = { groups: { group: string; perms: { id: string; label: string; hint: string; adjustable: boolean; view: boolean }[] }[]; byRole: Record<string, string[]> };
+export type PermList = { groups: { group: string; perms: { id: string; label: string; hint: string; adjustable: boolean; view: boolean }[] }[]; byRole: Record<string, string[]> };
 
-/** Switch single permissions on or off for one person, on top of their role. */
-function Access({ person, roleName, list, onSaved, onClose }: { person: any; roleName: string; list: PermList; onSaved: () => void; onClose: () => void }) {
+// How long a change lasts (Command center): for good, or until a time.
+const LASTS: { id: string; label: () => string; hours: number | null }[] = [
+  { id: "always", label: () => t("For good"), hours: null },
+  { id: "day", label: () => t("For 1 day"), hours: 24 },
+  { id: "week", label: () => t("For 1 week"), hours: 24 * 7 },
+  { id: "month", label: () => t("For 30 days"), hours: 24 * 30 },
+];
+
+/**
+ * Switch single permissions on or off for one person, on top of their role. Used on People > Access
+ * and in Settings > Command center. `people` turns on "Copy from", `sectionsOff` explains the switches
+ * the owner turned off for everyone.
+ */
+export function Access({ person, roleName, list, onSaved, onClose, people, sectionsOff, inline }: {
+  person: any; roleName: string; list: PermList; onSaved: () => void; onClose?: () => void;
+  people?: { id: string; name: string; role: string; removed_at?: string | null }[]; sectionsOff?: ReadonlySet<string>; inline?: boolean;
+}) {
   const [changes, setChanges] = useState<Record<string, boolean>>(person.access ?? {});
+  const [until, setUntil] = useState<Record<string, string>>(person.until ?? {});
+  const [lasts, setLasts] = useState("always");
+  const [copy, setCopy] = useState("");
   const [busy, setBusy] = useState(false);
   const fromRole = new Set(list.byRole[person.role] ?? []);
+  useEffect(() => { setChanges(person.access ?? {}); setUntil(person.until ?? {}); }, [person.id, person.access, person.until]);
 
   async function save(body: Record<string, unknown>) {
     setBusy(true);
     try {
-      const r = await api(`/users/${encodeURIComponent(person.id)}/access`, { method: "PUT", body });
+      const hours = LASTS.find((l) => l.id === lasts)?.hours ?? null;
+      const withEnd = body.changes && hours ? { ...body, until: new Date(Date.now() + hours * 3600_000).toISOString() } : body;
+      const r = await api(`/users/${encodeURIComponent(person.id)}/access`, { method: "PUT", body: withEnd });
       setChanges(r.changes);
+      if (body.copyFrom) toast(t("Copied. They now have the same role and access."));
       onSaved();
     } catch (x) {
       toast((x as Error).message);
@@ -256,9 +278,15 @@ function Access({ person, roleName, list, onSaved, onClose }: { person: any; rol
     }
     if (Object.keys(off).length) save({ changes: off });
   };
-  const phone = usePhone();
+  // A whole page on or off for this person: every function in the group.
+  const wholePage = (perms: { id: string; adjustable: boolean }[], on: boolean) => {
+    const next: Record<string, boolean | null> = {};
+    for (const p of perms) if (p.adjustable) next[p.id] = fromRole.has(p.id) === on ? null : on;
+    save({ changes: next });
+  };
+  const phone = usePhone() && !inline;
   useEffect(() => {
-    if (!phone) return;
+    if (!phone || !onClose) return;
     const was = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -276,13 +304,39 @@ function Access({ person, roleName, list, onSaved, onClose }: { person: any; rol
         <div className="row" style={{ gap: 6 }}>
           <button className="btn small" disabled={busy} onClick={viewOnly}>{t("View only")}</button>
           {count > 0 && <button className="btn small" disabled={busy} onClick={() => save({ reset: true })}>{t("Back to the role")}</button>}
-          <button className="btn small" onClick={onClose}>{t("Done")}</button>
+          {onClose && <button className="btn small" onClick={onClose}>{t("Done")}</button>}
         </div>
+      </div>
+      <div className="row wrap access-tools">
+        <label className="row" style={{ gap: 6 }}>
+          <span className="muted">{t("New changes last")}</span>
+          <select value={lasts} onChange={(e) => setLasts(e.target.value)}>
+            {LASTS.map((l) => <option key={l.id} value={l.id}>{l.label()}</option>)}
+          </select>
+        </label>
+        {people && (
+          <span className="row" style={{ gap: 6 }}>
+            <select aria-label={t("Copy role and access from")} value={copy} onChange={(e) => setCopy(e.target.value)}>
+              <option value="">{t("Copy role and access from…")}</option>
+              {people.filter((x) => x.id !== person.id && x.role !== "admin" && !x.removed_at).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </select>
+            <button className="btn small" disabled={busy || !copy} onClick={() => { save({ copyFrom: copy }); setCopy(""); }}>{t("Copy")}</button>
+          </span>
+        )}
       </div>
       <div className="access-groups">
         {list.groups.map((g) => (
           <section key={g.group} className="access-group">
-            <h3>{t(g.group)}</h3>
+            <div className="row access-group-head">
+              <h3>{t(g.group)}</h3>
+              <span className="spacer" />
+              {g.perms.some((p) => p.adjustable) && (
+                <>
+                  <button className="btn tiny" disabled={busy} onClick={() => wholePage(g.perms, true)} title={t("Turn every function on this page on for this person")}>{t("All on")}</button>
+                  <button className="btn tiny" disabled={busy} onClick={() => wholePage(g.perms, false)} title={t("Turn this whole page off for this person")}>{t("All off")}</button>
+                </>
+              )}
+            </div>
             {g.perms.map((p) => {
               const own = changes[p.id];
               const role = fromRole.has(p.id);
@@ -293,6 +347,11 @@ function Access({ person, roleName, list, onSaved, onClose }: { person: any; rol
                   <div className="access-text">
                     <span>{t(p.label)}</span>
                     <small className="muted">{t(p.hint)}</small>
+                    <small className="access-why">{
+                      sectionsOff?.has(p.id) ? t("Off for everyone: the owner switched this section off")
+                        : own === undefined ? (role ? t("On from the role") : t("Off from the role"))
+                          : until[p.id] ? t("Changed for them until {when}", { when: fmtTime(until[p.id]!) }) : t("Changed for them")
+                    }</small>
                   </div>
                   {p.adjustable ? (
                     <div className="seg" role="radiogroup" aria-label={t(p.label)}>

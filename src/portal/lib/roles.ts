@@ -153,6 +153,9 @@ export function readChanges(list: string | null | undefined): AccessChanges {
   return out;
 }
 
+/** SQL that keeps only access changes that haven't run out (alias a = user_access). Same text format as toISOString(). */
+export const ACCESS_LIVE = "(a.expires_at IS NULL OR a.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))";
+
 /** Seeing, without changing anything: what "View only" on the access screen keeps on. */
 export const VIEW_PERMS: ReadonlySet<Permission> = new Set(["boards.use", "machines.view", "catalog.view", "kb.view", "software.view", "cpsales.view", "orders.view", "jobs.view"]);
 
@@ -206,7 +209,7 @@ export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label:
   { group: "Admin only", perms: [
     { id: "users.manage", label: "Manage people", hint: "Invites, roles, access and sign-outs. Admins only." },
     { id: "audit.view", label: "Read the audit log", hint: "Who did what, and when. Admins only." },
-    { id: "settings.manage", label: "Admin controls", hint: "Portal-wide settings. Admins only." },
+    { id: "settings.manage", label: "Command center", hint: "Every switch and control for the portal. The portal owner only." },
   ] },
 ];
 

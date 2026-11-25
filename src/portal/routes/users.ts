@@ -4,7 +4,7 @@ import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
 import { body, fail, has, mustStr, requirePerm, requireUser } from "../lib/http";
 import { createInvite } from "../lib/invites";
-import { adjustable, effective, isPermission, isRole, PERMISSION_GROUPS, readChanges, VIEW_PERMS, type AccessChanges, type Permission } from "../lib/roles";
+import { ACCESS_LIVE, adjustable, effective, isPermission, isRole, PERMISSION_GROUPS, readChanges, VIEW_PERMS, type AccessChanges, type Permission } from "../lib/roles";
 import { listRoles, roleExists, saveRole } from "../lib/role-store";
 import { randomId } from "../../shared/crypto";
 import { isEmail } from "../lib/mail";
@@ -108,7 +108,7 @@ users.get("/permissions", async (c) => {
 });
 
 async function changesFor(db: D1Database, userId: string): Promise<AccessChanges> {
-  const r = await db.prepare("SELECT group_concat(perm || '=' || allow) AS list FROM user_access WHERE user_id = ?").bind(userId).first<{ list: string | null }>();
+  const r = await db.prepare(`SELECT group_concat(a.perm || '=' || a.allow) AS list FROM user_access a WHERE a.user_id = ? AND ${ACCESS_LIVE}`).bind(userId).first<{ list: string | null }>();
   return readChanges(r?.list);
 }
 
@@ -129,8 +129,31 @@ users.put("/:id/access", async (c) => {
   const before = await changesFor(c.env.DB, id);
   const at = now();
   const stmts: D1PreparedStatement[] = [];
+  let role = target.role;
+  let rolePerms = target.role_perms;
+  // until: the changes in this request run out then (ISO time in the future). Left out = no end.
+  let until: string | null = null;
+  if (b.until !== undefined && b.until !== null) {
+    if (typeof b.until !== "string" || Number.isNaN(Date.parse(b.until))) fail(400, "Pick a date for the change to end.");
+    if (Date.parse(b.until) <= Date.now()) fail(400, "The end date has to be in the future.");
+    until = new Date(Date.parse(b.until)).toISOString();
+  }
   if (b.reset === true) {
     stmts.push(c.env.DB.prepare("DELETE FROM user_access WHERE user_id = ?").bind(id));
+  } else if (typeof b.copyFrom === "string") {
+    // Copy another person's role and personal changes (for example a new hire who does the same job).
+    const from = await c.env.DB.prepare("SELECT u.id, u.role, (SELECT r.perms FROM roles r WHERE r.id = u.role) AS role_perms FROM users u WHERE u.id = ? AND u.removed_at IS NULL").bind(b.copyFrom).first<{ id: string; role: string; role_perms: string | null }>();
+    if (!from || from.id === id) fail(400, "Pick someone else to copy.");
+    if (from.role === "admin") fail(400, "Admin access can't be copied. Make them an admin on People instead.");
+    if (await isOwnerId(c.env.DB, id)) fail(403, "Only the portal owner can change the owner's login.");
+    role = from.role;
+    rolePerms = from.role_perms;
+    stmts.push(c.env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id));
+    stmts.push(c.env.DB.prepare("DELETE FROM user_access WHERE user_id = ?").bind(id));
+    stmts.push(c.env.DB.prepare(
+      `INSERT INTO user_access (user_id, perm, allow, set_by, set_at, expires_at)
+       SELECT ?, a.perm, a.allow, ?, ?, a.expires_at FROM user_access a WHERE a.user_id = ? AND ${ACCESS_LIVE}`,
+    ).bind(id, admin.id, at, from.id));
   } else {
     const changes = b.changes;
     if (!changes || typeof changes !== "object" || Array.isArray(changes) || !Object.keys(changes).length) fail(400, "Nothing to change.");
@@ -140,15 +163,15 @@ users.put("/:id/access", async (c) => {
       if (on === null) stmts.push(c.env.DB.prepare("DELETE FROM user_access WHERE user_id = ? AND perm = ?").bind(id, perm));
       else if (typeof on === "boolean") {
         stmts.push(c.env.DB.prepare(
-          "INSERT INTO user_access (user_id, perm, allow, set_by, set_at) VALUES (?,?,?,?,?) ON CONFLICT (user_id, perm) DO UPDATE SET allow = excluded.allow, set_by = excluded.set_by, set_at = excluded.set_at",
-        ).bind(id, perm, on ? 1 : 0, admin.id, at));
+          "INSERT INTO user_access (user_id, perm, allow, set_by, set_at, expires_at) VALUES (?,?,?,?,?,?) ON CONFLICT (user_id, perm) DO UPDATE SET allow = excluded.allow, set_by = excluded.set_by, set_at = excluded.set_at, expires_at = excluded.expires_at",
+        ).bind(id, perm, on ? 1 : 0, admin.id, at, until));
       } else fail(400, "Use on, off, or back to the role.");
     }
   }
   await c.env.DB.batch(stmts);
   const after = await changesFor(c.env.DB, id);
-  await audit(c.env.DB, { userId: admin.id, action: "user.access", targetType: "user", targetId: id, detail: { before, after }, ip: c.get("ip") });
-  return c.json({ changes: after, permissions: [...effective(target.role, after, target.role_perms)] });
+  await audit(c.env.DB, { userId: admin.id, action: "user.access", targetType: "user", targetId: id, detail: { before, after, ...(until ? { until } : {}), ...(role !== target.role ? { role: [target.role, role], copiedFrom: b.copyFrom } : {}) }, ip: c.get("ip") });
+  return c.json({ changes: after, role, permissions: [...effective(role, after, rolePerms)] });
 });
 
 /** Everyone (admin only). */
@@ -162,11 +185,15 @@ users.get("/", async (c) => {
             (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id) AS sessions
        FROM users u ORDER BY u.name`,
   ).all();
-  const access = await c.env.DB.prepare("SELECT user_id, group_concat(perm || '=' || allow) AS list FROM user_access GROUP BY user_id").all<{ user_id: string; list: string }>();
+  const access = await c.env.DB.prepare(`SELECT a.user_id, group_concat(a.perm || '=' || a.allow) AS list FROM user_access a WHERE ${ACCESS_LIVE} GROUP BY a.user_id`).all<{ user_id: string; list: string }>();
   const changes = new Map(access.results.map((r) => [r.user_id, readChanges(r.list)]));
+  // When a temporary change runs out: { userId: { perm: until } }
+  const ends = await c.env.DB.prepare(`SELECT a.user_id, a.perm, a.expires_at FROM user_access a WHERE a.expires_at IS NOT NULL AND ${ACCESS_LIVE}`).all<{ user_id: string; perm: string; expires_at: string }>();
+  const until = new Map<string, Record<string, string>>();
+  for (const e of ends.results) until.set(e.user_id, { ...(until.get(e.user_id) ?? {}), [e.perm]: e.expires_at });
   const people = (results as { id: string; role: string; role_perms: string | null }[]).map(({ role_perms, ...u }) => {
     const own = u.role === "admin" ? {} : (changes.get(u.id) ?? {});
-    return { ...u, access: own, permissions: [...effective(u.role, own, role_perms)] };
+    return { ...u, access: own, until: u.role === "admin" ? {} : (until.get(u.id) ?? {}), permissions: [...effective(u.role, own, role_perms)] };
   });
   const pending = await c.env.DB.prepare(
     "SELECT id, email, name, role, expires_at FROM invites WHERE used_at IS NULL AND user_id IS NULL AND expires_at > ? ORDER BY created_at DESC",

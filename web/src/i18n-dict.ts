@@ -2036,7 +2036,7 @@ export const IT: Record<string, string> = {
 Object.assign(ES, ADMIN_ES);
 Object.assign(IT, ADMIN_IT);
 // The access screen lists the admin-controls permission by name (src/portal/lib/roles.ts).
-DYNAMIC.push("Admin controls", "Portal-wide settings. Admins only.");
+DYNAMIC.push("Command center", "Every switch and control for the portal. The portal owner only.");
 // Software downloads (i18n-software.ts).
 Object.assign(ES, SOFTWARE_ES);
 Object.assign(IT, SOFTWARE_IT);

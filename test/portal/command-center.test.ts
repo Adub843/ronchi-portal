@@ -64,3 +64,32 @@ describe("Portal command center", () => {
     expect((await aaron.fetch("/api/jobs")).status).toBe(200);
   });
 });
+
+describe("Command center: each person's access", () => {
+  it("a change can last until a date, then the person goes back to what their role gives", async () => {
+    const aaron = await owner();
+    const tech = await person("tech");
+    const soon = new Date(Date.now() + 3600_000).toISOString();
+    expect((await aaron.fetch(`/api/users/${tech.id}/access`, { method: "PUT", body: { changes: { "orders.view": true }, until: soon } })).status).toBe(200);
+    expect((await tech.fetch("/api/change-parts")).status).toBe(200);
+    const list = await aaron.json("/api/users");
+    expect(list.data.users.find((u: any) => u.id === tech.id).until).toEqual({ "orders.view": soon });
+    // Time passes: the change has run out.
+    await env.DB.prepare("UPDATE user_access SET expires_at = ? WHERE user_id = ?").bind(new Date(Date.now() - 1000).toISOString(), tech.id).run();
+    expect((await tech.fetch("/api/change-parts")).status).toBe(403);
+    expect((await aaron.fetch(`/api/users/${tech.id}/access`, { method: "PUT", body: { changes: { "orders.view": true }, until: "2000-01-01T00:00:00Z" } })).status).toBe(400);
+  });
+
+  it("copies another person's role and access in one step", async () => {
+    const aaron = await owner();
+    const model = await person("sales");
+    const tech = await person("tech");
+    await aaron.json(`/api/users/${model.id}/access`, { method: "PUT", body: { changes: { "files.send": false } } });
+    const r = await aaron.json(`/api/users/${tech.id}/access`, { method: "PUT", body: { copyFrom: model.id } });
+    expect(r.status).toBe(200);
+    const me = (await tech.json("/api/auth/me")).data.user;
+    expect(me.role).toBe("sales");
+    expect(me.permissions).toContain("orders.view");
+    expect(me.permissions).not.toContain("files.send");
+  });
+});
