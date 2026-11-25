@@ -1,5 +1,57 @@
 // Spanish and Italian for the catalog3d screens. Kept in its own file so each area's words stay together
 // (merged into ES, IT and DYNAMIC by i18n-dict.ts).
 export const CATALOG3D_DYNAMIC: string[] = [];
-export const CATALOG3D_ES: Record<string, string> = {};
-export const CATALOG3D_IT: Record<string, string> = {};
+export const CATALOG3D_ES: Record<string, string> = {
+  "Add Fusion pictures": "Añadir imágenes de Fusion",
+  "Add {n} pictures": "Añadir {n} imágenes",
+  "Adding picture {n} of {total}…": "Añadiendo imagen {n} de {total}…",
+  "Files from Fusion": "Archivos de Fusion",
+  "No manifest.json among the chosen files. Pick every file in the folder Fusion made.": "No hay manifest.json entre los archivos elegidos. Elija todos los archivos de la carpeta que creó Fusion.",
+  "No part number at the start of the name: {list}": "Sin número de pieza al inicio del nombre: {list}",
+  "Not among the chosen files: {list}": "No está entre los archivos elegidos: {list}",
+  "Not in this machine's catalog: {list}": "No está en el catálogo de esta máquina: {list}",
+  "Nothing to add": "Nada que añadir",
+  "Pick every file in the folder Fusion made for this assembly: manifest.json and the pictures. Each part picture goes to the part with the same number, on every parts list that has it. The views become this parts list's pictures.":
+    "Elija todos los archivos de la carpeta que creó Fusion para este conjunto: manifest.json y las imágenes. Cada imagen de pieza va a la pieza con el mismo número, en todas las listas de piezas que la tengan. Las vistas pasan a ser las imágenes de esta lista de piezas.",
+  "Picture of {code}": "Imagen de {code}",
+  "Picture removed": "Imagen quitada",
+  "Pictures from Fusion": "Imágenes de Fusion",
+  "Remove picture": "Quitar imagen",
+  "Remove the views from this parts list?": "¿Quitar las vistas de esta lista de piezas?",
+  "Remove this part's picture? It goes from every machine with this part.": "¿Quitar la imagen de esta pieza? Desaparece de todas las máquinas que tienen esta pieza.",
+  "Remove this parts list's views": "Quitar las vistas de esta lista de piezas",
+  "That picture is too big (5 MB at most).": "Esa imagen es demasiado grande (5 MB como máximo).",
+  "The picture couldn't be read.": "No se pudo leer la imagen.",
+  "This isn't a Fusion pictures list (manifest.json).": "Esto no es una lista de imágenes de Fusion (manifest.json).",
+  "Views removed": "Vistas quitadas",
+  "{n} part pictures match this machine's catalog": "{n} imágenes de piezas coinciden con el catálogo de esta máquina",
+  "{n} pictures added": "{n} imágenes añadidas",
+  "{n} views for this parts list": "{n} vistas para esta lista de piezas",
+};
+export const CATALOG3D_IT: Record<string, string> = {
+  "Add Fusion pictures": "Aggiungi immagini da Fusion",
+  "Add {n} pictures": "Aggiungi {n} immagini",
+  "Adding picture {n} of {total}…": "Aggiunta immagine {n} di {total}…",
+  "Files from Fusion": "File da Fusion",
+  "No manifest.json among the chosen files. Pick every file in the folder Fusion made.": "Nessun manifest.json tra i file scelti. Scegli tutti i file della cartella creata da Fusion.",
+  "No part number at the start of the name: {list}": "Nessun codice all'inizio del nome: {list}",
+  "Not among the chosen files: {list}": "Non tra i file scelti: {list}",
+  "Not in this machine's catalog: {list}": "Non nel catalogo di questa macchina: {list}",
+  "Nothing to add": "Niente da aggiungere",
+  "Pick every file in the folder Fusion made for this assembly: manifest.json and the pictures. Each part picture goes to the part with the same number, on every parts list that has it. The views become this parts list's pictures.":
+    "Scegli tutti i file della cartella creata da Fusion per questo gruppo: manifest.json e le immagini. Ogni immagine va al ricambio con lo stesso codice, in tutte le distinte che lo contengono. Le viste diventano le immagini di questa distinta.",
+  "Picture of {code}": "Immagine di {code}",
+  "Picture removed": "Immagine tolta",
+  "Pictures from Fusion": "Immagini da Fusion",
+  "Remove picture": "Togli immagine",
+  "Remove the views from this parts list?": "Togliere le viste da questa distinta?",
+  "Remove this part's picture? It goes from every machine with this part.": "Togliere l'immagine di questo ricambio? Sparisce da tutte le macchine che lo hanno.",
+  "Remove this parts list's views": "Togli le viste di questa distinta",
+  "That picture is too big (5 MB at most).": "Immagine troppo grande (massimo 5 MB).",
+  "The picture couldn't be read.": "Impossibile leggere l'immagine.",
+  "This isn't a Fusion pictures list (manifest.json).": "Questo non è un elenco di immagini di Fusion (manifest.json).",
+  "Views removed": "Viste tolte",
+  "{n} part pictures match this machine's catalog": "{n} immagini di ricambi corrispondono al catalogo di questa macchina",
+  "{n} pictures added": "{n} immagini aggiunte",
+  "{n} views for this parts list": "{n} viste per questa distinta",
+};

@@ -188,7 +188,11 @@ The parts site:
   parts site holds; wrong keys get "not found" and are logged.
 - `parts-db` holds parts, drawings and models, and the customers' own logins, carts and
   quote requests. No prices, costs, staff names or staff notes (a test checks the table
-  list). Publishing refuses any sheet with a customer name or site from the registry.
+  list). Publishing refuses any sheet with a customer name or site from the registry,
+  in titles, groups, part names and the 3D part names (mesh map).
+- Part pictures and 3D views cross as images rendered from Ronchi CAD only (see "Catalog
+  pictures from Fusion"). A part picture is served only to a company whose machines use
+  that part; a view only with its parts list. Both with the same sandboxed headers as drawings.
 - Each company sees only the machines staff link to it. Every customer request goes
   through `src/parts/lib/access.ts`; another company's machine, sheet, file or quote
   answers "not found". `test/parts` signs in as two companies and tries each route
@@ -197,6 +201,28 @@ The parts site:
 
 `test/unit/wall.test.ts` checks all of these on every build, so a change that breaks
 the wall fails the build.
+
+## Catalog pictures from Fusion
+
+A picture per part in the parts list (balloon, picture, part number, name, quantity) and four
+views of each assembly, rendered in Autodesk Fusion from the CAD:
+
+1. On the Fusion PC (LabBridge add-in running): `node scripts/fusion-renders.mjs <assembly.step>`.
+   It hands the STEP to Fusion with the recipe `scripts/fusion/catalog-renders.py`, waits, puts
+   every picture on white and writes a folder "<name> renders" next to the STEP: `view-iso.png`,
+   `view-front.png`, `view-top.png`, `view-right.png`, one `part-<name>.png` per component, and
+   `manifest.json`. `--demo` renders a built-in test assembly to check the chain.
+   SolidWorks files go to STEP first with the Fusion add-in RonchiPortalExport.
+2. In the portal, open the parts list for that assembly, press **Add Fusion pictures** and pick
+   every file in the folder. Each picture goes to the part number at the start of its CAD name
+   (the 3D viewer's rule, `web/catalog/codes.ts`), on every parts list with that part; the views
+   become this parts list's pictures. Names without a part number, or parts not in this machine's
+   catalog, are listed and left out.
+3. **Publish to customers** copies them to the parts site with the drawings and 3D.
+
+Stored in R2 as `catalog/parts/<code>/picture` and `catalog/<sheet id>/view-<name>` (portal) and
+`parts/<code>/picture`, `sheets/<id>/view-<name>` (parts site); migrations `portal/0022` and
+`parts/0002`.
 
 ## Jobs, job emails and the Ronchi workbook
 

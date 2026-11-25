@@ -65,3 +65,24 @@ export function cleanPartCode(s: unknown): string | null {
   const c = s.trim().toUpperCase().replace(/\s+/g, "");
   return PART_CODE.test(c) ? c : null;
 }
+
+/**
+ * The fixed views of a parts list's 3D assembly, rendered in Fusion (scripts/fusion-renders.mjs):
+ * stored as catalog/<sheet id>/view-<name> and listed in the sheet's `views`, iso first.
+ */
+export const SHEET_VIEWS = ["iso", "front", "top", "right"] as const;
+export type SheetViewName = (typeof SHEET_VIEWS)[number];
+
+/** A stored list of views, cleaned: only known names, each once, in the standard order. */
+export function cleanViews(v: unknown): SheetViewName[] {
+  let list: unknown = v;
+  if (typeof v === "string") {
+    try {
+      list = JSON.parse(v);
+    } catch {
+      list = [];
+    }
+  }
+  const given = new Set(Array.isArray(list) ? list : []);
+  return SHEET_VIEWS.filter((n) => given.has(n));
+}

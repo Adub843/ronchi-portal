@@ -11,6 +11,7 @@ import { api, apiPut, can, fmtTime, type Me } from "../api";
 import { getLang, t } from "../i18n";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad, Tip } from "../components/ui";
 import { navigate } from "../router";
+import { FusionPictures } from "../catalog/FusionPictures";
 import type { TreeSheet } from "../../catalog/CatalogTree";
 import { CatalogBrowse, Crumbs, levelFrom, SECTION_WORD, Tile, TilePage, type LinkLike } from "../../catalog/Browse";
 import { TILE } from "../../catalog/icons";
@@ -208,7 +209,7 @@ function CatalogMachineBrowse({ id, rest }: { id: string; rest: string[]; me: Me
       level={levelFrom(rest)}
       base={`/catalog/m/${m.id}/catalog`}
       sheetTo={(s) => `/catalog/s/${s.id}`}
-      thumb={(s) => (s.has_drawing ? `/api/catalog/sheets/${enc(s.id)}/drawing` : null)}
+      thumb={(s) => (s.has_drawing ? `/api/catalog/sheets/${enc(s.id)}/drawing` : s.views?.length ? `/api/catalog/sheets/${enc(s.id)}/views/${s.views[0]}` : null)}
       L={Link as LinkLike}
       lang={getLang()}
       crumbs={[
@@ -443,6 +444,7 @@ function CatalogSheet({ id, me }: { id: string; me: Me }) {
   const [version, setVersion] = useState("");
   const [editing, setEditing] = useState(false);
   const [placing, setPlacing] = useState(false);
+  const [pictures, setPictures] = useState(false);
   const editor = can(me, "catalog.edit");
   if (error) return <ErrorNote error={error} />;
   if (!data) return null;
@@ -479,12 +481,15 @@ function CatalogSheet({ id, me }: { id: string; me: Me }) {
       <Crumbs L={Link as LinkLike} label={t("Where this drawing sits")} items={trail} />
       {placing && <p className="note-inline">{t("Pick a row in the parts list, then click its spot on the drawing. Each click adds a balloon for that row.")}</p>}
       {editing && <SheetEditor sheet={s} rows={rows} machineId={data.machine.id} onSaved={(v) => { if (v) setVersion(v); reload(); }} />}
+      {pictures && <FusionPictures machineId={data.machine.id} sheet={s} onDone={() => { setVersion(String(Date.now())); reload(); }} onClose={() => setPictures(false)} />}
       <SheetView
         sheet={s}
         rows={rows}
         lang={getLang()}
         version={version}
         fileUrl={(kind) => `/api/catalog/sheets/${enc(id)}/${kind}`}
+        viewUrl={(v) => `/api/catalog/sheets/${enc(id)}/views/${v}`}
+        pictureUrl={(code, v) => `/api/catalog/parts/${enc(code)}/picture?v=${enc(v)}`}
         onOpenSheet={(sid) => navigate(`/catalog/s/${sid}`)}
         partLink={(code) => <Link to={`/catalog/p/${code}`}>{code}</Link>}
         whereUsed={(code) => <Link to={`/catalog/p/${code}`}>{t("Show where this part is used")}</Link>}
@@ -495,6 +500,7 @@ function CatalogSheet({ id, me }: { id: string; me: Me }) {
         tools={editor ? (
           <>
             <button className="btn small" aria-pressed={placing} onClick={() => setPlacing(!placing)}>{placing ? t("Done placing") : t("Place balloons")}</button>
+            <button className="btn small" aria-pressed={pictures} onClick={() => setPictures(!pictures)}>{t("Add Fusion pictures")}</button>
             <button className="btn small" onClick={() => setEditing(!editing)}>{editing ? t("Close editing") : t("Edit")}</button>
           </>
         ) : undefined}
@@ -695,6 +701,23 @@ function CatalogPart({ code, me }: { code: string; me: Me }) {
           <label className="row" style={{ gap: 6 }}><input type="checkbox" checked={edit.wear} onChange={(e) => setEdit({ ...edit, wear: e.target.checked })} /> {t("Wears out (suggest it as a spare)")}</label>
           <div className="row"><button className="btn primary" type="submit">{t("Save")}</button><button className="btn" type="button" onClick={() => setEdit(null)}>{t("Cancel")}</button></div>
         </form>
+      )}
+      {p.picture_at && (
+        <div className="panel row" style={{ flexWrap: "wrap", alignItems: "flex-start" }}>
+          <img className="pl-info-pic" src={`/api/catalog/parts/${enc(code)}/picture?v=${enc(p.picture_at)}`} alt={t("Picture of {code}", { code: p.code })} />
+          {can(me, "catalog.edit") && (
+            <button className="btn small danger" onClick={async () => {
+              if (!confirm(t("Remove this part's picture? It goes from every machine with this part."))) return;
+              try {
+                await api(`/catalog/parts/${enc(code)}/picture`, { method: "DELETE" });
+                toast(t("Picture removed"));
+                reload();
+              } catch (x) {
+                toast((x as Error).message);
+              }
+            }}>{t("Remove picture")}</button>
+          )}
+        </div>
       )}
       <div className="grid g2">
         <div className="panel tbl">

@@ -19,10 +19,18 @@ export interface Row {
   wear: boolean;
   sub_sheet: string | null;
   hotspots: { x: number; y: number; w: number; h: number }[];
+  picture?: string | null;   // when the part's picture (rendered in Fusion) was added; null = none
+}
+
+/** A part's picture, or its icon when there is none or it can't be loaded. */
+function PartPic({ src, fallback, alt, className }: { src: string | null; fallback: ReactNode; alt: string; className?: string }) {
+  const [broken, setBroken] = useState(false);
+  if (!src || broken) return <>{fallback}</>;
+  return <img className={className} src={src} alt={alt} loading="lazy" decoding="async" onError={() => setBroken(true)} />;
 }
 
 export function PartsList({
-  rows, selected, onSelect, lang, onOpenSheet, partLink, whereUsed, action, extra, query, head, onShow3D, has3D,
+  rows, selected, onSelect, lang, onOpenSheet, partLink, whereUsed, action, extra, query, head, onShow3D, has3D, pictureUrl,
 }: {
   rows: Row[];
   selected: string | null;                       // selected row id
@@ -34,10 +42,12 @@ export function PartsList({
   action?: (row: Row) => ReactNode;              // for example the quantity box and cart button
   extra?: (row: Row) => ReactNode;               // for example the staff notes count
   query?: string;                                // the "Find in parts list" text, from the sheet's bar
-  head?: { code: string | null; title: string }; // the assembly this list belongs to
+  head?: { code: string | null; title: string; picture?: string | null }; // the assembly this list belongs to
   onShow3D?: (row: Row) => void;                 // "Show in 3D"
   has3D?: (code: string) => boolean;             // whether this part is in the sheet's 3D model
+  pictureUrl?: (code: string, version: string) => string; // a part's picture (rows with `picture` set)
 }) {
+  const pic = (r: Row) => (r.picture && pictureUrl ? pictureUrl(r.code, r.picture) : null);
   const [info, setInfo] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const shown = useMemo(() => {
@@ -58,7 +68,7 @@ export function PartsList({
       {head && (
         <div className="pl-row pl-asm">
           <span className="pl-pos" />
-          <span className="pl-pic">{IC.list}</span>
+          <span className="pl-pic">{head.picture ? <PartPic src={head.picture} fallback={IC.list} alt="" /> : IC.list}</span>
           <span className="pl-what"><b className="mono">{head.code ?? ""}</b><small>{head.title}</small></span>
           <span className="pl-qty">{w(lang, "Quantity: {n}", { n: 1 })}</span>
         </div>
@@ -71,7 +81,7 @@ export function PartsList({
           onSelect(r);
         }}>
           <span className="pl-pos">{r.pos}</span>
-          <span className="pl-pic" aria-hidden="true">{r.sub_sheet ? IC.list : IC.gearPart}</span>
+          <span className="pl-pic" aria-hidden="true"><PartPic key={pic(r) ?? ""} src={pic(r)} fallback={r.sub_sheet ? IC.list : IC.gearPart} alt="" /></span>
           <span className="pl-what">
             <span className="pl-code">
               <b className="mono">{partLink(r.code)}</b>
@@ -86,6 +96,7 @@ export function PartsList({
                 <span className="pl-info-head"><b className="mono">{r.code}</b> - {partName(lang, r)}
                   <button type="button" className="cv-x" aria-label={w(lang, "Close")} onClick={() => setInfo(null)}>{IC.close}</button>
                 </span>
+                {pic(r) && <PartPic className="pl-info-pic" src={pic(r)} fallback={null} alt={w(lang, "Picture of {code}", { code: r.code })} />}
                 <dl>
                   <dt>{w(lang, "Name")}</dt><dd>{partName(lang, r) || "–"}{r.name_it && lang !== "it" && r.name_it !== r.name_en ? <small> ({r.name_it})</small> : null}</dd>
                   <dt>{w(lang, "Number")}</dt><dd className="mono">{r.code}</dd>
