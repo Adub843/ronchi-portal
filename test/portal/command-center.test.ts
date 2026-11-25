@@ -113,3 +113,23 @@ describe("Command center: risky actions have their own switches", () => {
     expect((await (await person("sales")).json("/api/auth/me")).data.user.permissions).toContain("orders.export");
   });
 });
+
+describe("Command center: owner protection on People", () => {
+  it("Restore only brings back removed people, and never changes the owner", async () => {
+    const aaron = await owner();
+    const other = await person("admin");
+    const tech = await person("tech");
+    expect((await other.fetch(`/api/users/${aaron.id}/restore`, { body: { role: "tech" } })).status).not.toBe(200);
+    expect((await aaron.json("/api/auth/me")).data.user.role).toBe("admin");
+    expect((await other.fetch(`/api/users/${tech.id}/restore`, { body: { role: "sales" } })).status).toBe(409);
+  });
+
+  it("only the owner can invite or promote admins", async () => {
+    const aaron = await owner();
+    const other = await person("admin");
+    const tech = await person("tech");
+    expect((await other.fetch("/api/users/invite", { body: { email: "sneaky", name: "Sneaky", role: "admin" } })).status).toBe(403);
+    expect((await other.fetch(`/api/users/${tech.id}`, { method: "PATCH", body: { role: "admin" } })).status).toBe(403);
+    expect((await aaron.fetch(`/api/users/${tech.id}`, { method: "PATCH", body: { role: "admin" } })).status).toBe(200);
+  });
+});

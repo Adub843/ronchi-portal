@@ -211,6 +211,7 @@ users.post("/invite", async (c) => {
   if (!email) fail(400, "Use a work email or a username of 3 to 40 letters or numbers, with no spaces.");
   const name = mustStr(b.name, 100, "Name");
   if (!(await roleExists(c.env.DB, b.role))) fail(400, "Pick a role.");
+  if (b.role === "admin" && !admin.owner) fail(403, "Only the portal owner can invite another admin.");
   const exists = await c.env.DB.prepare("SELECT removed_at FROM users WHERE email = ?").bind(email).first<{ removed_at: string | null }>();
   if (exists?.removed_at) fail(409, "This person was removed. Find them under Removed employees and press Restore.");
   if (exists) fail(409, "Someone with this email or username already has a login.");
@@ -235,6 +236,7 @@ users.patch("/:id", async (c) => {
   const changes: Record<string, unknown> = {};
   if (b.role !== undefined) {
     if (!(await roleExists(c.env.DB, b.role))) fail(400, "Unknown role.");
+    if (b.role === "admin" && target.role !== "admin" && !admin.owner) fail(403, "Only the portal owner can make someone an admin.");
     changes.role = b.role;
   }
   if (b.status !== undefined) {
@@ -302,6 +304,11 @@ users.post("/:id/restore", async (c) => {
   const id = c.req.param("id");
   const target = await c.env.DB.prepare("SELECT id, name, role, removed_at FROM users WHERE id = ?").bind(id).first<{ id: string; name: string; role: string; removed_at: string | null }>();
   if (!target) fail(404, "Not found.");
+  // Restore is only for people under Removed employees, so it can't be used to change anyone else's
+  // role (that goes through PATCH, which protects the owner and yourself).
+  if (!target.removed_at) fail(409, "This person wasn't removed. Change their role on the People list instead.");
+  if (id === admin.id) fail(400, "You can't restore yourself.");
+  if (!admin.owner && (await isOwnerId(c.env.DB, id))) fail(403, "Only the portal owner can change the owner's login.");
   const b = await body(c);
   let role = target.role;
   if (typeof b.role === "string" && b.role) {
