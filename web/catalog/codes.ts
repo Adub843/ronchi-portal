@@ -3,8 +3,9 @@
 
 import { PART_CODE } from "../../src/shared/catalog/model";
 
-// Any code PART_CODE accepts, at the start of a name and followed by the end or a separator.
-const CODE_IN_NAME = new RegExp(`^(${PART_CODE.source.replace(/^\^|\$$/g, "")})(?=$|[^0-9A-Z_])`, "i");
+// Any code PART_CODE accepts, at the start of a name, followed by the end, a separator, or a
+// revision or note after an underscore (CA086399_A, GF000023_scatto).
+const CODE_IN_NAME = new RegExp(`^(${PART_CODE.source.replace(/^\^|\$$/g, "")})(?=$|[^0-9A-Z_]|_[A-Z])`, "i");
 
 /** The part code a node stands for: from the mesh map, else from the start of its name. */
 export function codeOf(name: string, meshMap: Record<string, string>): string | null {
