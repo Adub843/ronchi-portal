@@ -294,7 +294,7 @@ jobs.get("/:id/workbook", async (c) => {
     ? (await db.prepare("SELECT id, code, title, kind, updated_at FROM kb_articles WHERE serial = ? COLLATE NOCASE AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 50").bind(serial).all()).results
     : [];
   const orders = serial && has(u, "orders.view")
-    ? (await db.prepare("SELECT id, part, status, ship_date FROM cp_orders WHERE instr(upper(machine), ?) > 0 AND removed_at IS NULL ORDER BY updated_at DESC LIMIT 50").bind(serial).all()).results
+    ? (await db.prepare("SELECT id, part, status, ship_date FROM cp_orders WHERE instr(upper(machine), ?) > 0 AND phase = 'order' AND removed_at IS NULL ORDER BY updated_at DESC LIMIT 50").bind(serial).all()).results
     : [];
   const full = (j: JobRow) => ({ ...toJob(j), techs: engineers.get(j.id) ?? [], files: files.get(j.id) ?? [] });
   return c.json({ job: full(job), log: past.map(full), logBy: key.col, machine, notes, orders, maps: job.location ? mapLinks(job.location) : null });

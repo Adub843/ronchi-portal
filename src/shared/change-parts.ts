@@ -4,7 +4,7 @@
 
 /** Every field of an order that people can type, in the order they appear on screen and in exports. */
 export const CP_FIELDS = [
-  "customer", "machine", "part", "status", "salesperson", "quote", "customer_po", "ra_po", "aa",
+  "customer", "machine", "part", "status", "salesperson", "contact", "follow_up", "quote", "customer_po", "ra_po", "aa",
   "samples_received", "samples_shipped", "fill_test", "ship_date", "folder_url", "notes",
 ] as const;
 export type CpField = (typeof CP_FIELDS)[number];
@@ -17,6 +17,8 @@ export const CP_LABELS: Record<CpField, string> = {
   part: "Part",
   status: "Status",
   salesperson: "Salesperson",
+  contact: "Customer contact",
+  follow_up: "Follow up",
   quote: "Quote #",
   customer_po: "Customer PO",
   ra_po: "RA PO",
@@ -34,7 +36,7 @@ export const CP_LABELS: Record<CpField, string> = {
 
 /** Longest text each field may hold. */
 export const CP_MAX: Record<CpField, number> = {
-  customer: 200, machine: 60, part: 300, status: 60, salesperson: 80, quote: 80, customer_po: 80, ra_po: 120, aa: 80,
+  customer: 200, machine: 60, part: 300, status: 60, salesperson: 80, contact: 200, follow_up: 100, quote: 80, customer_po: 80, ra_po: 120, aa: 80,
   samples_received: 300, samples_shipped: 300, fill_test: 300, ship_date: 200, folder_url: 1000, notes: 5000,
 };
 
@@ -114,6 +116,8 @@ const ALIASES: Record<CpField, string[]> = {
   machine: ["machine", "machineno", "machinenumber", "serial", "serialno", "serialnumber", "machineserial", "sn", "mfgno"],
   part: ["part", "parts", "changepart", "changeparts", "description", "partdescription", "item", "project", "projectname", "format", "bottle", "container"],
   status: ["status", "stage", "state", "projectstatus", "openorcompleted"],
+  contact: ["contact", "customercontact", "contactname", "buyer"],
+  follow_up: ["followup", "followupdate", "nextfollowup", "nextstep"],
   salesperson: ["salesperson", "sales", "salesrep", "rep", "owner", "accountmanager"],
   quote: ["quote", "quoteno", "quotenumber", "quotation"],
   customer_po: ["customerpo", "custpo", "customerpono", "custpono", "po", "pono", "ponumber", "customerponumber", "poreceived"],
@@ -200,3 +204,14 @@ export function readOrdersCsv(text: string): ImportResult {
     problems,
   };
 }
+
+// ---------- the sales side ----------
+
+/** Steps of a change-part sale, before it's sold. "Lost" ends it; "Sold" is not a stage: selling makes it an order. */
+export const CP_SALE_STAGES = ["New request", "Waiting on samples", "Quoting", "Quote sent", "Follow up", "On hold", "Lost"] as const;
+
+/** A sale is still being worked unless it was lost. */
+export const isSaleOpen = (status: string | null | undefined) => !/^(lost|cancel+ed|canceled|no sale|declined)\b/i.test((status ?? "").trim());
+
+/** Fields that belong to the sale; the rest (samples, fill test, ship date, RA PO, AA) start once it's an order. */
+export const CP_SALE_FIELDS: readonly CpField[] = ["customer", "machine", "part", "status", "salesperson", "contact", "follow_up", "quote", "customer_po", "folder_url", "notes"];
