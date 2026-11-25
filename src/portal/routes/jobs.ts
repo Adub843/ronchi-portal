@@ -18,7 +18,7 @@ import { body, fail, has, requirePerm } from "../lib/http";
 import { isEmail, mailTo, sendMail } from "../lib/mail";
 import { serveFile } from "../lib/serve-file";
 import { isOn } from "../lib/switches";
-import { NOT_RECEIPT, seesMoney } from "./workbook";
+import { canFill, NOT_RECEIPT } from "./workbook";
 
 export const jobs = new Hono<AppEnv>();
 
@@ -204,10 +204,9 @@ jobs.get("/files/:fileId", async (c) => {
   const u = requirePerm(c, "jobs.view");
   const f = await c.env.DB.prepare("SELECT id, job_id, name FROM job_files WHERE id = ? AND deleted_at IS NULL").bind(c.req.param("fileId")).first<{ id: string; job_id: string; name: string }>();
   if (!f) fail(404, "Not found.");
-  // An expense receipt shows a dollar amount: only schedulers and billing may open it (not field service
-  // engineers, not even the one who added it).
+  // An expense receipt shows money: only the people on the job, schedulers and billing may open it.
   const receipt = await c.env.DB.prepare("SELECT 1 FROM wb_expenses WHERE receipt_file = ?").bind(f.id).first();
-  if (receipt && !seesMoney(u.perms)) fail(404, "Not found.");
+  if (receipt && !has(u, "workbook.billing") && !(await canFill(c.env.DB, u, f.job_id))) fail(404, "Not found.");
   return serveFile(c.env.FILES, `jobs/${f.id}`, f.name, { download: c.req.query("download") !== undefined });
 });
 

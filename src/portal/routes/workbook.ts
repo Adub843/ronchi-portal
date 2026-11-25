@@ -25,7 +25,7 @@ import { audit, now } from "../lib/db";
 import { body, fail, has, requirePerm, str } from "../lib/http";
 import { mailTo, sendMail } from "../lib/mail";
 import { isOn } from "../lib/switches";
-import { ACCESS_LIVE, effective, readChanges, type Permission } from "../lib/roles";
+import { ACCESS_LIVE, effective, readChanges } from "../lib/roles";
 import { loadSettings } from "../lib/settings-store";
 import { addQuickNote } from "./kb";
 
@@ -60,9 +60,6 @@ async function loadJob(db: D1Database, id: string): Promise<JobLite> {
 async function onJob(db: D1Database, jobId: string, userId: string): Promise<boolean> {
   return !!(await db.prepare("SELECT 1 FROM job_techs WHERE job_id = ? AND user_id = ?").bind(jobId, userId).first());
 }
-
-/** May this person see dollar amounts on a work order (expenses, receipts)? Schedulers and billing only. */
-export const seesMoney = (perms: ReadonlySet<Permission>) => perms.has("jobs.schedule") || perms.has("workbook.billing");
 
 /** May this person fill in this job's work order? */
 export async function canFill(db: D1Database, u: SessionUser, jobId: string): Promise<boolean> {
@@ -129,29 +126,25 @@ workbook.get("/:jobId", async (c) => {
   const db = c.env.DB;
   const job = await loadJob(db, c.req.param("jobId"));
   const fill = await canFill(db, u, job.id);
-  // Hours and the list of expenses: the people filling it in, and billing. Dollar amounts: only schedulers
-  // and billing. Field service engineers never see an amount, not even their own (Aaron, 2026-11-25).
-  const crew = fill || has(u, "workbook.billing");
-  const money = seesMoney(u.perms);
+  const money = fill || has(u, "workbook.billing");
   const [report, entries, photos, hours, expenses, recipients, member] = await Promise.all([
     loadReport(db, job.id),
     db.prepare(`SELECT e.id, e.user_id, u.name AS who, e.day, e.work, e.description, e.done, e.pct, e.issues, e.updated_at FROM wb_entries e JOIN users u ON u.id = e.user_id
                  WHERE e.job_id = ? AND e.removed_at IS NULL ORDER BY e.day, e.created_at`).bind(job.id).all().then((r) => r.results),
     db.prepare(`SELECT f.id, f.name, f.ext, f.created_at, p.caption, p.recipe_screen FROM job_files f LEFT JOIN wb_photos p ON p.file_id = f.id
                  WHERE f.job_id = ? AND f.deleted_at IS NULL AND lower(f.ext) IN ('jpg','jpeg','png','webp','heic','gif') AND ${NOT_RECEIPT} ORDER BY f.created_at`).bind(job.id).all().then((r) => r.results),
-    crew
+    money
       ? db.prepare(`SELECT h.*, u.name AS who FROM wb_hours h JOIN users u ON u.id = h.user_id WHERE h.job_id = ? ORDER BY h.day, u.name`).bind(job.id).all().then((r) => r.results)
       : null,
-    crew
-      ? db.prepare(`SELECT x.*, u.name AS who FROM wb_expenses x JOIN users u ON u.id = x.user_id WHERE x.job_id = ? AND x.removed_at IS NULL ORDER BY x.day, x.created_at`).bind(job.id).all()
-          .then((r) => (money ? r.results : r.results.map(({ amount_cents: _a, ...x }) => x)))
+    money
+      ? db.prepare(`SELECT x.*, u.name AS who FROM wb_expenses x JOIN users u ON u.id = x.user_id WHERE x.job_id = ? AND x.removed_at IS NULL ORDER BY x.day, x.created_at`).bind(job.id).all().then((r) => r.results)
       : null,
     db.prepare("SELECT u.id, u.name FROM wb_recipients r JOIN users u ON u.id = r.user_id AND u.status = 'active' ORDER BY u.name").all().then((r) => r.results),
     job.chat_id ? db.prepare("SELECT 1 FROM board_members WHERE board_id = ? AND user_id = ?").bind(job.chat_id, u.id).first() : null,
   ]);
   return c.json({
     report: report ?? { job_id: job.id, status: "draft", revision: 0 },
-    entries, photos, hours, expenses, recipients, money,
+    entries, photos, hours, expenses, recipients,
     chat: job.chat_id ? { id: job.chat_id, member: !!member } : null,
     canFill: fill, canSchedule: has(u, "jobs.schedule"), billable: billableFor(job.job_number),
     lists: { scopes: SCOPES, pct: PCT, expenseTypes: EXPENSE_TYPES, pay: PAY },
@@ -416,16 +409,14 @@ workbook.post("/:jobId/submit", async (c) => {
   const at = now();
   const blank = { scope: null, summary: null, open_issues: null, sign_name: null, sign_title: null, sign_date: null, signature: null };
   const base = { job, report: report ?? blank, entries, hours, photos: photos?.n ?? 0, by: u.name, link: jobLink(c.env.ORIGIN, job.id, true) };
-  // Each person gets the report as the work order screen shows it to them: schedulers and billing with
-  // dollar amounts; field service engineers on the job with hours and expenses but no amounts; anyone
-  // else without hours or expenses.
   const mail = reportText({ ...base, expenses });
-  const crewMail = reportText({ ...base, expenses, amounts: false });
-  const plainMail = reportText({ ...base, hours: [], expenses: [] });
-  const mailFor = (r: { role: string; access: string | null; role_perms: string | null; on_job: number }) => {
+  // Billable hours and expense amounts only go to people who may see them (on the job, schedulers, billing);
+  // others get the same report without them.
+  const plainMail = reportText({ ...base, hours: [], expenses: [] }); // same as the work order screen shows them
+  const seesMoney = (r: { role: string; access: string | null; role_perms: string | null; on_job: number }) => {
+    if (r.on_job) return true;
     const p = effective(r.role, readChanges(r.access), r.role_perms);
-    if (seesMoney(p)) return mail;
-    return r.on_job ? crewMail : plainMail;
+    return p.has("jobs.schedule") || p.has("workbook.billing");
   };
   // Mark it submitted first, and only if it's still a draft, so pressing Submit twice sends one email and one set of notes.
   const claimed = await db.prepare(
@@ -453,14 +444,13 @@ workbook.post("/:jobId/submit", async (c) => {
   const sent = [];
   for (const r of recipients) {
     const to = mailTo(r);
-    const m = mailFor(r);
+    const m = seesMoney(r) ? mail : plainMail;
     const status = to ? await sendMail(c.env, { to, subject: m.subject, text: m.text, html: htmlOf(m.text), replyTo }) : "no_address";
     sent.push({ name: r.name, to, status });
   }
   await audit(db, { userId: u.id, action: "workbook.submit", targetType: "job", targetId: job.id, detail: { notes, sent: sent.map((s) => ({ to: s.name, status: s.status })) }, ip: c.get("ip") });
   // When email isn't set up, the app offers the same email to send from the engineer's own email app.
-  const mine = seesMoney(u.perms) ? mail : crewMail; // what the person who pressed Submit may send from their own email
-  return c.json({ ok: true, notes, sent, subject: mine.subject, text: mine.text });
+  return c.json({ ok: true, notes, sent, subject: mail.subject, text: mail.text });
 });
 
 workbook.post("/:jobId/reopen", async (c) => {
