@@ -21,21 +21,10 @@ import { People } from "./pages/People";
 import { Catalog } from "./pages/Catalog";
 import { Customers, Quotes } from "./pages/Customers";
 import { Settings } from "./pages/Settings";
+import { Learn } from "./pages/Learn";
+import { NAV } from "./nav";
 import { roleLabel, useRoleNames } from "./roles";
 
-const NAV: { to: string; label: string; perm?: string; count?: keyof Unread; phone?: boolean }[] = [
-  { to: "/", label: "Home" },
-  { to: "/chats", label: "Chats", perm: "boards.use", count: "chats" },
-  { to: "/boards", label: "Boards", perm: "boards.use", count: "boards" },
-  { to: "/kb", label: "Knowledge base", perm: "kb.view" },
-  { to: "/machines", label: "Machines", perm: "machines.view" },
-  { to: "/catalog", label: "Parts catalog", perm: "catalog.view" },
-  { to: "/customers", label: "Customers", perm: "customers.manage" },
-  { to: "/change-parts", label: "Change parts", perm: "orders.view" },
-  { to: "/people", label: "People", perm: "users.manage" },
-  // On phones Settings lives in the account menu (top right), so the tab bar keeps room for the rest.
-  { to: "/settings", label: "Settings", phone: false },
-];
 
 export const DEFAULT_PREFS: Prefs = { theme: "ronchi", mode: "auto", layout: "L2", tiles: null, lang: "en", popups: true };
 
@@ -101,6 +90,7 @@ export function App() {
   else if (section === "/machines") page = <Machines me={me} />;
   else if (section === "/change-parts") page = <ChangeParts me={me} />;
   else if (section === "/people") page = <People me={me} />;
+  else if (section === "/learn") page = <Learn me={me} />;
   else if (section === "/settings") page = <Settings me={me} prefs={prefs} onPrefs={savePrefs} onSignOut={signOut} sound={sound} onSound={(on) => { setSound(on); setSoundState(on); }} />;
   else page = <Home me={me} unread={unread} />;
 
@@ -112,6 +102,7 @@ export function App() {
     { label: t("Alert sound"), role: "checkbox", checked: sound, onSelect: () => { setSound(!sound); setSoundState(!sound); } },
     { label: t("Mark all chats and boards read"), onSelect: async () => { await api("/boards/read-all", { body: {} }).catch(() => undefined); setUnread({ boards: 0, chats: 0 }); toast(t("All marked as read")); }, hidden: !can(me, "boards.use") },
     "sep",
+    { label: t("Portal training"), onSelect: () => navigate("/learn") },
     { label: t("Settings"), onSelect: () => navigate("/settings") },
     { label: t("People and access"), hint: t("Admin"), onSelect: () => navigate("/people"), hidden: !can(me, "users.manage") },
     { label: t("Archived boards"), hint: t("Admin"), onSelect: () => navigate("/boards"), hidden: !can(me, "boards.moderate") || !can(me, "users.manage") },

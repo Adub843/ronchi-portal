@@ -48,6 +48,10 @@ export function Home({ me, unread }: { me: Me; unread: Unread }) {
             <span className="muted">{t("Every change-part job, from quote to shipped.")}</span>
           </Link>
         )}
+        <Link to="/learn" className="panel tile">
+          <h2>{t("Portal training")}</h2>
+          <span className="muted">{t("Step-by-step guides for everything your access allows, by job and by page.")}</span>
+        </Link>
         <div className="panel tile">
           <h2>{t("Coming next")}</h2>
           <span className="muted">{t("Workbook Submit, service report filing, schedule and remote support arrive in the next steps.")}</span>
