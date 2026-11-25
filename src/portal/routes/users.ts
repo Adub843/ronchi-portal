@@ -21,7 +21,7 @@ users.get("/roles", async (c) => {
   return c.json({
     roles: Object.fromEntries(list.map((r) => [r.id, r.name])),
     // Names an admin typed (new roles and renamed built-ins), for labels around the app.
-    named: Object.fromEntries(list.filter((r) => !r.builtIn || r.changed).map((r) => [r.id, r.name])),
+    named: Object.fromEntries(list.filter((r) => !r.builtIn || r.renamed).map((r) => [r.id, r.name])),
     list: has(u, "users.manage") ? list : undefined,
   });
 });
@@ -196,8 +196,10 @@ users.patch("/:id", async (c) => {
   const admin = requirePerm(c, "users.manage");
   const id = c.req.param("id");
   const b = await body(c);
-  const target = await c.env.DB.prepare("SELECT id, role, status FROM users WHERE id = ?").bind(id).first<{ id: string; role: string; status: string }>();
+  const target = await c.env.DB.prepare("SELECT id, role, status, removed_at FROM users WHERE id = ?").bind(id).first<{ id: string; role: string; status: string; removed_at: string | null }>();
   if (!target) fail(404, "Not found.");
+  // A removed person comes back only through Restore, which also clears "removed".
+  if (target.removed_at && (b.status !== undefined || b.role !== undefined)) fail(409, "This person was removed. Find them under Removed employees and press Restore.");
   if (id === admin.id && (b.status === "disabled" || (b.role !== undefined && b.role !== "admin"))) {
     fail(400, "You can't remove your own admin access. Ask another admin.");
   }

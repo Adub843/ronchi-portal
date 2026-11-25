@@ -226,9 +226,9 @@ function roleList() {
   const count = (rid: string) => db.users.filter((x) => x.role === rid && !x.removed_at).length;
   const builtIn = Object.entries(ROLES).map(([rid, nm]) => {
     const row = db.roles.find((r) => r.id === rid);
-    return { id: rid, name: row?.name ?? nm, builtIn: true, changed: !!row, perms: [...rolePermissions(rid, row?.perms)] as string[], people: count(rid) };
+    return { id: rid, name: row?.name ?? nm, builtIn: true, changed: !!row, renamed: !!row && row.name !== nm, perms: [...rolePermissions(rid, row?.perms)] as string[], people: count(rid) };
   });
-  const made = db.roles.filter((r) => !(r.id in ROLES)).map((r) => ({ id: r.id, name: r.name, builtIn: false, changed: false, perms: [...rolePermissions(r.id, r.perms)] as string[], people: count(r.id) }));
+  const made = db.roles.filter((r) => !(r.id in ROLES)).map((r) => ({ id: r.id, name: r.name, builtIn: false, changed: false, renamed: false, perms: [...rolePermissions(r.id, r.perms)] as string[], people: count(r.id) }));
   return [...builtIn, ...made];
 }
 
@@ -320,7 +320,7 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   // --- people ---
   if (path === "/users/roles" && method === "GET") {
     const list = roleList();
-    return { roles: Object.fromEntries(list.map((r) => [r.id, r.name])), named: Object.fromEntries(list.filter((r) => !r.builtIn || r.changed).map((r) => [r.id, r.name])), list };
+    return { roles: Object.fromEntries(list.map((r) => [r.id, r.name])), named: Object.fromEntries(list.filter((r) => !r.builtIn || r.renamed).map((r) => [r.id, r.name])), list };
   }
   if (path === "/users/roles" && method === "POST") {
     const nm = String(body.name ?? "").trim();

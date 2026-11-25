@@ -3,6 +3,8 @@
 // Messages people type are never translated.
 import { ADMIN_ES, ADMIN_IT } from "./i18n-admin";
 import { SOFTWARE_DYNAMIC, SOFTWARE_ES, SOFTWARE_IT } from "./i18n-software";
+import { THEME_ES, THEME_IT } from "./i18n-themes";
+import { THEMES } from "../../src/shared/themes";
 
 /** Texts shown through a variable (role names, menu tabs) or sent by the server, so the test can't find them in t("...") calls. */
 export const DYNAMIC: string[] = [
@@ -1935,3 +1937,8 @@ DYNAMIC.push("Admin controls", "Portal-wide settings. Admins only.");
 Object.assign(ES, SOFTWARE_ES);
 Object.assign(IT, SOFTWARE_IT);
 DYNAMIC.push(...SOFTWARE_DYNAMIC);
+
+// The look descriptions in Settings (i18n-themes.ts).
+Object.assign(ES, THEME_ES);
+Object.assign(IT, THEME_IT);
+DYNAMIC.push(...THEMES.map((th) => th.blurb));

@@ -62,6 +62,17 @@ describe("roles an admin makes", () => {
   });
 });
 
+describe("role names other screens show", () => {
+  it("a built-in role whose switches changed keeps its built-in name; only a rename counts as named", async () => {
+    const admin = await person("admin");
+    expect((await admin.json("/api/users/roles/billing", { method: "PATCH", body: { perms: ["boards.use", "quotes.manage"] } })).status).toBe(200);
+    expect((await admin.json("/api/users/roles")).data.named.billing).toBeUndefined();
+    expect((await admin.json("/api/users/roles/billing", { method: "PATCH", body: { name: "Accounts" } })).status).toBe(200);
+    expect((await admin.json("/api/users/roles")).data.named.billing).toBe("Accounts");
+    await admin.json("/api/users/roles/billing/reset", { body: {} });
+  });
+});
+
 describe("removing employees", () => {
   it("removes someone: signed out, can't come back, kept on a removed list; restore brings them back", async () => {
     const admin = await person("admin");
@@ -79,6 +90,17 @@ describe("removing employees", () => {
     expect((await admin.json(`/api/users/${joe.id}/restore`, { body: {} })).status).toBe(200);
     const back = (await admin.json("/api/users")).data.users.find((u: any) => u.id === joe.id);
     expect(back).toMatchObject({ status: "active", removed_at: null });
+  });
+
+  it("a removed person only comes back through Restore, not by switching them on or changing their role", async () => {
+    const admin = await person("admin");
+    const ann = await person("sales", { name: "Ann" });
+    expect((await admin.json(`/api/users/${ann.id}/remove`, { body: {} })).status).toBe(200);
+    expect((await admin.json(`/api/users/${ann.id}`, { method: "PATCH", body: { status: "active" } })).status).toBe(409);
+    expect((await admin.json(`/api/users/${ann.id}`, { method: "PATCH", body: { role: "tech" } })).status).toBe(409);
+    const row = (await admin.json("/api/users")).data.users.find((u: any) => u.id === ann.id);
+    expect(row).toMatchObject({ status: "disabled", role: "sales" });
+    expect(row.removed_at).toBeTruthy();
   });
 
   it("restores into a new role when the old one was deleted", async () => {

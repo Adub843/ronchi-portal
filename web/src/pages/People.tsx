@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { api, fmtTime, type Me } from "../api";
 import { t } from "../i18n";
 import { ErrorNote, PageHead, toast, useLoad } from "../components/ui";
-import { refreshRoleNames } from "../roles";
+import { refreshRoleNames, roleDisplayName } from "../roles";
 
 export function People({ me }: { me: Me }) {
   const { data, error, reload } = useLoad(() => api("/users"));
@@ -78,7 +78,9 @@ export function People({ me }: { me: Me }) {
   }
   const rolesChanged = () => { roles.reload(); permList.reload(); reload(); void refreshRoleNames(); };
 
-  const roleNames: Record<string, string> = roles.data?.roles ?? {};
+  // Built-in roles show their short name in the person's language; roles an admin made or renamed keep the typed name.
+  const roleNames: Record<string, string> = {};
+  for (const [id, name] of Object.entries((roles.data?.roles ?? {}) as Record<string, string>)) roleNames[id] = roleDisplayName(id, name);
   const pickable = Object.entries(roleNames).filter(([k]) => k !== "admin");
   const current = (data?.users ?? []).filter((u: any) => !u.removed_at);
   const removed = (data?.users ?? []).filter((u: any) => u.removed_at);
@@ -327,7 +329,9 @@ function usePhone(): boolean {
   return on;
 }
 
-type RoleInfo = { id: string; name: string; builtIn: boolean; changed: boolean; perms: string[]; people: number };
+type RoleInfo = { id: string; name: string; builtIn: boolean; changed: boolean; renamed: boolean; perms: string[]; people: number };
+
+const shownName = (r: RoleInfo) => (r.renamed ? r.name : roleDisplayName(r.id, r.name));
 
 /** People > Roles: make roles, rename them, choose their switches, delete unused ones. */
 function Roles({ list, perms, onChanged }: { list: RoleInfo[]; perms: PermList; onChanged: () => void }) {
@@ -370,7 +374,7 @@ function Roles({ list, perms, onChanged }: { list: RoleInfo[]; perms: PermList; 
           <label htmlFor="rc">{t("Start from")}</label>
           <select id="rc" value={form.copyFrom} onChange={(e) => setForm({ ...form, copyFrom: e.target.value })}>
             <option value="">{t("Nothing switched on")}</option>
-            {list.filter((r) => r.id !== "admin").map((r) => <option key={r.id} value={r.id}>{t("Copy {role}", { role: r.name })}</option>)}
+            {list.filter((r) => r.id !== "admin").map((r) => <option key={r.id} value={r.id}>{t("Copy {role}", { role: shownName(r) })}</option>)}
           </select>
         </div>
         <ErrorNote error={err} />
@@ -387,7 +391,7 @@ function Roles({ list, perms, onChanged }: { list: RoleInfo[]; perms: PermList; 
                 <Fragment key={r.id}>
                   <tr>
                     <td>
-                      <b>{r.name}</b>
+                      <b>{shownName(r)}</b>
                       <div className="role-tags">
                         <span className="tag">{r.builtIn ? t("Built in") : t("Made here")}</span>
                         {r.changed && <span className="tag accent">{t("Changed")}</span>}
