@@ -2,6 +2,7 @@
 // Add a line here whenever a new t("...") text is added; test/unit/i18n.test.ts checks none is missing.
 // Messages people type are never translated.
 import { ADMIN_ES, ADMIN_IT } from "./i18n-admin";
+import { SOFTWARE_DYNAMIC, SOFTWARE_ES, SOFTWARE_IT } from "./i18n-software";
 
 /** Texts shown through a variable (role names, menu tabs) or sent by the server, so the test can't find them in t("...") calls. */
 export const DYNAMIC: string[] = [
@@ -1930,3 +1931,7 @@ Object.assign(ES, ADMIN_ES);
 Object.assign(IT, ADMIN_IT);
 // The access screen lists the admin-controls permission by name (src/portal/lib/roles.ts).
 DYNAMIC.push("Admin controls", "Portal-wide settings. Admins only.");
+// Software downloads (i18n-software.ts).
+Object.assign(ES, SOFTWARE_ES);
+Object.assign(IT, SOFTWARE_IT);
+DYNAMIC.push(...SOFTWARE_DYNAMIC);
