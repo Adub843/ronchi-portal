@@ -8,9 +8,18 @@ import { Empty, ErrorNote, Link, PageHead, useLoad } from "../components/ui";
 import { t } from "../i18n";
 import { toCsv } from "../../../src/shared/csv";
 import { Contact, DaysText, JobFiles, JobList, JobStatusPill, Location } from "./Jobs";
+import { ReportRecipients, WorkbookPanel } from "./Workbook";
 
 export function WorkOrders({ me }: { me: Me }) {
-  return <JobList me={me} base="/work-orders" title={t("Work orders")} sub={t("The Ronchi workbook: every work order, with each machine's log of past work orders.")} />;
+  return (
+    <>
+      {can(me, "workbook.billing") && (
+        <div className="row" style={{ justifyContent: "flex-end" }}><Link to="/work-orders/billing" className="btn">{t("Billing from work orders")}</Link></div>
+      )}
+      <ReportRecipients me={me} />
+      <JobList me={me} base="/work-orders" title={t("Work orders")} sub={t("The Ronchi workbook: every work order, with each machine's log of past work orders.")} />
+    </>
+  );
 }
 
 function download(name: string, text: string) {
@@ -60,6 +69,8 @@ export function WorkOrderPage({ id, me }: { id: string; me: Me }) {
         <div className="wo-l" style={{ marginTop: 14 }}>{t("Files")}</div>
         <JobFiles jobId={j.id} files={j.files} me={me} canRemoveAll={scheduler} onChange={reload} />
       </section>
+
+      <WorkbookPanel job={j} me={me} onFiles={reload} />
 
       {data.machine && (
         <section className="panel stack">

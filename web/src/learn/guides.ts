@@ -313,6 +313,27 @@ export const GUIDES: Guide[] = [
     ],
     tip: T("If an admin switches the Ronchi workbook off, Work orders leaves the menu but jobs keep working.", "Si un administrador apaga el cuaderno de trabajo Ronchi, Órdenes de trabajo sale del menú pero los trabajos siguen funcionando.", "Se un amministratore spegne il quaderno di lavoro Ronchi, Ordini di lavoro sparisce dal menu ma i lavori continuano a funzionare."),
   },
+  {
+    id: "fill-work-order", area: "jobs", needs: ["jobs.view"], open: "/work-orders",
+    title: T("Fill in the service report on a work order", "Llenar el informe de servicio en una orden de trabajo", "Compilare il rapporto di assistenza in un ordine di lavoro"),
+    summary: T("The Ronchi workbook lives in each work order: daily log, photos, billable hours, expenses and the customer's signature. It saves as you go.", "El cuaderno de trabajo Ronchi vive en cada orden de trabajo: registro diario, fotos, horas facturables, gastos y la firma del cliente. Se guarda mientras escribe.", "Il quaderno di lavoro Ronchi è in ogni ordine di lavoro: registro giornaliero, foto, ore fatturabili, spese e firma del cliente. Si salva mentre scrivi."),
+    steps: [
+      T("Open your job's work order. Pick the type of work and add each day to the Daily work log, with any issues found (one per line).", "Abra la orden de trabajo de su trabajo. Elija el tipo de trabajo y agregue cada día al Registro diario, con los problemas encontrados (uno por línea).", "Apri l'ordine di lavoro del tuo lavoro. Scegli il tipo di lavoro e aggiungi ogni giorno al Registro giornaliero, con i problemi trovati (uno per riga)."),
+      T("Add photos of the machine and the recipe screens, with a caption.", "Agregue fotos de la máquina y de las pantallas de receta, con una leyenda.", "Aggiungi foto della macchina e delle schermate delle ricette, con una didascalia."),
+      T("Enter each day's billable hours (what the customer is billed for, not a time clock) and your expenses with a receipt photo.", "Anote las horas facturables de cada día (lo que se le factura al cliente, no un reloj de fichaje) y sus gastos con foto del recibo.", "Inserisci le ore fatturabili di ogni giorno (ciò che si fattura al cliente, non una timbratura) e le spese con la foto della ricevuta."),
+      T("Have the customer sign on the screen, then press Submit. The office gets the report and each issue becomes a quick note on the machine.", "Pida al cliente que firme en la pantalla y pulse Enviar. La oficina recibe el informe y cada problema se convierte en una nota rápida de la máquina.", "Fai firmare il cliente sullo schermo, poi premi Invia. L'ufficio riceve il rapporto e ogni problema diventa una nota rapida sulla macchina."),
+    ],
+    tip: T("Use Open the job chat to talk with everyone on the job. After Submit the report locks; a scheduler can reopen it.", "Use Abrir el chat del trabajo para hablar con todos los del trabajo. Después de Enviar el informe se bloquea; un programador puede reabrirlo.", "Usa Apri la chat del lavoro per parlare con tutti quelli del lavoro. Dopo Invia il rapporto si blocca; un pianificatore può riaprirlo."),
+  },
+  {
+    id: "billing-week", area: "jobs", needs: ["jobs.view", "workbook.billing"], open: "/work-orders",
+    title: T("Bill customers from work orders", "Facturar a los clientes desde las órdenes de trabajo", "Fatturare ai clienti dagli ordini di lavoro"),
+    summary: T("Every field service engineer's billable hours and expenses, one week at a time.", "Las horas facturables y los gastos de cada ingeniero de servicio de campo, semana por semana.", "Ore fatturabili e spese di ogni ingegnere di assistenza sul campo, una settimana alla volta."),
+    steps: [
+      T("Open Work orders and press Billing from work orders.", "Abra Órdenes de trabajo y pulse Facturación desde las órdenes de trabajo.", "Apri Ordini di lavoro e premi Fatturazione dagli ordini di lavoro."),
+      T("Move between weeks, open a job to see its report, and press Download (CSV) for your invoicing.", "Cambie de semana, abra un trabajo para ver su informe y pulse Descargar (CSV) para facturar.", "Spostati tra le settimane, apri un lavoro per vedere il rapporto e premi Scarica (CSV) per la fatturazione."),
+    ],
+  },
 
   // ---------- Knowledge base ----------
   {

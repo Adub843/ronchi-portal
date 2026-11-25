@@ -3,6 +3,7 @@
 // Messages people type are never translated.
 import { ADMIN_ES, ADMIN_IT } from "./i18n-admin";
 import { SOFTWARE_DYNAMIC, SOFTWARE_ES, SOFTWARE_IT } from "./i18n-software";
+import { WORKBOOK_DYNAMIC, WORKBOOK_ES, WORKBOOK_IT } from "./i18n-workbook";
 import { THEME_ES, THEME_IT } from "./i18n-themes";
 import { THEMES } from "../../src/shared/themes";
 
@@ -2055,6 +2056,9 @@ DYNAMIC.push("Admin controls", "Portal-wide settings. Admins only.");
 Object.assign(ES, SOFTWARE_ES);
 Object.assign(IT, SOFTWARE_IT);
 DYNAMIC.push(...SOFTWARE_DYNAMIC);
+Object.assign(ES, WORKBOOK_ES);
+Object.assign(IT, WORKBOOK_IT);
+DYNAMIC.push(...WORKBOOK_DYNAMIC);
 
 // The look descriptions in Settings (i18n-themes.ts).
 Object.assign(ES, THEME_ES);

@@ -45,7 +45,8 @@ export type Permission =
   | "software.view"       // open software packages (installers, program folders) and download them
   | "software.manage"     // make software packages, upload and remove installers and folders
   | "jobs.view"           // see field service jobs and their machine history, and add files to them
-  | "jobs.schedule";      // schedule jobs, choose the field service engineers, send the job emails
+  | "jobs.schedule"       // schedule jobs, choose the field service engineers, send the job emails
+  | "workbook.billing";   // see every engineer's billable hours and expenses across jobs, and export them
 
 const ALL: Permission[] = [
   "settings.manage", "users.manage", "audit.view", "machines.view", "machines.add", "machines.edit",
@@ -54,7 +55,7 @@ const ALL: Permission[] = [
   "cpsales.view", "cpsales.edit", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import",
   "kb.view", "kb.write", "kb.edit_all", "kb.import", "kb.publish",
   "software.view", "software.manage",
-  "jobs.view", "jobs.schedule",
+  "jobs.view", "jobs.schedule", "workbook.billing",
 ];
 
 const STAFF_BASE: Permission[] = ["boards.use", "boards.create", "chats.start", "files.send", "machines.view", "catalog.view", "kb.view", "kb.write", "software.view", "jobs.view"];
@@ -66,7 +67,7 @@ const MANAGER: Permission[] = ALL.filter((p) => p !== "users.manage" && p !== "a
 export const PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
   admin: new Set(ALL),
   manager: new Set(MANAGER),
-  billing: new Set([...STAFF_BASE, "quotes.manage"]),
+  billing: new Set([...STAFF_BASE, "quotes.manage", "workbook.billing"]),
   scheduling: new Set([...STAFF_BASE, "jobs.schedule"]),
   service: new Set([...STAFF_BASE, "machines.add", "machines.edit", "boards.moderate", "catalog.edit", "customers.manage", "customers.invite", "quotes.manage", "kb.edit_all", "kb.import", "kb.publish", "jobs.schedule"]),
   sales: new Set([...STAFF_BASE, "customers.manage", "customers.invite", "quotes.manage", "cpsales.view", "cpsales.edit", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import"]),
@@ -202,6 +203,7 @@ export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label:
   { group: "Field service jobs", perms: [
     { id: "jobs.view", label: "See jobs", hint: "Field service jobs, each job's machine history, and adding files to a job." },
     { id: "jobs.schedule", label: "Schedule jobs", hint: "Make and change jobs, choose the field service engineers and send the job emails." },
+    { id: "workbook.billing", label: "Billing from work orders", hint: "See every field service engineer's billable hours and expenses by week, and download them for invoicing." },
   ] },
   { group: "Admin only", perms: [
     { id: "users.manage", label: "Manage people", hint: "Invites, roles, access and sign-outs. Admins only." },

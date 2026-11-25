@@ -23,6 +23,7 @@ import { Customers, Quotes } from "./pages/Customers";
 import { Settings } from "./pages/Settings";
 import { JobList, JobPage, NewJob } from "./pages/Jobs";
 import { WorkOrderPage, WorkOrders } from "./pages/WorkOrders";
+import { BillingWeek } from "./pages/Workbook";
 import { Learn } from "./pages/Learn";
 import { menuFor, pageAllowed } from "./nav";
 import { roleLabel, useRoleNames } from "./roles";
@@ -125,6 +126,7 @@ export function App() {
   else if (m?.[1] === "machines") page = <MachinePage id={m[2]!} me={me} />;
   else if (path === "/jobs/new") page = <NewJob me={me} />;
   else if (m?.[1] === "jobs") page = <JobPage key={m[2]} id={m[2]!} me={me} />;
+  else if (path === "/work-orders/billing" && switches.workbook) page = <BillingWeek me={me} />;
   else if (m?.[1] === "work-orders" && switches.workbook) page = <WorkOrderPage key={m[2]} id={m[2]!} me={me} />;
   else if (m?.[1] === "work-orders") page = <JobPage key={m[2]} id={m[2]!} me={me} />;
   else if (section === "/jobs") page = <JobList me={me} base="/jobs" title={t("Jobs")} sub={t("Field service visits: who is going where, and when.")} />;
