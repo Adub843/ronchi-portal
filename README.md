@@ -134,6 +134,10 @@ peer list. All peers the project needs are listed directly in `package.json`.)
   for one person, on top of their role (table `user_access`, migration 0009). It applies on
   their next click. Admins always keep everything, nobody can change their own access, and
   managing people and the audit log stay admin-only. Every change goes in the audit log.
+- **Roles.** Admin (Aaron only) can do everything. Manager (Paolo, Steve, Michele, Morad) can do
+  everything except manage people and read the audit log. Each page's add, change and remove
+  actions are separate switches (for example orders.add, orders.edit, orders.remove), and the
+  Access panel's "View only" button switches off everything that adds, changes or removes.
 - **Changes must come from the portal's own pages**: `Origin` must match and the
   `X-Ronchi: 1` header must be present, on top of the SameSite cookie.
 - **Headers**: strict Content Security Policy (only our own files), HSTS, no framing,

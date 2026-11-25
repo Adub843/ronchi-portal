@@ -70,7 +70,7 @@ export function KnowledgeBase({ me }: { me: Me }) {
       <div className="row kb-actions">
         {can(me, "kb.write") && <button className="btn primary" onClick={() => navigate("/kb/new-note")}>{t("Add a quick note")}</button>}
         {can(me, "kb.write") && <button className="btn" onClick={() => navigate("/kb/new")}>{t("New article")}</button>}
-        {can(me, "kb.publish") && (
+        {can(me, "kb.import") && (
           <>
             <button className="btn" onClick={() => file.current?.click()}>{t("Import documents (JSON)")}</button>
             <input ref={file} type="file" accept=".json,application/json" hidden onChange={(e) => importFile(e.target.files?.[0])} />
