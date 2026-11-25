@@ -1,6 +1,9 @@
-// A sheet's parts list: position, part number, name, quantity. Clicking a row selects that part
-// on the drawing or the 3D model; the list scrolls to a part picked on the drawing or model.
+// A sheet's parts list, laid out like the Ronchi Mario portal's: the assembly itself on top, then
+// one row per part with its position, picture, part number with an (i) card, name and quantity,
+// and the order box. Clicking a row selects that part on the drawing or 3D model; the list scrolls
+// to a part picked on the drawing or model.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { IC } from "./icons";
 import { partName, w, type Lang } from "./words";
 
 export interface Row {
@@ -19,7 +22,7 @@ export interface Row {
 }
 
 export function PartsList({
-  rows, selected, onSelect, lang, onOpenSheet, partLink, action, extra,
+  rows, selected, onSelect, lang, onOpenSheet, partLink, whereUsed, action, extra, query, head, onShow3D, has3D,
 }: {
   rows: Row[];
   selected: string | null;                       // selected row id
@@ -27,63 +30,84 @@ export function PartsList({
   lang: Lang;
   onOpenSheet: (id: string) => void;
   partLink: (code: string) => ReactNode;         // the part number, as a link to its page
-  action?: (row: Row) => ReactNode;              // for example "Add to cart"
+  whereUsed?: (code: string) => ReactNode;       // "Show where this part is used", as a link
+  action?: (row: Row) => ReactNode;              // for example the quantity box and cart button
   extra?: (row: Row) => ReactNode;               // for example the staff notes count
+  query?: string;                                // the "Find in parts list" text, from the sheet's bar
+  head?: { code: string | null; title: string }; // the assembly this list belongs to
+  onShow3D?: (row: Row) => void;                 // "Show in 3D"
+  has3D?: (code: string) => boolean;             // whether this part is in the sheet's 3D model
 }) {
-  const [q, setQ] = useState("");
-  const list = useRef<HTMLTableSectionElement>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const list = useRef<HTMLDivElement>(null);
   const shown = useMemo(() => {
-    const s = q.trim().toLowerCase();
+    const s = (query ?? "").trim().toLowerCase();
     if (!s) return rows;
     return rows.filter((r) => [r.pos, r.code, r.name_en, r.name_it, r.maker, r.maker_pn].some((v) => v && v.toLowerCase().includes(s)));
-  }, [rows, q]);
+  }, [rows, query]);
 
   useEffect(() => {
     if (!selected) return;
     list.current?.querySelector(`[data-row="${CSS.escape(selected)}"]`)?.scrollIntoView({ block: "nearest" });
   }, [selected]);
 
+  const qtyText = (r: Row) => `${r.qty ?? "–"}${r.unit === "m" ? ` ${w(lang, "m")}` : ""}`;
+
   return (
-    <div className="cv-parts">
-      <input className="cv-find" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={w(lang, "Find in this list")} aria-label={w(lang, "Find in this list")} />
-      {!rows.length && <p className="cv-none">{w(lang, "This drawing has no parts list.")}</p>}
-      {!!rows.length && !shown.length && <p className="cv-none">{w(lang, "No parts match.")}</p>}
-      {!!shown.length && (
-        <div className="cv-scroll">
-          <table className="cv-table">
-            <thead>
-              <tr>
-                <th scope="col">{w(lang, "Pos.")}</th>
-                <th scope="col">{w(lang, "Part number")}</th>
-                <th scope="col">{w(lang, "Description")}</th>
-                <th scope="col" className="num">{w(lang, "Qty")}</th>
-                {(action || extra) && <th scope="col"><span className="sr">{w(lang, "Add to cart")}</span></th>}
-              </tr>
-            </thead>
-            <tbody ref={list}>
-              {shown.map((r) => (
-                <tr key={r.id} data-row={r.id} className={r.id === selected ? "on" : undefined} onClick={(e) => {
-                  if ((e.target as HTMLElement).closest("a,button,input")) return;
-                  onSelect(r);
-                }}>
-                  <td className="mono">{r.pos}</td>
-                  <td className="mono">{partLink(r.code)}</td>
-                  <td>
-                    {partName(lang, r) || <span className="muted">–</span>}
-                    {r.wear && <span className="cv-tag" title={w(lang, "Wear part: good to keep a spare")}>{w(lang, "Wears")}</span>}
-                    {r.maker && <small className="cv-maker">{[r.maker, r.maker_pn].filter(Boolean).join(" ")}</small>}
-                    {r.sub_sheet && (
-                      <button type="button" className="cv-link" onClick={() => onOpenSheet(r.sub_sheet!)}>{w(lang, "Open assembly")} →</button>
-                    )}
-                  </td>
-                  <td className="num">{r.qty ?? "–"}{r.unit === "m" ? ` ${w(lang, "m")}` : ""}</td>
-                  {(action || extra) && <td className="cv-act">{extra?.(r)}{action?.(r)}</td>}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <div className="pl" ref={list}>
+      {head && (
+        <div className="pl-row pl-asm">
+          <span className="pl-pos" />
+          <span className="pl-pic">{IC.list}</span>
+          <span className="pl-what"><b className="mono">{head.code ?? ""}</b><small>{head.title}</small></span>
+          <span className="pl-qty">{w(lang, "Quantity: {n}", { n: 1 })}</span>
         </div>
       )}
+      {!rows.length && <p className="cv-none">{w(lang, "This drawing has no parts list.")}</p>}
+      {!!rows.length && !shown.length && <p className="cv-none">{w(lang, "No parts match.")}</p>}
+      {shown.map((r) => (
+        <div key={r.id} data-row={r.id} className={`pl-row${r.id === selected ? " on" : ""}`} onClick={(e) => {
+          if ((e.target as HTMLElement).closest("a,button,input,select,label,.pl-info")) return;
+          onSelect(r);
+        }}>
+          <span className="pl-pos">{r.pos}</span>
+          <span className="pl-pic" aria-hidden="true">{r.sub_sheet ? IC.list : IC.gearPart}</span>
+          <span className="pl-what">
+            <span className="pl-code">
+              <b className="mono">{partLink(r.code)}</b>
+              <button type="button" className="pl-i" aria-expanded={info === r.id} aria-label={w(lang, "About this part")} title={w(lang, "About this part")} onClick={() => setInfo(info === r.id ? null : r.id)}>{IC.info}</button>
+            </span>
+            <small>{partName(lang, r) || "–"}</small>
+            {r.wear && <span className="cv-tag" title={w(lang, "Wear part: good to keep a spare")}>{w(lang, "Wears")}</span>}
+            {r.maker && <small className="cv-maker">{[r.maker, r.maker_pn].filter(Boolean).join(" ")}</small>}
+            {r.sub_sheet && <button type="button" className="cv-link" onClick={() => onOpenSheet(r.sub_sheet!)}>{w(lang, "Open assembly")} ›</button>}
+            {info === r.id && (
+              <span className="pl-info" role="dialog" aria-label={r.code}>
+                <span className="pl-info-head"><b className="mono">{r.code}</b> - {partName(lang, r)}
+                  <button type="button" className="cv-x" aria-label={w(lang, "Close")} onClick={() => setInfo(null)}>{IC.close}</button>
+                </span>
+                <dl>
+                  <dt>{w(lang, "Name")}</dt><dd>{partName(lang, r) || "–"}{r.name_it && lang !== "it" && r.name_it !== r.name_en ? <small> ({r.name_it})</small> : null}</dd>
+                  <dt>{w(lang, "Number")}</dt><dd className="mono">{r.code}</dd>
+                  <dt>{w(lang, "Quantity")}</dt><dd>{qtyText(r)}</dd>
+                  <dt>{w(lang, "Pos.")}</dt><dd>{r.pos || "–"}</dd>
+                  {r.maker && <><dt>{w(lang, "Maker")}</dt><dd>{[r.maker, r.maker_pn].filter(Boolean).join(" ")}</dd></>}
+                </dl>
+                <span className="pl-info-links">
+                  {whereUsed?.(r.code)}
+                  {onShow3D && has3D?.(r.code) && <button type="button" className="cv-link" onClick={() => { onShow3D(r); setInfo(null); }}>{w(lang, "Show in 3D")}</button>}
+                  {r.sub_sheet && <button type="button" className="cv-link" onClick={() => onOpenSheet(r.sub_sheet!)}>{w(lang, "Open assembly")} ›</button>}
+                </span>
+              </span>
+            )}
+          </span>
+          <span className="pl-qty">
+            <span>{w(lang, "Quantity: {n}", { n: qtyText(r) })}</span>
+            {extra?.(r)}
+            {action?.(r)}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

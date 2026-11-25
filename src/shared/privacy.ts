@@ -38,7 +38,7 @@ export function scanForCustomerData(text: string, terms: PrivateTerms): PrivacyF
   check(terms.sites, "site");
   check(terms.serials, "machine_number");
   // Any machine-number pattern is refused, even one not in the registry yet.
-  const generic = new RegExp(MACHINE_SERIAL.source, "gi");
+  const generic = new RegExp(`${MACHINE_SERIAL.source}|\\bRA\\d{4}[A-Z]{0,3}\\b`, "gi");
   for (const m of text.matchAll(generic)) {
     if (!found.some((f) => f.match.toLowerCase() === m[0].toLowerCase())) {
       found.push({ kind: "machine_number", match: m[0] });

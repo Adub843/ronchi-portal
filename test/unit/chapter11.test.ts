@@ -30,8 +30,8 @@ const PAGE: PageText = {
 
 describe("part codes", () => {
   it("knows Ronchi codes", () => {
-    for (const c of ["GF010526", "CM009450_195", "CM004282_1", "0000025133", "TFP000091"]) expect(isPartCode(c), c).toBe(true);
-    for (const c of ["GF0105", "3651MB", "12", "hello", "GF010526_1234"]) expect(isPartCode(c), c).toBe(false);
+    for (const c of ["GF010526", "CM009450_195", "CM004282_1", "0000025133", "TFP000091", "RA1018_GS102289", "RA1029TP_GF108519", "ELE00885", "ELE00018_04", "EL4197", "EL4197_12", "PV-RON-WD12345", "PV-RON-WD123456_1", "SKL-SCS-123456", "SKS-SCS-123456", "MC1234_1", "ADB1234"]) expect(isPartCode(c), c).toBe(true);
+    for (const c of ["GF0105", "3651MB", "12", "hello", "GF010526_1234", "EL12", "ELE00885_123", "PV-RON-12345", "MC12"]) expect(isPartCode(c), c).toBe(false);
   });
   it("cleans what people type", () => {
     expect(cleanPartCode(" gf010526 ")).toBe("GF010526");

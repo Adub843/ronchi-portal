@@ -5,6 +5,7 @@
 // logins, and reading quote requests. Every call needs the publish key (Authorization: Bearer ...),
 // whose SHA-256 is the ADMIN_KEY_HASH secret. With no secret set, all of /admin is switched off.
 import { Hono } from "hono";
+import { MACHINE_NUMBER } from "../../shared/machine-number";
 import { randomId, sameText, sha256Hex } from "../../shared/crypto";
 import { cleanPartCode, SECTIONS } from "../../shared/catalog/model";
 import type { PartsApp } from "../env";
@@ -23,7 +24,7 @@ admin.use("*", async (c, next) => {
   await next();
 });
 
-const SERIAL = /^\d{4}[A-Z]{1,3}$/;
+const SERIAL = MACHINE_NUMBER;
 const ID = /^[A-Za-z0-9_-]{8,40}$/;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[a-z]{2,24}$/i;
 const num = (v: unknown, max: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? v : null);
@@ -82,7 +83,7 @@ admin.put("/companies/:id/machines", async (c) => {
   const list = (b.machines as unknown[]).map((m) => {
     const o = (m && typeof m === "object" ? m : {}) as Record<string, unknown>;
     const serial = String(o.serial ?? "").trim().toUpperCase();
-    if (!SERIAL.test(serial)) fail(400, `"${serial}" isn't a machine number like 3651MB.`);
+    if (!SERIAL.test(serial)) fail(400, `"${serial}" isn't a machine number like 3651MB or RA1018.`);
     return { serial, label: str(o.label, 100) };
   });
   const t = now();

@@ -11,6 +11,7 @@
 // sheet's mesh map (set by staff), or by the name itself when it starts with a part code (that's
 // how SolidWorks and Creo name parts: GF010526, GF010526-1, GF010526_2 ...).
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { IC, Ib } from "./icons";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -54,7 +55,7 @@ function storeViews(key: string, v: SavedView[]) {
 }
 
 export function Model3D({
-  src, meshMap, selected, onPick, lang, knownCodes, describe, card, fileName = "model",
+  src, meshMap, selected, onPick, lang, knownCodes, describe, card, fileName = "model", lead, label,
 }: {
   src: string;
   meshMap: Record<string, string>;
@@ -65,6 +66,8 @@ export function Model3D({
   describe?: (code: string) => string | null;   // the part's name, for hover labels
   card?: (code: string) => ReactNode;      // the selected part's details and actions (quantity, add to cart ...)
   fileName?: string;                       // for the saved picture
+  lead?: ReactNode;                        // buttons at the start of the toolbar (the Drawing / 3D switch)
+  label?: string;                          // shown at the end of the toolbar, like Mario's "Sheet:" name
 }) {
   const host = useRef<HTMLDivElement>(null);
   const engine = useRef<Engine | null>(null);
@@ -75,6 +78,7 @@ export function Model3D({
   const [explode, setExplode] = useState(0);
   const [section, setSection] = useState<{ axis: "x" | "y" | "z" | null; at: number }>({ axis: null, at: 0.5 });
   const [showTree, setShowTree] = useState(false);
+  const [panel, setPanel] = useState<"explode" | "section" | null>(null);
   const [full, setFull] = useState(false);
   const [mode, setMode] = useState<Mode>("turn");
   const [moved, setMoved] = useState(0);   // how many parts have been moved, for the Restore buttons
@@ -194,46 +198,54 @@ export function Model3D({
   return (
     <div className={`cv-stage${full ? " cv-full" : ""}`} onKeyDown={onKey}>
       <div className="cv-tools" role="toolbar" aria-label="3D">
-        <span className="cv-grp">
-          <button type="button" className="cv-btn" onClick={home} title={w(lang, "Home: starting view, everything shown and in place")}>{w(lang, "Home")}</button>
-          <button type="button" className="cv-btn" onClick={() => engine.current?.fit()} title="F">{w(lang, "Fit")}</button>
-          <button type="button" className="cv-btn" aria-pressed={mode === "window"} onClick={() => setMode(mode === "window" ? "turn" : "window")}>{w(lang, "Zoom window")}</button>
-          <button type="button" className="cv-btn" onClick={() => engine.current?.zoom(0.8)} aria-label={w(lang, "Zoom in")} title={w(lang, "Zoom in")}>+</button>
-          <button type="button" className="cv-btn" onClick={() => engine.current?.zoom(1.25)} aria-label={w(lang, "Zoom out")} title={w(lang, "Zoom out")}>−</button>
-          <button type="button" className="cv-btn" onClick={() => selected && engine.current?.zoomTo(selected)} disabled={!selected} title="S">{w(lang, "Zoom to selected")}</button>
-          <label className="cv-select">
-            <span className="sr">{w(lang, "Views")}</span>
-            <select aria-label={w(lang, "Views")} value="" onChange={(e) => {
-              const v = e.target.value;
-              if (v === "+save") saveView();
-              else if (v.startsWith("my:")) { const sv = views[Number(v.slice(3))]; if (sv) engine.current?.goTo(sv); }
-              else if (v.startsWith("del:")) { const next = views.filter((_, i) => i !== Number(v.slice(4))); setViews(next); storeViews(viewKey, next); }
-              else if (v) engine.current?.view(v as View);
-            }}>
-              <option value="">{w(lang, "Views")}</option>
-              {(Object.keys(VIEWS) as View[]).map((v) => <option key={v} value={v}>{w(lang, VIEW_WORDS[v])}</option>)}
-              {views.length > 0 && <optgroup label={w(lang, "My views")}>{views.map((v, i) => <option key={i} value={`my:${i}`}>{v.name}</option>)}</optgroup>}
-              <option value="+save">{w(lang, "Save this view")}</option>
-              {views.length > 0 && <optgroup label={w(lang, "Remove a view")}>{views.map((v, i) => <option key={i} value={`del:${i}`}>× {v.name}</option>)}</optgroup>}
-            </select>
-          </label>
-        </span>
-        <span className="cv-grp">
-          <button type="button" className="cv-btn" onClick={hide} disabled={!selected} title="H">{w(lang, "Hide")}</button>
-          <button type="button" className="cv-btn" onClick={isolate} disabled={!selected} title="I">{w(lang, "Isolate")}</button>
-          <button type="button" className="cv-btn" onClick={showAll} disabled={!hidden.size} title="A">{w(lang, "Show all")}</button>
-        </span>
-        <span className="cv-grp">
-          <button type="button" className="cv-btn" aria-pressed={mode === "move"} onClick={() => setMode(mode === "move" ? "turn" : "move")} disabled={!selected && mode !== "move"}>{w(lang, "Move part")}</button>
-          <button type="button" className="cv-btn" onClick={() => selected && engine.current?.restore(selected)} disabled={!moved || !selected}>{w(lang, "Restore part")}</button>
-          <button type="button" className="cv-btn" onClick={() => engine.current?.restoreAll()} disabled={!moved}>{w(lang, "Restore all")}</button>
-        </span>
-        <span className="cv-grp">
-          <button type="button" className="cv-btn" aria-pressed={xray} onClick={() => setXray(!xray)}>{w(lang, "See-through")}</button>
-          <label className="cv-range">
-            {w(lang, "Explode")}
-            <input type="range" min={0} max={1} step={0.01} value={explode} onChange={(e) => setExplode(Number(e.target.value))} />
-          </label>
+        {lead}
+        {/* The same tools, in the same order, as the Ronchi Mario viewer; then ours. */}
+        <Ib icon={IC.home} label={w(lang, "Home: starting view, everything shown and in place")} onClick={home} />
+        <Ib icon={IC.zoomAll} label={`${w(lang, "Zoom all")} (F)`} onClick={() => engine.current?.fit()} />
+        <Ib icon={IC.zoomWindow} label={w(lang, "Zoom window")} pressed={mode === "window"} onClick={() => setMode(mode === "window" ? "turn" : "window")} />
+        <Ib icon={IC.zoomIn} label={w(lang, "Zoom in")} onClick={() => engine.current?.zoom(0.8)} />
+        <Ib icon={IC.zoomOut} label={w(lang, "Zoom out")} onClick={() => engine.current?.zoom(1.25)} />
+        <Ib icon={IC.zoomSelected} label={`${w(lang, "Zoom selected")} (S)`} disabled={!selected} onClick={() => selected && engine.current?.zoomTo(selected)} />
+        <Ib icon={IC.isolate} label={`${w(lang, "Isolate")} (I)`} disabled={!selected} onClick={isolate} />
+        <Ib icon={IC.hide} label={`${w(lang, "Hide selected")} (H)`} disabled={!selected} onClick={hide} />
+        <Ib icon={IC.showAll} label={`${w(lang, "Unhide all")} (A)`} disabled={!hidden.size} onClick={showAll} />
+        <Ib icon={IC.move} label={w(lang, "Move part")} pressed={mode === "move"} disabled={!selected && mode !== "move"} onClick={() => setMode(mode === "move" ? "turn" : "move")} />
+        <Ib icon={IC.restoreAll} label={w(lang, "Restore all")} disabled={!moved} onClick={() => engine.current?.restoreAll()} />
+        <Ib icon={IC.restorePart} label={w(lang, "Restore part")} disabled={!moved || !selected} onClick={() => selected && engine.current?.restore(selected)} />
+        <label className="cv-pick" title={w(lang, "Orientation")}>
+          {IC.orient}{IC.caret}
+          <select aria-label={w(lang, "Orientation")} value="" onChange={(e) => {
+            const v = e.target.value;
+            if (v === "+save") saveView();
+            else if (v.startsWith("my:")) { const sv = views[Number(v.slice(3))]; if (sv) engine.current?.goTo(sv); }
+            else if (v.startsWith("del:")) { const next = views.filter((_, i) => i !== Number(v.slice(4))); setViews(next); storeViews(viewKey, next); }
+            else if (v) engine.current?.view(v as View);
+          }}>
+            <option value="">{w(lang, "Orientation")}</option>
+            {(Object.keys(VIEWS) as View[]).map((v) => <option key={v} value={v}>{w(lang, VIEW_WORDS[v])}</option>)}
+            {views.length > 0 && <optgroup label={w(lang, "My views")}>{views.map((v, i) => <option key={i} value={`my:${i}`}>{v.name}</option>)}</optgroup>}
+            <option value="+save">{w(lang, "Save this view")}</option>
+            {views.length > 0 && <optgroup label={w(lang, "Remove a view")}>{views.map((v, i) => <option key={i} value={`del:${i}`}>× {v.name}</option>)}</optgroup>}
+          </select>
+        </label>
+        <span className="cv-sep" />
+        <Ib icon={IC.xray} label={w(lang, "See-through")} pressed={xray} onClick={() => setXray(!xray)} />
+        <Ib icon={IC.explode} label={w(lang, "Explode")} pressed={panel === "explode" || explode > 0} onClick={() => setPanel(panel === "explode" ? null : "explode")} />
+        <Ib icon={IC.section} label={w(lang, "Section")} pressed={panel === "section" || !!section.axis} onClick={() => setPanel(panel === "section" ? null : "section")} />
+        <Ib icon={IC.tree} label={w(lang, "Model tree")} pressed={showTree} onClick={() => setShowTree(!showTree)} />
+        <Ib icon={IC.camera} label={w(lang, "Picture")} onClick={picture} />
+        <Ib icon={full ? IC.unfull : IC.full} label={w(lang, full ? "Exit full screen" : "Full screen")} pressed={full} onClick={() => setFull(!full)} />
+        <span className="cv-gap" />
+        {label && <span className="cv-label">{label}</span>}
+      </div>
+      {panel === "explode" && (
+        <div className="cv-panel">
+          <label className="cv-range">{w(lang, "Explode")}<input type="range" min={0} max={1} step={0.01} value={explode} onChange={(e) => setExplode(Number(e.target.value))} /></label>
+          <button type="button" className="cv-link" onClick={() => setExplode(0)} disabled={!explode}>{w(lang, "Put back together")}</button>
+        </div>
+      )}
+      {panel === "section" && (
+        <div className="cv-panel">
           <label className="cv-select">
             {w(lang, "Section")}
             <select value={section.axis ?? ""} onChange={(e) => setSection({ ...section, axis: (e.target.value || null) as "x" | "y" | "z" | null })}>
@@ -243,15 +255,9 @@ export function Model3D({
               <option value="z">Z</option>
             </select>
           </label>
-          {section.axis && (
-            <input className="cv-slim" type="range" min={0} max={1} step={0.005} value={section.at} aria-label={w(lang, "Section")} onChange={(e) => setSection({ ...section, at: Number(e.target.value) })} />
-          )}
-        </span>
-        <span className="cv-gap" />
-        <button type="button" className="cv-btn" aria-pressed={showTree} onClick={() => setShowTree(!showTree)}>{w(lang, "Model tree")}</button>
-        <button type="button" className="cv-btn" onClick={picture}>{w(lang, "Picture")}</button>
-        <button type="button" className="cv-btn" aria-pressed={full} onClick={() => setFull(!full)}>{w(lang, full ? "Exit full screen" : "Full screen")}</button>
-      </div>
+          {section.axis && <input className="cv-slim" type="range" min={0} max={1} step={0.005} value={section.at} aria-label={w(lang, "Section")} onChange={(e) => setSection({ ...section, at: Number(e.target.value) })} />}
+        </div>
+      )}
       <div className="cv-body">
         {showTree && tree && (
           <ModelTree
@@ -788,3 +794,4 @@ class Engine {
     this.box2d.remove();
   }
 }
+
