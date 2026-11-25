@@ -85,6 +85,7 @@ def _shoot(vp, orientation, path, size, notes):
     cam.viewOrientation = getattr(adsk.core.ViewOrientations, orientation)
     cam.isFitView = True
     vp.camera = cam
+    adsk.doEvents()
     vp.fit()
     adsk.doEvents()
     try:
@@ -161,16 +162,16 @@ def make(design, root, P):
     manifest = {"version": 1, "source": os.path.basename(P.get("source") or src), "units": "mm", "size": size,
                 "views": {}, "parts": [], "notes": notes}
     try:
-        shown.all()
-        for name, orient in VIEWS:
-            f = "view-%s.png" % name
-            if _shoot(vp, orient, os.path.join(out, f), size, notes):
-                manifest["views"][name] = f
-
         # One picture per component, from its first occurrence. Names that clash on disk get a number.
         by_comp = {}
         order = []
+        # A STEP import puts everything in one wrapper occurrence named after the file; it is the
+        # whole assembly again (the views), so it gets no picture of its own.
+        tops = [o for o in root.occurrences]
+        wrapper = tops[0].fullPathName if len(tops) == 1 and not _code(tops[0].component.name) else None
         for o in shown.occs:
+            if o.fullPathName == wrapper:
+                continue
             c = o.component
             key = getattr(c, "id", None) or c.name
             if key in by_comp:
@@ -195,6 +196,18 @@ def make(design, root, P):
             })
         if len(order) > limit:
             notes.append("only the first %d of %d components were drawn (max_parts)" % (limit, len(order)))
+
+        # The whole assembly last: right after the import Fusion's first fit is off centre.
+        shown.all()
+        _shoot(vp, "IsoTopRightViewOrientation", os.path.join(out, "_warmup.png"), 64, notes)
+        for name, orient in VIEWS:
+            f = "view-%s.png" % name
+            if _shoot(vp, orient, os.path.join(out, f), size, notes):
+                manifest["views"][name] = f
+        try:
+            os.remove(os.path.join(out, "_warmup.png"))
+        except OSError:
+            pass
     finally:
         try:
             shown.restore()
@@ -257,4 +270,5 @@ def make_demo(design, root, P):
             tbm.booleanOperation(s, cyl(0, 0, 10, 14, 5), adsk.fusion.BooleanTypes.UnionBooleanType)
             screw.bRepBodies.add(s)
         else:
-            root.occurrences.addExistingComponent(screw, at(x, y, 0))
+            occ = root.occurrences.addExistingComponent(screw, adsk.core.Matrix3D.create())
+            occ.transform2 = at(x, y, 0)
