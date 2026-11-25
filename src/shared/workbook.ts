@@ -31,7 +31,7 @@ export const RECIPE_SCREENS: Record<string, string[]> = {
 };
 
 /** The billable hour types, in the order of the old time sheet's Billable Hours table. No Training:
- *  training isn't billable (Aaron, 2026-11-25); the old wb_hours.training column stays and is saved as 0. */
+ *  training isn't billable (Aaron, 2026-11-25); the old wb_hours.training column stays, unused. */
 export const HOUR_TYPES = [
   { key: "travel_wd", label: "Weekday travel" },
   { key: "travel_we", label: "Weekend travel" },

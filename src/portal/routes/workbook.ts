@@ -258,6 +258,7 @@ workbook.put("/:jobId/photos/:fileId", async (c) => {
 });
 
 // ---- Billable hours (customer billing, not a time clock) ----
+// No Training (Aaron, 2026-11-25): the old wb_hours.training column is left alone (new rows default to 0).
 
 /** Set one engineer's billable hours for one day on this job (all zero removes the day). */
 workbook.put("/:jobId/hours", async (c) => {
@@ -278,11 +279,11 @@ workbook.put("/:jobId/hours", async (c) => {
   }
   const at = now();
   landed(await db.prepare(
-    `INSERT INTO wb_hours (id, job_id, user_id, day, travel_wd, travel_we, regular, training, overtime, warranty, miles, note, created_at, updated_at)
-     SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE ${STILL_OPEN}
+    `INSERT INTO wb_hours (id, job_id, user_id, day, travel_wd, travel_we, regular, overtime, warranty, miles, note, created_at, updated_at)
+     SELECT ?,?,?,?,?,?,?,?,?,?,?,?,? WHERE ${STILL_OPEN}
      ON CONFLICT(job_id, user_id, day) DO UPDATE SET travel_wd = excluded.travel_wd, travel_we = excluded.travel_we, regular = excluded.regular,
-       training = excluded.training, overtime = excluded.overtime, warranty = excluded.warranty, miles = excluded.miles, note = excluded.note, updated_at = excluded.updated_at`,
-  ).bind(randomId(), job.id, who, d, h.travel_wd, h.travel_we, h.regular, 0, h.overtime, h.warranty, h.miles, note, at, at, job.id).run());
+       overtime = excluded.overtime, warranty = excluded.warranty, miles = excluded.miles, note = excluded.note, updated_at = excluded.updated_at`,
+  ).bind(randomId(), job.id, who, d, h.travel_wd, h.travel_we, h.regular, h.overtime, h.warranty, h.miles, note, at, at, job.id).run());
   await auditJob(c, c.get("user")!, job.id, "workbook.hours", { for: who, day: d, ...h });
   return c.json({ ok: true });
 });
