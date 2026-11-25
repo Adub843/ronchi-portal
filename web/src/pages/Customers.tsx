@@ -5,6 +5,7 @@ import { useState } from "react";
 import { api, can, fmtTime, type Me } from "../api";
 import { t } from "../i18n";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad } from "../components/ui";
+import { navigate } from "../router";
 
 const enc = encodeURIComponent;
 const QUOTE_STATUS: Record<string, string> = { sent: "New", received: "Received", quoted: "Quoted", closed: "Closed" };
@@ -153,10 +154,10 @@ function Company({ co, open, invite, onToggle, onChange }: { co: any; open: bool
   );
 }
 
-export function Quotes({ id }: { id?: string }) {
+export function Quotes({ id, me }: { id?: string; me?: Me }) {
   const [status, setStatus] = useState("");
   const { data, error } = useLoad(() => api(`/quotes${status ? `?status=${status}` : ""}`), [status]);
-  if (id) return <QuotePage id={id} />;
+  if (id) return <QuotePage id={id} me={me ?? null} />;
   return (
     <>
       <PageHead title={t("Quote requests")} sub={t("Parts lists customers sent from the parts site.")} tip="quotes.head">
@@ -187,7 +188,7 @@ export function Quotes({ id }: { id?: string }) {
   );
 }
 
-function QuotePage({ id }: { id: string }) {
+function QuotePage({ id, me }: { id: string; me: Me | null }) {
   const { data, error, reload } = useLoad(() => api(`/quotes/${enc(id)}`), [id]);
   if (error) return <ErrorNote error={error} />;
   if (!data) return null;
@@ -195,6 +196,14 @@ function QuotePage({ id }: { id: string }) {
   return (
     <>
       <PageHead title={q.number} sub={`${q.company} · ${q.sent_by} · ${fmtTime(q.created_at)}`}>
+        {can(me, "psales.edit") && <button className="btn primary" onClick={async () => {
+          try {
+            const r = await api<{ id: string }>("/parts-orders/from-request", { body: { requestId: id } });
+            navigate(`/parts-orders/${r.id}`);
+          } catch (x) {
+            toast((x as Error).message);
+          }
+        }}>{t("Start a quote from this request")}</button>}
         <select value={q.status} aria-label={t("Status")} onChange={async (e) => {
           try {
             await api(`/quotes/${enc(id)}`, { method: "PATCH", body: { status: e.target.value } });

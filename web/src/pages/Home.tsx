@@ -9,6 +9,8 @@ export function Home({ me, unread }: { me: Me; unread: Unread }) {
   const boards = useLoad(() => (can(me, "boards.use") ? api("/boards") : Promise.resolve({ boards: [] })));
   const orders = useLoad(() => (can(me, "orders.view") ? api("/change-parts") : Promise.resolve(null)));
   const sales = useLoad(() => (can(me, "cpsales.view") ? api("/change-parts/sales") : Promise.resolve(null)));
+  const parts = useLoad(() => (can(me, "psales.view") ? api("/parts-orders") : Promise.resolve(null)));
+  const ship = useLoad(() => (can(me, "ship.view") ? api("/shipping") : Promise.resolve(null)));
   const hour = new Date().getHours();
   useRoleNames();
   const greet = hour < 12 ? t("Good morning") : hour < 18 ? t("Good afternoon") : t("Good evening");
@@ -58,6 +60,22 @@ export function Home({ me, unread }: { me: Me; unread: Unread }) {
             {can(me, "cpsales.view") && <span className="stat"><span className="n">{sales.data ? sales.data.sales.filter((o: any) => o.open).length : "–"}</span><span className="l">{t("Open sales")}</span></span>}
             {can(me, "orders.view") && <span className="stat"><span className="n">{orders.data ? orders.data.orders.filter((o: any) => o.open && o.status !== "Folder only").length : "–"}</span><span className="l">{t("Open orders")}</span></span>}
             <span className="muted">{t("Every change-part job, from the first request to shipped.")}</span>
+          </Link>
+        )}
+        {can(me, "psales.view") && (
+          <Link to="/parts-orders" className="panel tile">
+            <h2>{t("Parts orders")}</h2>
+            <span className="stat"><span className="n">{parts.data?.kpis.openQuotes ?? "–"}</span><span className="l">{t("Open quotes")}</span></span>
+            <span className="stat"><span className="n">{parts.data?.kpis.openOrders ?? "–"}</span><span className="l">{t("Open orders")}</span></span>
+            <span className="muted">{parts.data?.kpis.late ? t("{n} past the promised ship date", { n: parts.data.kpis.late }) : t("Spare parts quotes and orders, from the customer's request to shipped.")}</span>
+          </Link>
+        )}
+        {can(me, "ship.view") && (
+          <Link to="/shipping" className="panel tile">
+            <h2>{t("Shipping and receiving")}</h2>
+            <span className="stat"><span className="n">{ship.data?.kpis.arrivingThisWeek ?? "–"}</span><span className="l">{t("Arriving this week")}</span></span>
+            <span className="stat"><span className="n">{ship.data?.kpis.toShipToday ?? "–"}</span><span className="l">{t("To ship today")}</span></span>
+            <span className="muted">{t("What is coming in from Italy and suppliers, and what is going out to customers.")}</span>
           </Link>
         )}
         <Link to="/learn" className="panel tile">

@@ -138,6 +138,26 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
               ) : <Empty>{t("No change-part orders for this machine.")}</Empty>}
             </div>
           )}
+          {data.partsOrders && (
+            <div className="panel" style={{ gridColumn: "1 / -1" }}>
+              <h2>{t("Parts orders")}</h2>
+              {data.partsOrders.length ? (
+                <div className="tbl">
+                  <table>
+                    <tbody>
+                      {data.partsOrders.map((o: any) => (
+                        <tr key={o.id}>
+                          <td className="mono"><Link to={`/parts-orders/${o.id}`}>{o.order_number ?? o.quote_number}</Link></td>
+                          <td>{t(o.order_number ? "Order" : "Quote")}{o.customer_po ? ` · ${t("PO {po}", { po: o.customer_po })}` : ""}</td>
+                          <td className="muted">{t(({ quote: "Quote", sent: "Quote sent", lost: "Lost", booked: "Booked", closed: "Closed", cancelled: "Cancelled" } as Record<string, string>)[o.status] ?? o.status)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <Empty>{t("No parts orders for this machine.")}</Empty>}
+            </div>
+          )}
         </div>
       )}
     </>

@@ -237,6 +237,25 @@ the wall fails the build.
      `"MAIL_FROM": "jobs@ronchiamerica.com"`, then deploy.
   3. People whose login is a username (no email) need an "email for job notices", set on the People page.
 
+## Parts orders, and shipping and receiving
+
+- **Parts orders** (`/parts-orders`, spare parts; change parts stay under Change parts): a quote (Q-2026-0001, revisions
+  A, B ...) becomes an order (SO-2026-0001) when the customer's PO is typed in. Lost and cancelled need a reason. Lines
+  have a Ronchi part code, description, quantity and a backorder flag. Notes save as people type. Files go in R2 under
+  `parts-orders/<id>`. The list's tracker shows counts and days only (open quotes and orders, late, backordered lines,
+  quotes won, average days, on-time shipping, bookings by month). A customer's quote request can start a quote in one click.
+  Code: `src/portal/routes/parts-orders.ts`, `src/shared/parts-orders.ts` (statuses, the allowed moves, the tracker's numbers),
+  `web/src/pages/PartsOrders.tsx`. Tables: migration 0020. `psales.view` sees, `psales.edit` changes.
+- **Shipping and receiving** (`/shipping`): incoming shipments (supplier, reference, carrier, tracking or container number,
+  expected date, customs and broker notes) received in as many goes as needed, with problems (short, damaged ...) and photos;
+  outgoing shipments from a parts order, a change-part order or anything else (to pick, packed, shipped, delivered), with a
+  printable packing slip. **An order's shipped quantities and status are never typed**: they are added up from shipments
+  marked shipped or delivered, so the two can't disagree. Tracking links come from the carriers list
+  (Shipping > Carriers), whose link templates staff can fix without a code change. The LTL links are marked "Check this link"
+  until someone checks them on the carrier's site. No paid carrier services. Code: `src/portal/routes/shipping.ts`,
+  `src/shared/shipping.ts`, `web/src/pages/Shipping.tsx`. Tables: migration 0021. `ship.view` sees, `ship.edit` changes.
+- **No money**: neither module has a price, cost, value or total anywhere; `test/portal/parts-orders.test.ts` checks every table.
+
 ## Going live
 
 See [docs/REBUILD.md](docs/REBUILD.md). In short: create the three D1 databases and two R2
