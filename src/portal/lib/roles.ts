@@ -10,7 +10,7 @@ export const ROLES: Record<Role, string> = {
   service: "Service",
   sales: "Sales",
   engineering: "Engineering",
-  tech: "Field technician",
+  tech: "Field service engineer",
 };
 
 export type Permission =

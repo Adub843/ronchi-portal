@@ -12,7 +12,7 @@ import { loc, t } from "../i18n";
 import { navigate } from "../router";
 
 type Kind = "board" | "chat";
-const ROLE_LABELS: Record<string, string> = { admin: "Admin", manager: "Managers", billing: "Billing", scheduling: "Scheduling", service: "Service", sales: "Sales", engineering: "Engineering", tech: "Techs" };
+const ROLE_LABELS: Record<string, string> = { admin: "Admin", manager: "Managers", billing: "Billing", scheduling: "Scheduling", service: "Service", sales: "Sales", engineering: "Engineering", tech: "Field service engineers" };
 const base = (k: Kind) => (k === "chat" ? "/chats" : "/boards");
 
 /** A chat's name: the name it was given, or the other people in it. */
