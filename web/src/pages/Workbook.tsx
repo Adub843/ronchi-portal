@@ -65,7 +65,7 @@ export function WorkbookPanel({ job, me, onFiles }: { job: any; me: Me; onFiles:
       <WorkLog job={job} entries={data.entries} fill={fill} me={me} canSchedule={data.canSchedule} onChange={reload} />
       <Photos jobId={job.id} photos={data.photos} fill={fill} onChange={refresh} />
       {data.hours && <BillableHours job={job} rows={data.hours} fill={fill} me={me} canSchedule={data.canSchedule} onChange={reload} />}
-      {data.expenses && <Expenses job={job} rows={data.expenses} fill={fill} me={me} billable={data.billable} onChange={refresh} />}
+      {data.expenses && <Expenses job={job} rows={data.expenses} fill={fill} me={me} billable={data.billable} money={!!data.money} onChange={refresh} />}
       <SignOff jobId={job.id} report={r} fill={fill} onSaved={reload} />
     </section>
   );
@@ -321,7 +321,7 @@ function BillableHours({ job, rows, fill, me, canSchedule, onChange }: { job: an
 
 // ---- Expenses ----
 
-function Expenses({ job, rows, fill, me, billable, onChange }: { job: any; rows: any[]; fill: boolean; me: Me; billable: "Y" | "N"; onChange: () => void }) {
+function Expenses({ job, rows, fill, me, billable, money: seesMoney, onChange }: { job: any; rows: any[]; fill: boolean; me: Me; billable: "Y" | "N"; money: boolean; onChange: () => void }) {
   const firstDay = job.work_days.includes(today()) ? today() : job.work_days[0] ?? today();
   const blank: Record<string, string> = { day: firstDay, type: "", amount: "", pay: "Credit", description: "", billable };
   const [f, setF] = useState<Record<string, string>>(blank);
@@ -358,28 +358,29 @@ function Expenses({ job, rows, fill, me, billable, onChange }: { job: any; rows:
       toast((x as Error).message);
     }
   }
-  const total = rows.reduce((s, x) => s + x.amount_cents, 0);
+  const total = seesMoney ? rows.reduce((s, x) => s + x.amount_cents, 0) : 0;
   return (
     <div className="panel stack">
       <h3 style={{ margin: 0 }}>{t("Expenses")}</h3>
       {rows.length ? (
         <div className="tbl">
           <table>
-            <thead><tr><th>{t("Date")}</th><th>{t("Field service engineer")}</th><th>{t("Kind")}</th><th>{t("What it was for")}</th><th>{t("Paid by")}</th><th>{t("Billable")}</th><th className="num">{t("Amount")}</th><th /></tr></thead>
+            <thead><tr><th>{t("Date")}</th><th>{t("Field service engineer")}</th><th>{t("Kind")}</th><th>{t("What it was for")}</th><th>{t("Paid by")}</th><th>{t("Billable")}</th>{seesMoney && <th className="num">{t("Amount")}</th>}<th /></tr></thead>
             <tbody>
               {rows.map((x) => (
                 <tr key={x.id}>
                   <td>{fmtDate(x.day)}</td><td>{x.who}</td><td>{t(x.type)}</td>
-                  <td>{x.description}{x.receipt_file && <> · <a href={`/api/jobs/files/${enc(x.receipt_file)}`} target="_blank" rel="noopener noreferrer">{t("Receipt")}</a></>}</td>
-                  <td>{t(x.pay)}</td><td>{x.billable === "Y" ? t("Yes") : t("No")}</td><td className="num">{money(x.amount_cents)}</td>
+                  <td>{x.description}{seesMoney && x.receipt_file && <> · <a href={`/api/jobs/files/${enc(x.receipt_file)}`} target="_blank" rel="noopener noreferrer">{t("Receipt")}</a></>}</td>
+                  <td>{t(x.pay)}</td><td>{x.billable === "Y" ? t("Yes") : t("No")}</td>{seesMoney && <td className="num">{money(x.amount_cents)}</td>}
                   <td>{fill && (x.user_id === me.id || can(me, "jobs.schedule")) && <button className="linkish" onClick={() => remove(x.id)}>{t("Remove")}</button>}</td>
                 </tr>
               ))}
-              <tr><td colSpan={6}><strong>{t("Total")}</strong></td><td className="num"><strong>{money(total)}</strong></td><td /></tr>
+              {seesMoney && <tr><td colSpan={6}><strong>{t("Total")}</strong></td><td className="num"><strong>{money(total)}</strong></td><td /></tr>}
             </tbody>
           </table>
         </div>
       ) : <Empty>{t("No expenses yet.")}</Empty>}
+      {!seesMoney && rows.length > 0 && <p className="muted small" style={{ margin: 0 }}>{t("Amounts and receipts go to the office for billing and are not shown here.")}</p>}
       {fill && (
         <form className="grid g3 wb-add" onSubmit={add}>
           <div className="field"><label htmlFor="ex-day">{t("Date")}</label><input id="ex-day" type="date" required value={f.day} onChange={(e) => set("day", e.target.value)} /></div>
