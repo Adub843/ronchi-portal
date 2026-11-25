@@ -640,7 +640,7 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
-    id: "parts-reports", area: "parts-orders", needs: ["partsorders.view", "partsorders.reports"],
+    id: "parts-reports", area: "parts-orders", needs: ["partsorders.view", "partsorders.prices", "partsorders.reports"],
     title: T("Parts sales reports", "Informes de ventas de repuestos", "Report vendite ricambi"),
     summary: T("Sales by month, top customers and parts, win rate and how fast orders ship.", "Ventas por mes, mejores clientes y repuestos, tasa de éxito y rapidez de envío.", "Vendite per mese, clienti e ricambi principali, percentuale di successo e rapidità di spedizione."),
     steps: [

@@ -1,6 +1,7 @@
 -- Parts orders: spare parts sales from the customer's first ask to the invoice (routes/parts-orders.ts).
 -- Business side only: the help center and the customer parts site never see these tables.
--- Shipments for an order live in the shipping tables (migration 0017); this file doesn't depend on them.
+-- Shipments for an order live in the Shipping section's tables (shipments, shipment_lines), when that
+-- section is installed; this file doesn't depend on them and the routes check they exist first.
 CREATE TABLE parts_orders (
   id              TEXT PRIMARY KEY,
   seq             INTEGER NOT NULL UNIQUE,        -- shown as P-1001, P-1002, ...

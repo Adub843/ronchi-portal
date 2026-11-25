@@ -26,12 +26,13 @@ function day(iso: string | null | undefined): string {
   return new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString(loc(), { month: "short", day: "numeric", year: "numeric" });
 }
 
-export function PoStatus({ status, late, priority }: { status: string; late?: boolean; priority?: string }) {
+export function PoStatus({ status, late, priority, expired }: { status: string; late?: boolean; priority?: string; expired?: boolean }) {
   const s = status as Status;
   const cls = late ? "p-acc" : ["shipped", "invoiced", "closed"].includes(s) ? "p-ok" : ["on_hold", "lost", "cancelled"].includes(s) ? "p-warn" : "p-info";
   return (
     <span className="row po-pills">
       <span className={`pill ${cls}`}>{t(STATUS_LABELS[s] ?? status)}{late ? ` · ${t("Late")}` : ""}</span>
+      {expired && <span className="pill p-warn">{t("Quote expired")}</span>}
       {priority && priority !== "normal" && <span className="pill p-acc">{t(PRIORITY_LABELS[priority as keyof typeof PRIORITY_LABELS] ?? priority)}</span>}
     </span>
   );
@@ -51,7 +52,7 @@ const VIEWS: Record<View, (o: Row) => boolean> = {
 };
 
 export function PartsOrders({ me, tab }: { me: Me; tab?: string }) {
-  const reports = can(me, "partsorders.reports");
+  const reports = can(me, "partsorders.reports") && can(me, "partsorders.prices");
   const tabs = [
     { id: "", label: t("Orders") },
     { id: "to-order", label: t("To order from suppliers") },
@@ -143,7 +144,7 @@ function OrderList({ me }: { me: Me }) {
                   <td className="mono nowrap"><Link to={`/parts-orders/${o.id}`}>{o.number}</Link></td>
                   <td>{o.customer}{o.customer_po && <small className="muted block">{t("PO")} {o.customer_po}</small>}</td>
                   <td className="mono">{o.machine ?? "–"}</td>
-                  <td><PoStatus status={o.status} late={late(o)} priority={o.priority} /></td>
+                  <td><PoStatus status={o.status} late={late(o)} priority={o.priority} expired={o.status === "quoted" && !!o.quote_valid && o.quote_valid < today()} /></td>
                   <td className="nowrap">{o.lines ? t("{a} of {b} here", { a: o.received, b: o.lines }) : "–"}{o.next_eta && isOpen(o.status) && o.received < o.lines && <small className="muted block">{t("Next arrives {d}", { d: day(o.next_eta) })}</small>}</td>
                   <td className="nowrap">{day(o.promised)}</td>
                   {prices && <td className="num">{o.total ? money(o.total) : "–"}</td>}
@@ -355,7 +356,7 @@ export function PartsOrderPage({ id, me }: { id: string; me: Me }) {
         {can(me, "partsorders.remove") && <button className="btn danger" onClick={remove}>{sure ? t("Yes, remove") : t("Remove")}</button>}
       </PageHead>
       <div className={`panel po-where${orderLate(o as { status: string; promised: string | null }, today()) ? " late" : ""}`}>
-        <PoStatus status={o.status} late={orderLate(o as { status: string; promised: string | null }, today())} priority={o.priority} />
+        <PoStatus status={o.status} late={orderLate(o as { status: string; promised: string | null }, today())} priority={o.priority} expired={o.status === "quoted" && !!o.quote_valid && o.quote_valid < today()} />
         <span>{whereItIs(o, lines)}</span>
         <span className="spacer" />
         <span className="muted">{t("{a} of {b} lines here, {c} shipped", { a: o.progress.received, b: o.progress.lines, c: o.progress.shipped })}</span>
@@ -373,7 +374,7 @@ export function PartsOrderPage({ id, me }: { id: string; me: Me }) {
             </thead>
             <tbody>
               {lines.map((l) => {
-                const isLate = lineLate(l as any, today()) && !/stock/i.test(l.supplier ?? "");
+                const isLate = !/stock/i.test(l.supplier ?? "") && l.qty_received < l.qty && (lineLate(l as any, today()) || (!!o.needed_by && !!l.eta && l.eta > o.needed_by));
                 return (
                   <tr key={l.id}>
                     <td className="mono">{l.part_code ? <Link to={`/catalog/p/${enc(l.part_code)}`}>{l.part_code}</Link> : "–"}</td>
@@ -441,8 +442,8 @@ export function PartsOrderPage({ id, me }: { id: string; me: Me }) {
   );
 }
 
-const histLabel = (k: string) => k === "status" ? t("Status") : k === "lines" ? t("Parts") : k === "quote_request" ? t("Quote request") : k === "copied_from" ? t("Copied from") : k in ORDER_LABELS ? L(k as OrderField) : k;
-const histValue = (k: string, v: unknown) => v == null || v === "" ? "–" : k === "status" ? t(STATUS_LABELS[v as Status] ?? String(v)) : String(v);
+const histLabel = (k: string) => k === "status" ? t("Status") : k === "lines" ? t("Parts") : k === "quote_request" ? t("Quote request") : k === "copied_from" ? t("Copied from") : k === "prices" ? t("Prices") : k in ORDER_LABELS ? L(k as OrderField) : k;
+const histValue = (k: string, v: unknown) => v == null || v === "" ? "–" : k === "prices" ? t("Changed") : k === "status" ? t(STATUS_LABELS[v as Status] ?? String(v)) : String(v);
 
 // ---------- New order and editing ----------
 
@@ -625,5 +626,27 @@ export function MakePartsOrder({ quoteId }: { quoteId: string }) {
         setBusy(false);
       }
     }}>{t("Make parts order")}</button>
+  );
+}
+
+/** On a catalog part's page: the parts orders it has been on ("sold before"). */
+export function PartSoldBefore({ code, me }: { code: string; me: Me }) {
+  const { data } = useLoad<{ orders: Row[] }>(() => api(`/parts-orders/part/${enc(code)}`), [code]);
+  if (!data) return null;
+  const prices = can(me, "partsorders.prices");
+  return (
+    <div className="panel tbl" style={{ gridColumn: "1 / -1" }}>
+      <h2>{t("Parts orders with this part")}</h2>
+      {!data.orders.length ? <Empty>{t("Not on any parts order yet.")}</Empty> : (
+        <table>
+          <thead><tr><th>{t("Order")}</th><th>{t("Customer")}</th><th>{t("Machine")}</th><th>{t("Status")}</th><th className="num">{t("Qty")}</th>{prices && <th className="num">{t("Price")}</th>}</tr></thead>
+          <tbody>
+            {data.orders.map((o) => (
+              <tr key={`${o.id}-${o.qty}`}><td className="mono"><Link to={`/parts-orders/${o.id}`}>{o.number}</Link></td><td>{o.customer}</td><td className="mono">{o.machine ?? "–"}</td><td><PoStatus status={o.status} /></td><td className="num">{o.qty}</td>{prices && <td className="num">{money(o.unit_price)}</td>}</tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
   );
 }

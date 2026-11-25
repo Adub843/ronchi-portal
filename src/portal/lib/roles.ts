@@ -204,7 +204,7 @@ export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label:
     { id: "partsorders.edit", label: "Change parts orders", hint: "Change an order's details, lines and status, and mark parts arrived or shipped." },
     { id: "partsorders.remove", label: "Remove parts orders", hint: "Take a parts order off the list." },
     { id: "partsorders.prices", label: "See parts prices", hint: "See and set prices, costs, discounts, margins and order totals." },
-    { id: "partsorders.reports", label: "Parts sales reports", hint: "Sales by month, customer and part, and how long orders take." },
+    { id: "partsorders.reports", label: "Parts sales reports", hint: "Sales by month, customer and part, and how long orders take. Also needs See parts prices." },
   ] },
   { group: "Knowledge base", perms: [
     { id: "kb.view", label: "Search the knowledge base", hint: "Read articles and quick notes." },

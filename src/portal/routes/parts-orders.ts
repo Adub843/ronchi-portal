@@ -14,7 +14,7 @@ import { Hono, type Context } from "hono";
 import { randomId } from "../../shared/crypto";
 import {
   DATE_FIELDS, DAY, DONE, isOpen, isStatus, LINE_MONEY, MAX_LINES, MONEY_FIELDS, ORDER_FIELDS, ORDER_LABELS, ORDER_MAX,
-  PRIORITIES, autoStatus, isStock, progress, SOURCES, stampsFor, totals, type Line, type OrderField, type Status,
+  PRIORITIES, QUOTING, WON, autoStatus, isStock, progress, SOURCES, stampsFor, totals, type Line, type OrderField, type Status,
 } from "../../shared/parts-orders";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
@@ -150,17 +150,17 @@ partsOrders.get("/", async (c) => {
   const prices = has(u, "partsorders.prices");
   const machine = (c.req.query("machine") ?? "").trim().toUpperCase().slice(0, 60);
   const { results } = await c.env.DB.prepare(
-    `SELECT o.id, o.seq, o.customer, o.contact, o.machine, o.status, o.priority, o.salesperson, o.customer_po, o.quote_no, o.invoice_no,
+    `SELECT o.id, o.seq, o.customer, o.contact, o.machine, o.status, o.priority, o.salesperson, o.customer_po, o.quote_no, o.quote_valid, o.invoice_no,
             o.needed_by, o.promised, o.discount_pct, o.freight, o.won_at, o.created_at, o.updated_at,
             (SELECT MIN(l.eta) FROM parts_order_lines l WHERE l.order_id = o.id AND l.qty_received < l.qty AND l.eta IS NOT NULL) AS next_eta
        FROM parts_orders o
-      WHERE o.removed_at IS NULL AND (? = '' OR upper(o.machine) = ?)
+      WHERE o.removed_at IS NULL AND (? = '' OR o.machine = ?)
       ORDER BY o.updated_at DESC LIMIT 3000`,
   ).bind(machine, machine).all<Row>();
   // All lines in one read, then grouped here (cheaper than one sub-query per order).
   const lines = (await c.env.DB.prepare(
     `SELECT l.id, l.order_id, l.part_code, l.description, l.qty, l.unit_price, l.supplier, l.qty_received, l.qty_shipped
-       FROM parts_order_lines l JOIN parts_orders o ON o.id = l.order_id WHERE o.removed_at IS NULL AND (? = '' OR upper(o.machine) = ?)`,
+       FROM parts_order_lines l JOIN parts_orders o ON o.id = l.order_id WHERE o.removed_at IS NULL AND (? = '' OR o.machine = ?)`,
   ).bind(machine, machine).all<Row>()).results;
   const ship = await shippedFromShipping(c.env.DB);
   const byOrder = new Map<string, Row[]>();
@@ -181,6 +181,7 @@ partsOrders.get("/", async (c) => {
 /** Sales reports. Booked sales count from the day the customer said yes (won), lost and cancelled left out. */
 partsOrders.get("/reports", async (c) => {
   requirePerm(c, "partsorders.reports");
+  requirePerm(c, "partsorders.prices"); // every report is in dollars
   const from = DAY.test(c.req.query("from") ?? "") ? c.req.query("from")! : new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
   const to = DAY.test(c.req.query("to") ?? "") ? c.req.query("to")! : "9999-12-31";
   const db = c.env.DB;
@@ -350,11 +351,15 @@ partsOrders.patch("/:id", async (c) => {
   const f = cleanOrder(b, prices);
   const diff: Record<string, [unknown, unknown]> = {};
   for (const [k, v] of Object.entries(f)) if ((before[k] ?? null) !== (v ?? null) && !MONEY_FIELDS.has(k as OrderField)) diff[k] = [before[k] ?? null, v ?? null];
+  // Money stays out of the history, but the history still says it changed.
+  if (Object.entries(f).some(([k, v]) => MONEY_FIELDS.has(k as OrderField) && (before[k] ?? null) !== (v ?? null))) diff.prices = [null, "changed"];
   const set: Row = Object.fromEntries(Object.entries(f).filter(([k, v]) => (before[k] ?? null) !== (v ?? null)));
   const t = now();
   if (b.status !== undefined) {
     const s = statusOf(b.status);
     if (s !== before.status) {
+      // Like the order tools in the research: a quote becomes an order only with the customer's PO.
+      if (QUOTING.has(before.status) && WON.has(s) && !(("customer_po" in f ? f.customer_po : before.customer_po))) fail(400, "Type the customer's PO number first.");
       set.status = s;
       diff.status = [before.status, s];
       for (const stamp of stampsFor(s)) if (!before[stamp]) set[stamp] = t;
@@ -447,7 +452,16 @@ partsOrders.post("/from-quote/:quoteId", async (c) => {
     source: "parts_site",
     notes: quote.notes ? String(quote.notes).slice(0, 5000) : null,
   };
-  const made = await insertOrder(c, u.id, f, "inquiry", lines, { quote_request_id: qid, quote_request_no: String(quote.number ?? "").slice(0, 40) });
+  let made: { id: string; seq: number };
+  try {
+    made = await insertOrder(c, u.id, f, "inquiry", lines, { quote_request_id: qid, quote_request_no: String(quote.number ?? "").slice(0, 40) });
+  } catch (e) {
+    // Two people pressed the button at once: open the order the other one made.
+    if (!/quote_request_id/.test(String(e))) throw e;
+    const first = await c.env.DB.prepare("SELECT id, seq FROM parts_orders WHERE quote_request_id = ?").bind(qid).first<{ id: string; seq: number }>();
+    if (!first) throw e;
+    return c.json({ id: first.id, number: number(first.seq), existing: true });
+  }
   await audit(c.env.DB, { userId: u.id, action: "parts_order.create", targetType: "parts_order", targetId: made.id, detail: { changes: { quote_request: [null, quote.number], customer: [null, f.customer], lines: ["none", linesSummary(lines)] } }, ip: c.get("ip") });
   // Let the customer's request show "received" on their side.
   if (quote.status === "sent") await partsCall(c.env, `/quotes/${encodeURIComponent(qid)}`, { method: "PATCH", body: { status: "received", by: u.name } }).catch(() => undefined);

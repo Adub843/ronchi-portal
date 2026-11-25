@@ -34,7 +34,7 @@ machines.get("/:id", async (c) => {
     : null;
   // Spare parts orders for this machine, only for people who may see parts orders.
   const partsOrders = has(c.get("user"), "partsorders.view")
-    ? (await c.env.DB.prepare("SELECT id, 'P-' || seq AS number, customer, status, customer_po, updated_at FROM parts_orders WHERE upper(machine) = ? AND removed_at IS NULL ORDER BY updated_at DESC LIMIT 100").bind(String(m.serial).toUpperCase()).all()).results
+    ? (await c.env.DB.prepare("SELECT id, 'P-' || seq AS number, customer, status, customer_po, updated_at FROM parts_orders WHERE machine = ? AND removed_at IS NULL ORDER BY updated_at DESC LIMIT 100").bind(String(m.serial).toUpperCase()).all()).results
     : undefined;
   return c.json({ machine: m, boards: boards.results, orders, partsOrders });
 });

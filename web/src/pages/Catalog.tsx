@@ -3,10 +3,11 @@
 // 3D from STEP) and publish it to the customer parts site.
 //
 //   /catalog                 machines with a catalog, and part search across all of them
-//   /catalog/m/<machine id>  one machine's catalog tree, import and publish
+//   /catalog/m/<machine id>  one machine's catalog tree, and publish
 //   /catalog/s/<sheet id>    one drawing or 3D assembly with its parts list
 //   /catalog/p/<part code>   one part: names, where it's used, notes
 import { useEffect, useMemo, useState } from "react";
+import { PartSoldBefore } from "./PartsOrders";
 import { api, apiPut, can, fmtTime, type Me } from "../api";
 import { getLang, t } from "../i18n";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad, Tip } from "../components/ui";
@@ -741,6 +742,7 @@ function CatalogPart({ code, me }: { code: string; me: Me }) {
             </div>
           ))}
         </div>
+        {can(me, "partsorders.view") && <PartSoldBefore code={code} me={me} />}
       </div>
     </>
   );

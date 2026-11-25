@@ -98,6 +98,23 @@ describe("parts orders", () => {
     expect(page.history.at(-1).action).toBe("parts_order.create");
   });
 
+  it("won't turn a quote into an order without the customer's PO", async () => {
+    const sales = await person("sales");
+    const { data } = await sales.json("/api/parts-orders", { body: { customer: "No PO Co", status: "quoted" } });
+    const rev = (await sales.json(`/api/parts-orders/${data.id}`)).data.order.revision;
+    expect((await sales.fetch(`/api/parts-orders/${data.id}`, { method: "PATCH", body: { revision: rev, status: "ordered" } })).status).toBe(400);
+    expect((await sales.fetch(`/api/parts-orders/${data.id}`, { method: "PATCH", body: { revision: rev, status: "ordered", customer_po: "NP-1" } })).status).toBe(200);
+  });
+
+  it("lists the orders a part has been on, for the catalog", async () => {
+    const sales = await person("sales");
+    await sales.json("/api/parts-orders", { body: { customer: "Part Co", lines: [{ part_code: "R99-7777", qty: 3, unit_price: 5 }] } });
+    const r = await sales.json("/api/parts-orders/part/R99-7777");
+    expect(r.data.orders).toHaveLength(1);
+    expect(r.data.orders[0]).toMatchObject({ customer: "Part Co", qty: 3, unit_price: 5 });
+    expect((await (await person("scheduling")).json("/api/parts-orders/part/R99-7777")).data.orders[0].unit_price).toBeUndefined();
+  });
+
   it("repeats an order as a new inquiry with the same lines", async () => {
     const sales = await person("sales");
     const { data } = await sales.json("/api/parts-orders", { body: { ...ORDER, status: "closed" } });
@@ -136,7 +153,21 @@ describe("parts orders", () => {
     expect(rep.data.topParts.some((p: any) => p.part_code === "R44-0910")).toBe(true);
     expect(rep.data.open).toBeGreaterThanOrEqual(1);
     expect((await (await person("scheduling")).fetch("/api/parts-orders/reports")).status).toBe(403);
+    // Reports are dollars: given reports but not prices, someone still can't open them.
+    const meagan = await person("scheduling");
+    await env.DB.prepare("INSERT INTO user_access (user_id, perm, allow, set_at) VALUES (?, 'partsorders.reports', 1, datetime('now'))").bind(meagan.id).run();
+    expect((await meagan.json("/api/auth/me")).data.user.permissions).toContain("partsorders.reports");
+    expect((await meagan.fetch("/api/parts-orders/reports")).status).toBe(403);
     expect(data.id).toBeTruthy();
+  });
+
+  it("says prices changed in the history without the amounts", async () => {
+    const sales = await person("sales");
+    const { data } = await sales.json("/api/parts-orders", { body: ORDER });
+    const rev = (await sales.json(`/api/parts-orders/${data.id}`)).data.order.revision;
+    expect((await sales.fetch(`/api/parts-orders/${data.id}`, { method: "PATCH", body: { revision: rev, freight: 120 } })).status).toBe(200);
+    const h = (await sales.json(`/api/parts-orders/${data.id}`)).data.history[0];
+    expect(h.changes).toEqual({ prices: [null, "changed"] });
   });
 
   it("goes away completely when Aaron switches the section off, and comes back when on", async () => {
