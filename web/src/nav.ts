@@ -32,3 +32,12 @@ export const NAV: NavItem[] = [
 export function menuFor(perms: ReadonlySet<string>, switches: { workbook: boolean }): NavItem[] {
   return NAV.filter((n) => (!n.perm || perms.has(n.perm)) && (!n.unless || !perms.has(n.unless)) && (!n.workbook || switches.workbook));
 }
+
+/** False when the page at `path` needs a permission this person lacks. The menu already hides those pages;
+ *  this also covers an address typed in, bookmarked or opened from a link, so nobody sees an empty page
+ *  with forms they can't use. The server refuses the data either way. */
+export function pageAllowed(path: string, perms: ReadonlySet<string>): boolean {
+  const section = "/" + (path.split("/")[1] ?? "");
+  const item = NAV.find((n) => n.to === section);
+  return !item?.perm || perms.has(item.perm);
+}

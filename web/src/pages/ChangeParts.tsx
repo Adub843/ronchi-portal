@@ -38,7 +38,7 @@ type View = "open" | "late" | "soon" | "done" | "folder" | "all";
 const folderOnly = (o: Order) => (o.status ?? "").toLowerCase() === "folder only";
 
 export function ChangeParts({ me }: { me: Me }) {
-  const { data, error, reload } = useLoad<{ orders: Order[] }>(() => api("/change-parts"));
+  const { data, error, reload } = useLoad<{ orders: Order[] }>(() => api("/change-parts"), [], { live: true });
   const [view, setView] = useState<View>("open");
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
@@ -275,7 +275,7 @@ function ImportPanel({ onDone }: { onDone: () => void }) {
 }
 
 export function ChangePartPage({ id, me }: { id: string; me: Me }) {
-  const { data, error, reload } = useLoad<{ order: Order & Record<string, any>; history: any[] }>(() => api(`/change-parts/${encodeURIComponent(id)}`), [id]);
+  const { data, error, reload } = useLoad<{ order: Order & Record<string, any>; history: any[] }>(() => api(`/change-parts/${encodeURIComponent(id)}`), [id], { live: true });
   const [editing, setEditing] = useState(false);
   const [sure, setSure] = useState(false);
   if (error) return <ErrorNote error={error} />;

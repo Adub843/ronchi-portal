@@ -134,6 +134,17 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
+    id: "install-app", area: "basics", needs: [],
+    title: T("Put the portal on your phone or desktop as an app", "Poner el portal como aplicación en su teléfono o escritorio", "Mettere il portale come app sul telefono o sul desktop"),
+    summary: T("The portal can open in its own window with a Ronchi icon, like any other app. Nothing to download from a store.", "El portal puede abrirse en su propia ventana con un icono de Ronchi, como cualquier aplicación. No hay que descargar nada de una tienda.", "Il portale può aprirsi in una sua finestra con l'icona Ronchi, come qualsiasi app. Niente da scaricare da uno store."),
+    steps: [
+      T("On a computer or Android phone (Chrome or Edge): open the account menu at the top right and press Install as an app.", "En computadora o teléfono Android (Chrome o Edge): abra el menú de la cuenta arriba a la derecha y pulse Instalar como aplicación.", "Su computer o telefono Android (Chrome o Edge): apri il menu dell'account in alto a destra e premi Installa come app."),
+      T("On an iPhone (Safari): press Share, then Add to Home Screen.", "En iPhone (Safari): pulse Compartir y luego Agregar a pantalla de inicio.", "Su iPhone (Safari): premi Condividi, poi Aggiungi alla schermata Home."),
+      T("Open the portal from the new icon. You stay signed in, and it always shows the latest version.", "Abra el portal desde el icono nuevo. Su sesión sigue iniciada y siempre muestra la versión más reciente.", "Apri il portale dalla nuova icona. Resti collegato e mostra sempre la versione più recente."),
+    ],
+    tip: T("No Install as an app in the menu? It's already installed, or this browser doesn't offer it. Use the browser's own menu instead.", "¿No aparece Instalar como aplicación en el menú? Ya está instalada o este navegador no lo ofrece. Use el menú del propio navegador.", "Non vedi Installa come app nel menu? È già installata o questo browser non lo offre. Usa il menu del browser."),
+  },
+  {
     id: "lost-device", area: "basics", needs: [], open: "/settings",
     title: T("Sign out a lost phone", "Cerrar la sesión de un teléfono perdido", "Disconnettere un telefono perso"),
     summary: T("If a phone or computer is lost or replaced, take its sign-in away.", "Si pierde o cambia un teléfono o computadora, quítele el acceso.", "Se un telefono o computer è perso o sostituito, togli il suo accesso."),

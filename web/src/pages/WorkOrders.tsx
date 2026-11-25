@@ -23,7 +23,7 @@ function download(name: string, text: string) {
 }
 
 export function WorkOrderPage({ id, me }: { id: string; me: Me }) {
-  const { data, error, reload } = useLoad(() => api(`/jobs/${encodeURIComponent(id)}/workbook`), [id]);
+  const { data, error, reload } = useLoad(() => api(`/jobs/${encodeURIComponent(id)}/workbook`), [id], { live: true });
   if (error) return <ErrorNote error={error} />;
   if (!data) return null;
   const j = data.job;

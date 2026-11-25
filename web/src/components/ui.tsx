@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "../i18n";
 import { hrefFor, navigate } from "../router";
 import { hideTip, useTipHidden } from "../tips";
@@ -45,19 +45,40 @@ export function Empty({ children }: { children: ReactNode }) {
 }
 
 /** Load data from the API, with loading and error states. */
-export function useLoad<T>(load: () => Promise<T>, deps: unknown[] = []): { data: T | null; error: string | null; reload: () => void } {
+/** Minimum gap between two "came back to the page" refreshes, so flicking between windows doesn't
+ *  spend Cloudflare requests. */
+const LIVE_GAP = 20_000;
+
+/** Loads data for a page. With `live`, the page also reloads quietly when someone comes back to it
+ *  (window or tab shown again), so they see what others changed meanwhile without a timer polling
+ *  the server. Edit forms keep their own copy, and saves carry a revision, so this never loses typing. */
+export function useLoad<T>(load: () => Promise<T>, deps: unknown[] = [], opts: { live?: boolean } = {}): { data: T | null; error: string | null; reload: () => void } {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const loadedAt = useRef(0);
   useEffect(() => {
     let live = true;
     setError(null);
+    loadedAt.current = Date.now();
     load().then((d) => live && setData(d), (e: Error) => live && setError(e.message));
     return () => {
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick]);
+  useEffect(() => {
+    if (!opts.live) return;
+    const back = () => {
+      if (document.visibilityState === "visible" && Date.now() - loadedAt.current > LIVE_GAP) setTick((t) => t + 1);
+    };
+    document.addEventListener("visibilitychange", back);
+    window.addEventListener("focus", back);
+    return () => {
+      document.removeEventListener("visibilitychange", back);
+      window.removeEventListener("focus", back);
+    };
+  }, [opts.live]);
   return { data, error, reload: () => setTick((t) => t + 1) };
 }
 

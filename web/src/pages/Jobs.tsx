@@ -62,7 +62,7 @@ export function JobList({ me, base, title, sub }: { me: Me; base: "/jobs" | "/wo
   const [view, setView] = useState<string>(base === "/work-orders" ? "all" : can(me, "jobs.schedule") ? "upcoming" : "mine");
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
-  const { data, error } = useLoad(() => api(`/jobs?view=${view}&q=${encodeURIComponent(query)}`), [view, query]);
+  const { data, error } = useLoad(() => api(`/jobs?view=${view}&q=${encodeURIComponent(query)}`), [view, query], { live: true });
   return (
     <>
       <PageHead title={title} sub={sub}>
@@ -187,7 +187,7 @@ export function JobFiles({ jobId, files, me, canRemoveAll, onChange }: { jobId: 
 // ---- One job ----
 
 export function JobPage({ id, me }: { id: string; me: Me }) {
-  const { data, error, reload } = useLoad(() => api(`/jobs/${encodeURIComponent(id)}`), [id]);
+  const { data, error, reload } = useLoad(() => api(`/jobs/${encodeURIComponent(id)}`), [id], { live: true });
   const [editing, setEditing] = useState(false);
   const [emails, setEmails] = useState<EmailResult[]>(() => {
     const r = justScheduled?.id === id ? justScheduled.emails : [];
