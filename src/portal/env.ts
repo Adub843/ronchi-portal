@@ -41,6 +41,8 @@ export interface SessionUser {
   role: string;
   /** Everything this person may do: their role plus any per-person changes. */
   perms: ReadonlySet<Permission>;
+  /** The portal owner (Aaron): the only one who sees the command center. See lib/owner.ts. */
+  owner: boolean;
   sessionHash: string;
 }
 

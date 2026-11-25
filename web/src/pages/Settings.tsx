@@ -1,5 +1,5 @@
 // My look, language and alerts (saved to my login), and my devices.
-// Admins also get a second tab, Admin controls (pages/AdminSettings.tsx).
+// The portal owner also gets a second tab, Command center (pages/AdminSettings.tsx).
 import { useState } from "react";
 import { api, can, fmtTime, type Me } from "../api";
 import { Link, PageHead, toast, useLoad, Tip } from "../components/ui";
@@ -18,15 +18,15 @@ export function Settings({ me, admin, prefs, onPrefs, onSignOut, sound, onSound,
   const tabs = isAdmin && (
     <div className="tabs-row" role="tablist" aria-label={t("Settings")}>
       <Link to="/settings" className={`btn${admin ? "" : " primary"}`} current={!admin}>{t("My settings")}</Link>
-      <Link to="/settings/admin" className={`btn${admin ? " primary" : ""}`} current={admin}>{t("Admin controls")}</Link>
+      <Link to="/settings/admin" className={`btn${admin ? " primary" : ""}`} current={admin}>{t("Command center")}</Link>
     </div>
   );
   if (admin && isAdmin) {
     return (
       <>
-        <PageHead title={t("Admin controls")} sub={t("Everything you can adjust to manage people and grow the portal.")} />
+        <PageHead title={t("Command center")} sub={t("Every switch and control for the portal, in one place. Only you see this.")} />
         {tabs}
-        <AdminSettings onSaved={(s) => onSettings(s)} />
+        <AdminSettings onSaved={(s) => onSettings(s)} switches={switches} onSwitches={onSwitches} />
       </>
     );
   }
@@ -39,7 +39,7 @@ function MySettings({ me, tabs, prefs, onPrefs, onSignOut, sound, onSound, switc
   const devices = useLoad(() => api("/users/me/devices"));
   const [deviceLink, setDeviceLink] = useState<string | null>(null);
 
-  // Only the looks and languages an admin allows (Settings > Admin controls).
+  // Only the looks and languages an admin allows (Settings > Command center).
   const themes = THEMES.filter((th) => !me.settings || me.settings.look.allowedThemes.includes(th.id));
   const langs = LANGS.filter((l) => !me.settings || me.settings.languages.allowed.includes(l.id));
   function shuffle() {
@@ -93,25 +93,6 @@ function MySettings({ me, tabs, prefs, onPrefs, onSignOut, sound, onSound, switc
           <Tip id="settings.mute">{t("To silence one chat or board, open it and choose Mute alerts in its menu.")}</Tip>
         </div>
       </div>
-      {can(me, "users.manage") && (
-        <div className="panel stack">
-          <h2 style={{ margin: 0 }}>{t("Ronchi workbook")}</h2>
-          <label className="row switchrow">
-            <input type="checkbox" checked={switches.workbook} onChange={async (e) => {
-              const on = e.target.checked;
-              if (!on && !window.confirm(t("Switch the Ronchi workbook off for everyone? Work orders leave the menu. Jobs, job emails and job files keep working, and nothing is deleted."))) return;
-              try {
-                const r = await api("/switches/workbook", { method: "PUT", body: { on } });
-                onSwitches(r.switches);
-                toast(on ? t("The Ronchi workbook is on") : t("The Ronchi workbook is off"));
-              } catch (x) {
-                toast((x as Error).message);
-              }
-            }} />
-            <span><b>{t("Use the Ronchi workbook (Work orders)")}</b><small className="muted">{t("On: each job has a work order with the machine's log of past work orders, and the field service engineer's email opens it. Off: for teams that keep their Excel sheets. Jobs, job emails and files keep working; switching back on brings everything back.")}</small></span>
-          </label>
-        </div>
-      )}
       <div className="panel stack">
         <div className="row">
           <h2 style={{ margin: 0 }}>{t("Your look")}</h2>

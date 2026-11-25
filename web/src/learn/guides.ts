@@ -638,20 +638,20 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
-    id: "workbook-switch", area: "people", needs: ["users.manage"], open: "/settings",
+    id: "workbook-switch", area: "people", needs: ["settings.manage"], open: "/settings",
     title: T("Switch the Ronchi workbook on or off", "Encender o apagar el cuaderno de trabajo Ronchi", "Accendere o spegnere il quaderno di lavoro Ronchi"),
     summary: T("If the team keeps its Excel sheets, hide Work orders for everyone.", "Si el equipo sigue con sus hojas de Excel, oculte Órdenes de trabajo para todos.", "Se il team continua con i fogli Excel, nascondi Ordini di lavoro a tutti."),
     steps: [
-      T("Open Settings and find Ronchi workbook.", "Abra Configuración y busque Cuaderno de trabajo Ronchi.", "Apri Impostazioni e cerca Quaderno di lavoro Ronchi."),
+      T("Open Settings, press Command center and find Use the Ronchi workbook under Sections of the portal.", "Abra Configuración, pulse Centro de mando y busque Usar el cuaderno de trabajo Ronchi en Secciones del portal.", "Apri Impostazioni, premi Centro di comando e cerca Usa il quaderno di lavoro Ronchi in Sezioni del portale."),
       T("Untick it and confirm. Jobs, job emails and job files keep working, and nothing is deleted.", "Desmárquelo y confirme. Los trabajos, sus correos y archivos siguen funcionando y no se borra nada.", "Togli la spunta e conferma. Lavori, email e file dei lavori continuano a funzionare e non si cancella nulla."),
     ],
   },
   {
     id: "admin-controls", area: "people", needs: ["settings.manage"], open: "/settings",
-    title: T("Use the admin controls", "Usar los controles de administrador", "Usare i controlli amministratore"),
-    summary: T("Portal-wide settings: usage, a notice for everyone, sign-in, sections, chat limits, languages, looks and emergency sign-out.", "Ajustes de todo el portal: uso, un aviso para todos, inicio de sesión, secciones, límites de chat, idiomas, aspectos y cierre de sesión de emergencia.", "Impostazioni di tutto il portale: utilizzo, un avviso per tutti, accesso, sezioni, limiti delle chat, lingue, aspetti e disconnessione di emergenza."),
+    title: T("Use the command center", "Usar el centro de mando", "Usare il centro di comando"),
+    summary: T("Only the portal owner sees it: every section's on/off switch, usage, a notice for everyone, sign-in, chat limits, languages, looks and emergency sign-out.", "Solo el dueño del portal lo ve: el interruptor de cada sección, uso, un aviso para todos, inicio de sesión, límites de chat, idiomas, aspectos y cierre de sesión de emergencia.", "Lo vede solo il proprietario del portale: l'interruttore di ogni sezione, utilizzo, un avviso per tutti, accesso, limiti delle chat, lingue, aspetti e disconnessione di emergenza."),
     steps: [
-      T("Open Settings and press Admin controls.", "Abra Configuración y pulse Controles de administrador.", "Apri Impostazioni e premi Controlli amministratore."),
+      T("Open Settings and press Command center.", "Abra Configuración y pulse Centro de mando.", "Apri Impostazioni e premi Centro di comando."),
       T("Change what you need. A bar appears at the bottom; press Save changes, or Discard to undo.", "Cambie lo que necesite. Aparece una barra abajo; pulse Guardar cambios, o Descartar para deshacer.", "Modifica ciò che ti serve. In basso compare una barra; premi Salva modifiche, oppure Scarta per annullare."),
       T("Reset this group puts one group back to how the portal started. Roles and one person's access are changed on People.", "Restablecer este grupo devuelve un grupo a como empezó el portal. Los roles y el acceso de una persona se cambian en Personas.", "Ripristina questo gruppo riporta un gruppo come all'inizio. Ruoli e accesso di una persona si cambiano in Persone."),
     ],

@@ -249,10 +249,14 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   const seg = path.split("/").filter(Boolean);
   const u = me();
   // --- auth & me ---
-  if (path === "/auth/me") return { user: { id: u.id, name: u.name, email: u.email, role: u.role, permissions: [...effective(u.role, u.access, savedPerms(u.role))] }, settings: publicPart(db.settings) };
+  if (path === "/auth/me") return { user: { id: u.id, name: u.name, email: u.email, role: u.role, permissions: [...effective(u.role, u.access, savedPerms(u.role))], owner: u.role === "admin" }, settings: publicPart(db.settings) };
   // --- admin controls ---
   if (path === "/settings" && method === "GET")
-    return { settings: db.settings, defaults: defaults(), sections: SECTIONS, locked: LOCKED_RULES, updatedAt: db.settingsAt, updatedBy: db.settingsAt ? u.name : null };
+    return {
+      settings: db.settings, defaults: defaults(), sections: SECTIONS, locked: LOCKED_RULES, updatedAt: db.settingsAt, updatedBy: db.settingsAt ? u.name : null,
+      owner: { id: u.id, name: u.name }, admins: db.users.filter((x) => x.role === "admin" && x.status === "active").map((x) => ({ id: x.id, name: x.name })),
+    };
+  if (path === "/settings/owner") throw new Fail(400, "The preview has only one admin, so there's nobody to hand it to.");
   if (path === "/settings" || path === "/settings/reset") {
     const d = defaults();
     const input = path === "/settings" ? body : body.group ? { [body.group]: (d as any)[body.group] } : d;
@@ -404,7 +408,7 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   if (path === "/users" && method === "GET")
     return { users: db.users.map((x) => ({ ...x, access: x.role === "admin" ? {} : (x.access ?? {}), permissions: [...effective(x.role, x.access, savedPerms(x.role))], passkeys: 1 + (x.id === u.id ? 1 : 0), sessions: x.status === "active" ? 1 : 0 })), invites: db.invites };
   if (path === "/users/invite") {
-    if (db.settings.people.invitesPaused) throw new Fail(403, "New invites are paused. Turn them back on in Settings > Admin controls.");
+    if (db.settings.people.invitesPaused) throw new Fail(403, "New invites are paused. The portal owner can turn them back on in Settings > Command center.");
     if (!body.name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email ?? "")) throw new Fail(400, "Enter a name and a valid email.");
     db.invites.unshift({ id: id(), email: body.email, name: body.name, role: body.role, expires_at: iso(new Date(Date.now() + 72 * 3600000)) });
     log("invite.create");

@@ -9,6 +9,7 @@ import { listRoles, roleExists, saveRole } from "../lib/role-store";
 import { randomId } from "../../shared/crypto";
 import { isEmail } from "../lib/mail";
 import { endAllSessions } from "../lib/session";
+import { isOwnerId } from "../lib/owner";
 import { getSettings } from "../lib/settings-store";
 import { loginId } from "../../shared/login";
 
@@ -176,7 +177,7 @@ users.get("/", async (c) => {
 /** Invite a new person. Returns the link once; it is never shown again. */
 users.post("/invite", async (c) => {
   const admin = requirePerm(c, "users.manage");
-  if (getSettings().people.invitesPaused) fail(403, "New invites are paused. Turn them back on in Settings > Admin controls.");
+  if (getSettings().people.invitesPaused) fail(403, "New invites are paused. The portal owner can turn them back on in Settings > Command center.");
   const b = await body(c);
   // A work email or a plain username (Aaron, 2026-11-24: "just a username").
   const email = loginId(b.email);
@@ -199,6 +200,7 @@ users.patch("/:id", async (c) => {
   const target = await c.env.DB.prepare("SELECT id, role, status, removed_at FROM users WHERE id = ?").bind(id).first<{ id: string; role: string; status: string; removed_at: string | null }>();
   if (!target) fail(404, "Not found.");
   // A removed person comes back only through Restore, which also clears "removed".
+  if (id !== admin.id && !admin.owner && (b.status !== undefined || b.role !== undefined) && (await isOwnerId(c.env.DB, id))) fail(403, "Only the portal owner can change the owner's login.");
   if (target.removed_at && (b.status !== undefined || b.role !== undefined)) fail(409, "This person was removed. Find them under Removed employees and press Restore.");
   if (id === admin.id && (b.status === "disabled" || (b.role !== undefined && b.role !== "admin"))) {
     fail(400, "You can't remove your own admin access. Ask another admin.");
@@ -238,6 +240,7 @@ users.patch("/:id", async (c) => {
 users.post("/:id/sign-out-everywhere", async (c) => {
   const admin = requirePerm(c, "users.manage");
   const id = c.req.param("id");
+  if (id !== admin.id && !admin.owner && (await isOwnerId(c.env.DB, id))) fail(403, "Only the portal owner can sign out the owner's devices.");
   const n = await endAllSessions(c.env.DB, id);
   await audit(c.env.DB, { userId: admin.id, action: "user.sign_out_all", targetType: "user", targetId: id, detail: { sessions: n }, ip: c.get("ip") });
   return c.json({ ok: true, sessions: n });

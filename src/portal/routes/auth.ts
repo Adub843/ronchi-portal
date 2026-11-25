@@ -62,7 +62,7 @@ export const auth = new Hono<AppEnv>();
 auth.get("/me", (c) => {
   const u = c.get("user");
   return c.json({
-    user: u ? { id: u.id, name: u.name, email: u.email, role: u.role, permissions: [...u.perms] } : null,
+    user: u ? { id: u.id, name: u.name, email: u.email, role: u.role, permissions: [...u.perms], owner: u.owner } : null,
     settings: u ? publicPart(getSettings()) : null,
   });
 });
