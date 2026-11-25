@@ -14,7 +14,7 @@
 // Range requests, so a browser can resume a big download.
 import { Hono } from "hono";
 import { randomId } from "../../shared/crypto";
-import { cleanFolder, MAX_SOFTWARE_BYTES, PART_BYTES, softwareFileName } from "../../shared/software";
+import { cleanFolder, MAX_SOFTWARE_BYTES, PART_BYTES, sharePointLink, softwareFileName } from "../../shared/software";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
 import { body, fail, mustStr, requirePerm, str } from "../lib/http";
@@ -22,7 +22,7 @@ import { body, fail, mustStr, requirePerm, str } from "../lib/http";
 export const software = new Hono<AppEnv>();
 
 interface PackageRow { id: string; name: string; description: string | null; legacy: number; position: number; updated_at: string; files?: number; size?: number }
-interface FileRow { id: string; package_id: string; folder: string; name: string; size: number; upload_id: string | null; ready_at: string | null }
+interface FileRow { id: string; package_id: string; folder: string; name: string; size: number; upload_id: string | null; ready_at: string | null; source_url?: string | null }
 
 const key = (fileId: string) => `software/${fileId}`;
 
@@ -62,6 +62,12 @@ software.get("/files/:id", async (c) => {
   requirePerm(c, "software.view");
   const f = await loadFile(c.env.DB, c.req.param("id"));
   if (!f.ready_at) fail(404, "Not found.");
+  // Kept on SharePoint: send the person there. Their own Microsoft sign-in opens it.
+  if (f.source_url) {
+    const link = sharePointLink(f.source_url);
+    if (!link) fail(404, "Not found.");
+    return new Response(null, { status: 302, headers: { Location: link.download, "Cache-Control": "private, no-store" } });
+  }
   const range = parseRange(c.req.header("range"), f.size);
   const obj = await c.env.FILES.get(key(f.id), range ? { range: { offset: range.start, length: range.end - range.start + 1 } } : undefined);
   if (!obj) fail(404, "Not found.");
@@ -100,10 +106,10 @@ software.get("/:id", async (c) => {
   requirePerm(c, "software.view");
   const p = await loadPackage(c.env.DB, c.req.param("id"));
   const { results } = await c.env.DB.prepare(
-    "SELECT id, folder, name, size, ready_at FROM software_files WHERE package_id = ? AND deleted_at IS NULL AND ready_at IS NOT NULL ORDER BY folder, name",
+    "SELECT id, folder, name, size, ready_at, source_url FROM software_files WHERE package_id = ? AND deleted_at IS NULL AND ready_at IS NOT NULL ORDER BY folder, name",
   ).bind(p.id).all<FileRow>();
   const size = results.reduce((n, f) => n + f.size, 0);
-  return c.json({ package: shapePackage({ ...p, files: results.length, size }), files: results.map((f) => ({ id: f.id, folder: f.folder, name: f.name, size: f.size })) });
+  return c.json({ package: shapePackage({ ...p, files: results.length, size }), files: results.map((f) => ({ id: f.id, folder: f.folder, name: f.name, size: f.size, link: !!f.source_url })) });
 });
 
 // ---------- Packages (software.manage) ----------
@@ -136,7 +142,7 @@ software.patch("/:id", async (c) => {
 software.delete("/:id", async (c) => {
   const u = requirePerm(c, "software.manage");
   const p = await loadPackage(c.env.DB, c.req.param("id"));
-  const { results } = await c.env.DB.prepare("SELECT id, upload_id FROM software_files WHERE package_id = ? AND deleted_at IS NULL").bind(p.id).all<FileRow>();
+  const { results } = await c.env.DB.prepare("SELECT id, upload_id, source_url FROM software_files WHERE package_id = ? AND deleted_at IS NULL").bind(p.id).all<FileRow>();
   for (const f of results) await removeStored(c.env.FILES, f);
   const at = now();
   await c.env.DB.batch([
@@ -165,6 +171,39 @@ software.post("/:id/files", async (c) => {
   await c.env.DB.prepare("INSERT INTO software_files (id, package_id, folder, name, size, upload_id, uploaded_by, created_at) VALUES (?,?,?,?,?,?,?,?)")
     .bind(id, p.id, folder, name, size, upload.uploadId, u.id, now()).run();
   return c.json({ id, partBytes: PART_BYTES, parts: Math.ceil(size / PART_BYTES) });
+});
+
+/**
+ * Add SharePoint links instead of uploading: { folder, links: ["https://…", { url, name }] }.
+ * Nothing is copied; Download sends people to SharePoint.
+ */
+software.post("/:id/links", async (c) => {
+  const u = requirePerm(c, "software.manage");
+  const p = await loadPackage(c.env.DB, c.req.param("id"));
+  const b = await body(c);
+  const folder = cleanFolder(b.folder);
+  if (folder === null) fail(400, "That folder name can't be used.");
+  const raw = Array.isArray(b.links) ? b.links : [];
+  if (!raw.length) fail(400, "Paste at least one SharePoint link.");
+  if (raw.length > 500) fail(400, "Up to 500 links at a time.");
+  const rows: { url: string; name: string }[] = [];
+  for (const item of raw) {
+    const url = typeof item === "string" ? item : String((item as { url?: unknown })?.url ?? "");
+    const given = typeof item === "object" && item ? str((item as { name?: unknown }).name, 255) : null;
+    const link = url.length <= 2000 ? sharePointLink(url) : null;
+    if (!link) fail(400, `That isn't a link to one file on Ronchi's SharePoint: ${url.slice(0, 120)}`);
+    const name = given ?? link.name;
+    if (!name) fail(400, "Give a file name for each sharing link.");
+    rows.push({ url: url.trim(), name: softwareFileName(name) });
+  }
+  const at = now();
+  await c.env.DB.batch(rows.map((r) =>
+    c.env.DB.prepare("INSERT INTO software_files (id, package_id, folder, name, size, source_url, ready_at, uploaded_by, created_at) VALUES (?,?,?,?,0,?,?,?,?)")
+      .bind(randomId(), p.id, folder, r.name, r.url, at, u.id, at),
+  ));
+  await c.env.DB.prepare("UPDATE software_packages SET updated_at = ? WHERE id = ?").bind(at, p.id).run();
+  await audit(c.env.DB, { userId: u.id, action: "software.links.add", targetType: "software_package", targetId: p.id, detail: { count: rows.length, folder }, ip: c.get("ip") });
+  return c.json({ added: rows.length });
 });
 
 /** One piece of a file, as the raw request body. */
@@ -212,7 +251,8 @@ software.delete("/files/:id", async (c) => {
 });
 
 /** Take a file out of the bucket, or call off its upload if it never finished. */
-async function removeStored(bucket: R2Bucket, f: Pick<FileRow, "id" | "upload_id">) {
+async function removeStored(bucket: R2Bucket, f: Pick<FileRow, "id" | "upload_id" | "source_url">) {
+  if (f.source_url) return; // only a link: nothing in the bucket
   if (f.upload_id) {
     await bucket.resumeMultipartUpload(key(f.id), f.upload_id).abort().catch(() => undefined);
   } else {

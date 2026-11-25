@@ -102,3 +102,53 @@ describe("software downloads", () => {
     expect((await admin.json(`/api/software/${id}`)).data.package).toMatchObject({ name: "Allen-Bradley (legacy)", legacy: true });
   });
 });
+
+describe("software kept on SharePoint (Aaron, 2026-11-25: \"we dont have to store the software ... tunnel that file from share point for now\")", () => {
+  const SP = "https://ronchiam.sharepoint.com/sites/HelpReferenceDocuments/Shared%20Documents/0%20-%20Help%20%26%20Technical%20Reference%20Documents/AB%20Studio%205000%20Software";
+
+  it("a package can hold SharePoint links; Download sends people straight to SharePoint", async () => {
+    const admin = await person("admin");
+    const tech = await person("tech");
+    const id = (await admin.json("/api/software", { body: { name: "AB links" } })).data.id;
+    const add = await admin.json(`/api/software/${id}/links`, { body: { folder: "Studio 5000 v32", links: [`${SP}/v32/Studio%205000%20v32.iso`, `${SP}/RSLinx%20Classic%204.21.exe`] } });
+    expect(add.status, JSON.stringify(add.data)).toBe(200);
+    expect(add.data.added).toBe(2);
+    const files = (await tech.json(`/api/software/${id}`)).data.files;
+    expect(files.map((f: any) => [f.folder, f.name, f.link])).toEqual([
+      ["Studio 5000 v32", "RSLinx Classic 4.21.exe", true],
+      ["Studio 5000 v32", "Studio 5000 v32.iso", true],
+    ]);
+    const res = await tech.fetch(`/api/software/files/${files[1].id}`);
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(
+      "https://ronchiam.sharepoint.com/sites/HelpReferenceDocuments/_layouts/15/download.aspx?SourceUrl=" +
+        encodeURIComponent("/sites/HelpReferenceDocuments/Shared Documents/0 - Help & Technical Reference Documents/AB Studio 5000 Software/v32/Studio 5000 v32.iso"),
+    );
+    // Removing a link only removes the link.
+    expect((await admin.fetch(`/api/software/files/${files[0].id}`, { method: "DELETE" })).status).toBe(200);
+    expect((await tech.json(`/api/software/${id}`)).data.files).toHaveLength(1);
+  });
+
+  it("takes the SharePoint page link (AllItems.aspx?id=...) and sharing links too", async () => {
+    const admin = await person("admin");
+    const id = (await admin.json("/api/software", { body: { name: "AB page links" } })).data.id;
+    const page = "https://ronchiam.sharepoint.com/sites/HelpReferenceDocuments/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2FHelpReferenceDocuments%2FShared%20Documents%2FAB%2FFTView%2014.zip&parent=%2Fsites";
+    const share = "https://ronchiam.sharepoint.com/:u:/s/HelpReferenceDocuments/EaBcDeF123?e=xyz";
+    const add = await admin.json(`/api/software/${id}/links`, { body: { links: [page, { url: share, name: "KEPServerEX 6.exe" }] } });
+    expect(add.status, JSON.stringify(add.data)).toBe(200);
+    const files = (await admin.json(`/api/software/${id}`)).data.files;
+    const byName = Object.fromEntries(files.map((f: any) => [f.name, f.id]));
+    expect((await admin.fetch(`/api/software/files/${byName["FTView 14.zip"]}`)).headers.get("location")).toContain("download.aspx?SourceUrl=" + encodeURIComponent("/sites/HelpReferenceDocuments/Shared Documents/AB/FTView 14.zip"));
+    expect((await admin.fetch(`/api/software/files/${byName["KEPServerEX 6.exe"]}`)).headers.get("location")).toBe(`${share}&download=1`);
+  });
+
+  it("only Ronchi SharePoint file links, only for people who manage software", async () => {
+    const admin = await person("admin");
+    const tech = await person("tech");
+    const id = (await admin.json("/api/software", { body: { name: "Guarded" } })).data.id;
+    expect((await tech.json(`/api/software/${id}/links`, { body: { links: [`${SP}/a.exe`] } })).status).toBe(403);
+    for (const bad of ["https://evil.example.com/a.exe", "http://ronchiam.sharepoint.com/sites/x/a.exe", "https://ronchiam.sharepoint.com.evil.com/sites/x/a.exe", "javascript:alert(1)", SP]) {
+      expect((await admin.json(`/api/software/${id}/links`, { body: { links: [bad] } })).status, bad).toBe(400);
+    }
+  });
+});

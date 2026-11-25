@@ -55,3 +55,32 @@ export function fmtBytes(bytes: number): string {
   if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(bytes < 10 * 1024 ** 2 ? 1 : 0)} MB`;
   return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }
+
+/**
+ * A Ronchi SharePoint file link turned into its direct download address, and the file's name.
+ * Takes the three kinds of link people copy: the file's own address, the library page link
+ * (…/Forms/AllItems.aspx?id=/sites/…/file.exe) and a sharing link (…/:u:/s/Site/Token).
+ * Only https links on a *.sharepoint.com address; null for anything else, and for a folder
+ * (no file extension), because a folder can't be downloaded as one link.
+ */
+export function sharePointLink(input: string): { download: string; name: string | null } | null {
+  let u: URL;
+  try {
+    u = new URL(input.trim());
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" || !/^[a-z0-9-]+\.sharepoint\.com$/i.test(u.hostname) || u.username || u.password) return null;
+  // Sharing link: SharePoint downloads it when download=1 is added.
+  if (/^\/:[a-z]:\//i.test(u.pathname)) {
+    u.searchParams.set("download", "1");
+    return { download: u.toString(), name: null };
+  }
+  let path = u.searchParams.get("id") ?? decodeURIComponent(u.pathname);
+  if (!path.startsWith("/sites/") && !path.startsWith("/teams/")) return null;
+  if (/\/Forms\/[^/]+\.aspx$/i.test(path) || path.includes("/_layouts/")) return null;
+  const name = path.split("/").pop() ?? "";
+  if (!/\.[A-Za-z0-9]{1,8}$/.test(name)) return null; // a folder
+  const site = path.split("/").slice(0, 3).join("/"); // /sites/HelpReferenceDocuments
+  return { download: `https://${u.hostname}${site}/_layouts/15/download.aspx?SourceUrl=${encodeURIComponent(path)}`, name };
+}
