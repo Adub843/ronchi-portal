@@ -193,79 +193,108 @@ const GROUP_HEAD = /^(?:\d{1,2}\.\d{1,2}\s+)?GRUPP[IO]\b/i;
 // ---------- Older manuals: the table on its own page ----------
 //
 // Manuals up to about machine 4000 print each assembly as two pages: the drawing page, then the
-// table page. The table has a header line
+// table page. The table has a header line, which differs a little from manual to manual:
 //     ITEM  CODE  REV.  DESCRIZIONE  DESCRIPTION  SPEC.  QTY
+//     ITEM CODE  REV. DESCRIZIONE  DESCRIPTION  QTY          (words run together, no SPEC.)
+//     CODE  REV.  DESCRIZIONE  BESCHREIBUNG  QTY             (no ITEM, another second language)
 // with the assembly's own number and names on the line above it ("GS089663/A  RIEMPITRICE
-// FILLING MACHINE"). Every cell is its own piece of text, so the columns are read by where the
-// header words sit. The drawing page has no text at all: its balloon numbers are drawn as lines,
-// so this reader can't place balloons (the PC loader finds them by reading the picture).
+// FILLING MACHINE"). The second-language word, SPEC. and QTY always stand alone, so the names,
+// the SPEC. text and the quantity are read by where those words sit; the position, part number
+// and revision at the start of a row are told apart by what they are. A table without ITEM has
+// no position numbers at all, and its rows come back with an empty position. The drawing page
+// has no text: its balloon numbers are drawn as lines, so this reader can't place balloons (the
+// PC loader finds them by reading the picture).
 
-const HEAD_WORDS = { item: /^ITEM$/i, code: /^CODE$/i, rev: /^REV\.?$/i, it: /^DESCRIZIONE$/i, en: /^DESCRIPTION$/i, spec: /^SPEC\.?$/i, qty: /^Q\.?TY\.?$/i };
 const OWN_CODE = /^(.+?)(?:\/([A-Z0-9]{1,2}))?$/;
 
 const listSheets = new WeakSet<ParsedSheet>();
 
 function readListPage(page: PageText): ParsedSheet | null {
   const items = page.items.filter((t) => t.str.trim());
-  const find = (re: RegExp, near?: number) => items.find((t) => re.test(t.str.trim()) && (near === undefined || Math.abs(t.y - near) < 6));
-  const item = find(HEAD_WORDS.item);
-  if (!item) return null;
-  const col = { item, code: find(HEAD_WORDS.code, item.y), it: find(HEAD_WORDS.it, item.y), en: find(HEAD_WORDS.en, item.y), qty: find(HEAD_WORDS.qty, item.y), rev: find(HEAD_WORDS.rev, item.y), spec: find(HEAD_WORDS.spec, item.y) };
-  if (!col.code || !col.it || !col.en || !col.qty) return null;
-  const x = { code: col.code.x - 4, rev: (col.rev?.x ?? col.it.x) - 6, it: col.it.x - 4, en: col.en.x - 4, spec: (col.spec?.x ?? col.qty.x - 60) - 4, qty: col.qty.x - 14 };
+  const word = (t: TextItem) => t.str.trim();
+  const qtyHead = items.find((t) => /^Q\.?TY\.?$/i.test(word(t)));
+  if (!qtyHead) return null;
+  const headLine = items.filter((t) => Math.abs(t.y - qtyHead.y) < 6);
+  const codeHead = headLine.find((t) => /(?:^|\s)CODE$/i.test(word(t)));
+  const itHead = headLine.find((t) => /(?:^|\s)DESCRIZIONE$/i.test(word(t)));
+  if (!codeHead || !itHead) return null;
+  const specHead = headLine.find((t) => /^SPEC\.?$/i.test(word(t)));
+  // The second language's heading: the word standing alone between DESCRIZIONE and SPEC. or QTY.
+  const enHead = headLine
+    .filter((t) => t !== specHead && t !== qtyHead && t.x > itHead.x && /^\p{L}{4,}$/u.test(word(t)))
+    .sort((a, b) => a.x - b.x)[0];
+  if (!enHead) return null;
+  const hasItem = headLine.some((t) => /^ITEM(?:\s|$)/i.test(word(t)));
+  const x = { en: enHead.x - 4, spec: specHead ? specHead.x - 4 : qtyHead.x - 14, qty: qtyHead.x - 14 };
   const text = (list: TextItem[]) => [...list].sort((a, b) => a.y - b.y || a.x - b.x).map((t) => t.str.trim()).join(" ").replace(/\s+/g, " ");
   const warnings: string[] = [];
   const sheet: ParsedSheet = { page: page.page, code: null, rev: null, titleIt: "", titleEn: "", group: null, rows: [], balloons: [], warnings };
 
   // The assembly's own line: just above the header, never the page header (machine number, chapter).
-  const lineH = Math.max(item.h, 6);
-  const own = items.filter((t) => t.y < item.y - lineH * 0.5 && t.y > item.y - lineH * 3.2);
-  for (const t of own.filter((o) => o.x < x.it)) {
-    const m = OWN_CODE.exec(t.str.trim().toUpperCase().replace(/\s+/g, ""));
+  const lineH = Math.max(codeHead.h, 6);
+  const own = items.filter((t) => t.y < qtyHead.y - lineH * 0.5 && t.y > qtyHead.y - lineH * 3.2);
+  let ownCode: TextItem | undefined;
+  for (const t of own.filter((o) => o.x < x.en).sort((a, b) => a.x - b.x)) {
+    const m = OWN_CODE.exec(word(t).toUpperCase().replace(/\s+/g, ""));
     if (m && isPartCode(m[1]!)) {
       sheet.code = m[1]!;
       sheet.rev = m[2] ?? null;
+      ownCode = t;
       break;
     }
   }
-  sheet.titleIt = text(own.filter((t) => t.x >= x.it && t.x < x.en));
+  sheet.titleIt = text(own.filter((t) => t !== ownCode && t.x < x.en));
   sheet.titleEn = text(own.filter((t) => t.x >= x.en));
 
-  // Rows: every position number under ITEM starts a row; other cells join the nearest one.
-  const below = items.filter((t) => t.y > item.y + lineH * 0.5 && t.y < page.height * 0.94);
-  const anchors = below.filter((t) => t.x < x.code && INT.test(t.str.trim())).sort((a, b) => a.y - b.y);
-  if (!anchors.length) return sheet.code ? sheet : null;
+  // Rows. A row starts where the first cell of a line is a position number (when the table has
+  // ITEM) or a part number; every other cell joins the nearest row, so a SPEC. printed over two
+  // lines stays with its part.
+  const below = items.filter((t) => t.y > qtyHead.y + lineH * 0.5 && t.y < page.height * 0.94);
   const mid = (t: TextItem) => t.y + t.h / 2;
-  const cells = anchors.map(() => [] as TextItem[]);
+  const left = below.filter((t) => t.x < x.en).sort((a, b) => a.x - b.x);
+  const starts: { pos: string; code: TextItem | undefined; rev: TextItem | undefined; at: number; cells: TextItem[] }[] = [];
+  const taken = new Set<TextItem>();
+  for (const t of left) {
+    if (taken.has(t)) continue;
+    const line = left.filter((o) => Math.abs(mid(o) - mid(t)) < lineH * 0.45);
+    if (line[0] !== t) continue;
+    const isPos = hasItem && INT.test(word(t));
+    const isCode = isPartCode(word(t).toUpperCase().replace(/\s+/g, ""));
+    if (!isPos && !isCode) continue;
+    const code = isPos ? line[1] : t;
+    const after = code ? line[line.indexOf(code) + 1] : undefined;
+    const rev = after && REV.test(word(after)) ? after : undefined;
+    for (const o of [t, code, rev]) if (o) taken.add(o);
+    starts.push({ pos: isPos ? word(t) : "", code, rev, at: mid(t), cells: [] });
+  }
+  if (!starts.length) return sheet.code ? sheet : null;
+  starts.sort((a, b) => a.at - b.at);
   for (const t of below) {
-    if (t.x < x.code) continue;
-    let best = 0;
-    for (let i = 1; i < anchors.length; i++) if (Math.abs(mid(anchors[i]!) - mid(t)) < Math.abs(mid(anchors[best]!) - mid(t))) best = i;
-    if (Math.abs(mid(anchors[best]!) - mid(t)) < lineH * 2.5) cells[best]!.push(t);
+    if (taken.has(t)) continue;
+    let best = starts[0]!;
+    for (const r of starts) if (Math.abs(r.at - mid(t)) < Math.abs(best.at - mid(t))) best = r;
+    if (Math.abs(best.at - mid(t)) < lineH * 2.5) best.cells.push(t);
   }
   const seen = new Set<string>();
-  anchors.forEach((a, i) => {
-    const c = cells[i]!;
-    const pos = a.str.trim();
-    const raw = text(c.filter((t) => t.x >= x.code && t.x < x.rev)).toUpperCase().replace(/\s+/g, "");
+  for (const r of starts) {
+    const raw = r.code ? word(r.code).toUpperCase().replace(/\s+/g, "") : "";
     if (!isPartCode(raw)) {
-      if (raw) warnings.push(`Position ${pos}: "${raw.slice(0, 30)}" is not a Ronchi part number, left out.`);
-      return;
+      if (raw) warnings.push(`Position ${r.pos}: "${raw.slice(0, 30)}" is not a Ronchi part number, left out.`);
+      continue;
     }
-    if (seen.has(`${pos}|${raw}`)) return;
-    seen.add(`${pos}|${raw}`);
-    const rev = text(c.filter((t) => t.x >= x.rev && t.x < x.it));
-    const qtyText = text(c.filter((t) => t.x >= x.qty)).replace(",", ".");
+    if (seen.has(`${r.pos}|${raw}`)) continue;
+    seen.add(`${r.pos}|${raw}`);
+    const qtyText = text(r.cells.filter((t) => t.x >= x.qty)).replace(",", ".");
     const qm = /^(\d{1,4}(?:\.\d{1,3})?)\s*([A-Za-z.]*)$/.exec(qtyText);
     const qty = qm ? Number(qm[1]) : null;
     if (qty === null) warnings.push(`Row ${raw} has no quantity.`);
     sheet.rows.push({
-      pos, code: raw, rev: REV.test(rev) ? rev : null,
-      nameIt: text(c.filter((t) => t.x >= x.it && t.x < x.en)),
-      nameEn: text(c.filter((t) => t.x >= x.en && t.x < x.spec)),
+      pos: r.pos, code: raw, rev: r.rev ? word(r.rev) : null,
+      nameIt: text(r.cells.filter((t) => t.x < x.en)),
+      nameEn: text(r.cells.filter((t) => t.x >= x.en && t.x < x.spec)),
       qty, unit: qm && /^m(?:t|\.)?$/i.test(qm[2] ?? "") ? "m" : null,
     });
-  });
+  }
   if (!sheet.code) warnings.push("The sheet's own part code was not found.");
   listSheets.add(sheet);
   return sheet;

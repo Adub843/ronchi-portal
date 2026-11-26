@@ -143,6 +143,40 @@ describe("older manuals with the table on its own page", () => {
     expect(s.warnings).toEqual(['Position 24: "XYZ" is not a Ronchi part number, left out.']);
   });
 
+  it("reads a table whose header words run together and has no SPEC. column", () => {
+    const s = readPage({
+      page: 7, width: 595, height: 842,
+      items: [
+        ...head, t("GS072091/A", 65, 109, 47), t("RIEMPITRICE", 169, 109, 50), t("FILLER", 345, 109, 25),
+        t("ITEM CODE", 65, 123, 45), t("REV. DESCRIZIONE", 140, 123, 80), t("DESCRIPTION", 345, 123, 48), t("QTY", 520, 123, 15),
+        t("1", 75, 134, 4, 7), t("CA000426", 93, 134, 32, 7), t("A", 149, 134, 5, 7), t("SUPPORTO", 168, 134, 40, 7), t("SUPPORT", 344, 134, 30, 7), t("1", 528, 134, 4, 7),
+        t("10", 73, 144, 8, 7), t("CD031803", 93, 144, 32, 7), t("D", 149, 144, 5, 7), t("STAFFA", 168, 144, 25, 7), t("24", 526, 144, 8, 7), t("BRACKET", 344, 144, 30, 7),
+      ],
+    });
+    expect(s).toMatchObject({ code: "GS072091", rev: "A", titleIt: "RIEMPITRICE", titleEn: "FILLER", warnings: [] });
+    expect(s.rows).toEqual([
+      { pos: "1", code: "CA000426", rev: "A", nameIt: "SUPPORTO", nameEn: "SUPPORT", qty: 1, unit: null },
+      { pos: "10", code: "CD031803", rev: "D", nameIt: "STAFFA", nameEn: "BRACKET", qty: 24, unit: null },
+    ]);
+  });
+
+  it("reads a table with no ITEM column and another second language, leaving the positions empty", () => {
+    const s = readPage({
+      page: 7, width: 595, height: 842,
+      items: [
+        ...head, t("GF007069/C", 65, 110, 47), t("RUOTA SUPPORTO ANELLO RM", 145, 110, 110), t("RAD STÜTZE RING RM", 332, 110, 80),
+        t("BESCHREIBUNG", 332, 124, 55), t("CODE", 65, 124, 22), t("REV. DESCRIZIONE", 114, 124, 80), t("QTY", 519, 124, 15),
+        t("CD036605", 64, 136, 32, 7), t("A", 124, 136, 5, 7), t("PIATTO", 144, 136, 25, 7), t("TELLER", 331, 136, 25, 7), t("1", 527, 136, 4, 7),
+        t("CM003071", 64, 147, 32, 7), t("A", 124, 147, 5, 7), t("DADO", 144, 147, 20, 7), t("MUTTER", 331, 147, 25, 7), t("4", 527, 147, 4, 7),
+      ],
+    });
+    expect(s).toMatchObject({ code: "GF007069", rev: "C", titleIt: "RUOTA SUPPORTO ANELLO RM", titleEn: "RAD STÜTZE RING RM", warnings: [] });
+    expect(s.rows).toEqual([
+      { pos: "", code: "CD036605", rev: "A", nameIt: "PIATTO", nameEn: "TELLER", qty: 1, unit: null },
+      { pos: "", code: "CM003071", rev: "A", nameIt: "DADO", nameEn: "MUTTER", qty: 4, unit: null },
+    ]);
+  });
+
   it("draws the sheet from the page before the table, and joins a table that runs over two pages", () => {
     const more = list(34, "GF089845/A", cells(124, "25", "CM009055", "A", "CHIUSURA", "CLOSING DEVICE", "2"));
     const { sheets } = readChapter11([{ ...DRAWING, page: 32 }, TABLE]);
