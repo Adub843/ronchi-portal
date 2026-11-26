@@ -8,7 +8,8 @@ import { IC, Ib } from "./icons";
 import type { Balloon } from "./Drawing2D";
 import { w, type Lang } from "./words";
 
-const START = { rx: 52, rz: -16, s: 1, x: 0, y: 0 };
+// s is the zoom on top of the flat fit; 0 means "fill the view as it lies now" (see fit below).
+const START = { rx: 52, rz: -16, s: 0, x: 0, y: 0 };
 const MIN = 0.3;
 const MAX = 10;
 
@@ -27,7 +28,8 @@ export function DrawingTilt({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [view, setView] = useState(START);
-  const [base, setBase] = useState(0.2);   // the scale at which the whole sheet fits the box
+  const [base, setBase] = useState(0.2);   // the scale at which the whole sheet fits the box, seen flat
+  const [fit, setFit] = useState(1);       // how much larger the tilted sheet can be and still fit
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [full, setFull] = useState(false);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -35,7 +37,16 @@ export function DrawingTilt({
 
   const measure = useCallback(() => {
     const el = box.current;
-    if (el) setBase(Math.min(el.clientWidth / width, el.clientHeight / height) * 0.9);
+    if (!el) return;
+    const flat = Math.min(el.clientWidth / width, el.clientHeight / height) * 0.9;
+    // Lying tilted, the sheet covers less of the view than it does flat, a tall page most of all,
+    // so it opens at the size its tilted outline fills the view instead of small in the middle.
+    const rz = (Math.abs(START.rz) * Math.PI) / 180;
+    const across = width * Math.cos(rz) + height * Math.sin(rz);
+    const down = (width * Math.sin(rz) + height * Math.cos(rz)) * Math.cos((START.rx * Math.PI) / 180);
+    const tilted = Math.min(el.clientWidth / across, el.clientHeight / down) * 0.86;
+    setBase(flat);
+    setFit(Math.max(1, tilted / flat));
   }, [width, height]);
 
   useEffect(() => {
@@ -47,7 +58,9 @@ export function DrawingTilt({
     return () => ro.disconnect();
   }, [measure, full]);
 
-  const zoom = (factor: number) => setView((v) => ({ ...v, s: Math.min(MAX, Math.max(MIN, v.s * factor)) }));
+  const fitNow = useRef(1);
+  fitNow.current = fit;
+  const zoom = (factor: number) => setView((v) => ({ ...v, s: Math.min(MAX, Math.max(MIN, (v.s || fitNow.current) * factor)) }));
 
   useEffect(() => {
     const el = box.current;
@@ -91,7 +104,7 @@ export function DrawingTilt({
     drag.current = null;
   }
 
-  const s = base * view.s;
+  const s = base * (view.s || fit);
   // Balloons stand a fixed distance off the paper on screen, whatever the zoom.
   const lift = 14 / s;
 
@@ -100,7 +113,7 @@ export function DrawingTilt({
       <div className="cv-tools" role="toolbar" aria-label={w(lang, "3D")}>
         {lead}
         <Ib icon={IC.home} label={w(lang, "Fit")} onClick={() => setView(START)} />
-        <Ib icon={IC.drawing} label={w(lang, "Look straight down")} pressed={view.rx === 0 && view.rz === 0} onClick={() => setView((v) => ({ ...v, rx: 0, rz: 0 }))} />
+        <Ib icon={IC.drawing} label={w(lang, "Look straight down")} pressed={view.rx === 0 && view.rz === 0} onClick={() => setView({ rx: 0, rz: 0, s: 1, x: 0, y: 0 })} />
         <Ib icon={IC.zoomIn} label={w(lang, "Zoom in")} onClick={() => zoom(1.4)} />
         <Ib icon={IC.zoomOut} label={w(lang, "Zoom out")} onClick={() => zoom(1 / 1.4)} />
         <Ib icon={full ? IC.unfull : IC.full} label={w(lang, full ? "Exit full screen" : "Full screen")} pressed={full} onClick={() => setFull(!full)} />
