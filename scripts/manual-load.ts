@@ -7,6 +7,7 @@
 //
 //   node node_modules/.cache/manual-load.mjs [--dry-run] [--replace] <machine number> <chapter11.pdf>
 //   node node_modules/.cache/manual-load.mjs [--dry-run] [--replace] --list jobs.tsv     (machine number <TAB> pdf path per line)
+//   --no-balloons skips reading drawn balloon numbers off the pictures (scripts/balloons.ts), which is the slow part.
 //
 // A machine that already has parts lists is skipped unless --replace is given, so a catalog that
 // staff or an earlier import built is never overwritten by accident. A machine the portal doesn't
@@ -15,6 +16,7 @@ import { appendFileSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { homedir } from "node:os";
 import { createCanvas } from "@napi-rs/canvas";
+import { closeReader, findBalloons } from "./balloons";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { guessSection, linkSubAssemblies, readChapter11, type PageText, type TextItem } from "../src/shared/catalog/chapter11";
 
@@ -23,6 +25,7 @@ const LOG = process.env.RONCHI_MANUAL_LOG ?? "C:\\ronchi-cad\\probe\\manual-load
 const args = process.argv.slice(2);
 const dry = args.includes("--dry-run");
 const replace = args.includes("--replace");
+const readBalloons = !args.includes("--no-balloons");
 const listAt = args.indexOf("--list");
 const rest = args.filter((a, i) => !a.startsWith("--") && !(listAt >= 0 && i === listAt + 1));
 const jobs: { serial: string; pdf: string }[] = listAt >= 0
@@ -63,7 +66,7 @@ async function pageImage(doc: pdfjs.PDFDocumentProxy, n: number, longSide = 3600
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   await page.render({ canvas: canvas as never, canvasContext: ctx as never, viewport: vp }).promise;
   page.cleanup();
-  return { bytes: await canvas.encode("webp", 82), w: canvas.width, h: canvas.height };
+  return { bytes: await canvas.encode("webp", 82), w: canvas.width, h: canvas.height, canvas, pointsWide: vp1.width };
 }
 
 const note = (serial: string, what: string, detail: Record<string, unknown> = {}) => {
@@ -87,7 +90,28 @@ for (const job of jobs) {
     if (!sheets.length) { failed++; note(serial, "nothing read: no parts tables with text (the PDF may be scanned pictures)", { pages: doc.numPages }); continue; }
     const parents = linkSubAssemblies(sheets);
     const warnings = sheets.flatMap((s) => s.warnings.map((x) => `Page ${s.page}: ${x}`));
-    if (dry) { done++; note(serial, "dry run", { pages: doc.numPages, sheets: sheets.length, rows, noNumber: sheets.filter((x) => !x.code).length, noDrawing: sheets.filter((x) => !x.balloons.length && x.drawingPage === undefined).length, warnings: warnings.length }); continue; }
+
+    // One picture per drawing. Older manuals draw their balloon numbers instead of typing them,
+    // so those are read off the picture here, before the parts lists are sent.
+    const pictures = new Map<number, { bytes: Buffer; w: number; h: number }>();
+    const sizes = new Map<number, number>();
+    let drawn = 0, spots = 0, noSpot = 0;
+    for (const s of sheets) {
+      const img = await pageImage(doc, s.drawingPage ?? s.page);
+      pictures.set(s.page, { bytes: img.bytes, w: img.w, h: img.h });
+      if (!readBalloons || s.balloons.length || s.drawingPage === undefined || !s.rows.length) continue;
+      const settled = [...sizes].find(([, n]) => n >= 3)?.[0];
+      const found = await findBalloons(img.canvas, img.pointsWide, new Set(s.rows.map((r) => r.pos)), settled);
+      if (found.radius) sizes.set(found.radius, (sizes.get(found.radius) ?? 0) + 1);
+      s.balloons = found.balloons;
+      drawn++;
+      const have = new Set(found.balloons.map((b) => b.pos));
+      spots += have.size;
+      noSpot += s.rows.filter((r) => !have.has(r.pos)).length;
+      if (drawn % 20 === 0) console.log(`  ${serial}: balloons read on ${drawn} drawings`);
+    }
+    const balloonNote = drawn ? { drawingsWithDrawnBalloons: drawn, rowsWithSpot: spots, rowsWithoutSpot: noSpot } : {};
+    if (dry) { done++; note(serial, "dry run", { pages: doc.numPages, sheets: sheets.length, rows, noNumber: sheets.filter((x) => !x.code).length, noDrawing: sheets.filter((x) => !x.balloons.length && x.drawingPage === undefined).length, warnings: warnings.length, ...balloonNote }); continue; }
 
     const res = await fetch(`${PORTAL}/api/catalog-loader/machines/${encodeURIComponent(serial)}/import`, {
       method: "POST", headers: { ...auth, "content-type": "application/json" },
@@ -106,18 +130,18 @@ for (const job of jobs) {
     const ids = ((await res.json()) as { sheets: { key: string; id: string }[] }).sheets;
     let drawings = 0, bytes = 0, bad = 0;
     for (const { key, id } of ids) {
-      // Older manuals print the drawing on the page before the table.
-      const img = await pageImage(doc, sheets.find((x) => x.page === Number(key))?.drawingPage ?? Number(key));
+      const img = pictures.get(Number(key))!;
       const put = await fetch(`${PORTAL}/api/catalog-loader/sheets/${id}/drawing?w=${img.w}&h=${img.h}`, { method: "PUT", headers: { ...auth, "content-type": "image/webp" }, body: img.bytes });
       if (put.ok) { drawings++; bytes += img.bytes.byteLength; } else bad++;
     }
     await doc.destroy();
     if (bad) failed++; else done++;
-    note(serial, bad ? "loaded, but some drawings were refused" : "loaded", { sheets: ids.length, rows, drawings, drawingsRefused: bad, mb: +(bytes / 1048576).toFixed(1), warnings: warnings.length, seconds: Math.round((Date.now() - t0) / 1000) });
+    note(serial, bad ? "loaded, but some drawings were refused" : "loaded", { ...balloonNote, sheets: ids.length, rows, drawings, drawingsRefused: bad, mb: +(bytes / 1048576).toFixed(1), warnings: warnings.length, seconds: Math.round((Date.now() - t0) / 1000) });
   } catch (e) {
     failed++;
     note(serial, `failed: ${(e as Error).message}`);
   }
 }
+await closeReader();
 console.log(`\n${done} machines ${dry ? "read" : "loaded"}, ${skipped} skipped, ${failed} failed.`);
 process.exit(failed ? 1 : 0);
