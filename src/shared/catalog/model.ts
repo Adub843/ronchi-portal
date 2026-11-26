@@ -44,6 +44,8 @@ export interface ParsedSheet {
   rows: SheetRow[];
   balloons: (Hotspot & { pos: string })[];
   warnings: string[];
+  /** Older manuals print the drawing on the page before its table: the page to draw. Unset = the same page. */
+  drawingPage?: number;
 }
 
 /**

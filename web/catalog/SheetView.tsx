@@ -5,6 +5,7 @@
 import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
 import { IC } from "./icons";
 import { Drawing2D, type Balloon } from "./Drawing2D";
+import { DrawingTilt } from "./DrawingTilt";
 import { PartsList, type Row } from "./PartsList";
 import { partName, w, type Lang } from "./words";
 
@@ -51,7 +52,9 @@ export function SheetView({
   const q = version ? `?v=${encodeURIComponent(version)}` : "";
   const title = [sheet.code, sheet.title].filter(Boolean).join(" - ");
 
-  const lead = sheet.drawing && sheet.model ? (
+  // A sheet with a drawing always has a 3D side: the CAD model when there is one, the drawing itself
+  // lying in the 3D view when there isn't (DrawingTilt).
+  const lead = sheet.drawing ? (
     <span className="cv-switch" role="tablist" aria-label={w(lang, "Drawing or 3D")}>
       <button type="button" role="tab" aria-selected={tab === "drawing"} title={w(lang, "Drawing")} aria-label={w(lang, "Drawing")} onClick={() => setTab("drawing")}>{IC.drawing}</button>
       <button type="button" role="tab" aria-selected={tab === "model"} title={w(lang, "3D")} aria-label={w(lang, "3D")} onClick={() => setTab("model")}>{IC.model}</button>
@@ -131,6 +134,20 @@ export function SheetView({
                 fileName={[sheet.code, sheet.title].filter(Boolean).join(" ")}
               />
             </Suspense>
+          )}
+          {tab === "model" && !sheet.model && sheet.drawing && (
+            <DrawingTilt
+              key={`${sheet.id}${q}`}
+              src={fileUrl("drawing") + q}
+              width={sheet.drawing.w}
+              height={sheet.drawing.h}
+              balloons={balloons}
+              selected={row?.pos ?? null}
+              onPick={(pos) => setRowId(rows.find((r) => r.pos === pos)?.id ?? null)}
+              lang={lang}
+              lead={lead}
+              label={subtitle}
+            />
           )}
           {!sheet.drawing && !sheet.model && <p className="cv-msg cv-empty">{w(lang, "No drawing for this parts list yet. The list on the right is complete.")}</p>}
           {sheet.prev && <button type="button" className="mv-side-arrow left" onClick={() => onOpenSheet(sheet.prev!)} aria-label={w(lang, "Previous sheet")} title={w(lang, "Previous sheet")}>{IC.prev}</button>}

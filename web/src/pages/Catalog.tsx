@@ -20,7 +20,7 @@ import type { Row } from "../../catalog/PartsList";
 import { codeOf } from "../../catalog/codes";
 import { findAssemblies } from "../../catalog/split";
 import { w, type Word } from "../../catalog/words";
-import { linkSubAssemblies, readChapter11, type PageText } from "../../../src/shared/catalog/chapter11";
+import { guessSection, linkSubAssemblies, readChapter11, type PageText } from "../../../src/shared/catalog/chapter11";
 import { cleanPartCode, type ParsedSheet } from "../../../src/shared/catalog/model";
 import "../../catalog/catalog.css";
 
@@ -225,7 +225,7 @@ function CatalogMachine({ id, me }: { id: string; me: Me }) {
           {data.imports.map((i: any) => (
             <details key={i.id} className="imp">
               <summary>
-                {i.file_name} · {t("{n} drawings, {rows} rows", { n: i.sheets, rows: i.rows })} · {i.by_name} · {fmtTime(i.created_at)}
+                {i.file_name} · {t("{n} drawings, {rows} rows", { n: i.sheets, rows: i.rows })} · {i.by_name ?? t("Read on the office PC")} · {fmtTime(i.created_at)}
                 {i.warnings.length > 0 && <span className="cv-tag">{t("{n} to check", { n: i.warnings.length })}</span>}
               </summary>
               <ul>{i.warnings.map((x: string, k: number) => <li key={k}>{x}</li>)}</ul>
@@ -346,13 +346,6 @@ function AddSheet({ machineId, sheets, onDone }: { machineId: string; sheets: Tr
 
 // ---------- Reading a manual ----------
 
-function guessSection(s: ParsedSheet): string {
-  const text = `${s.group ?? ""} ${s.titleEn} ${s.titleIt}`.toLowerCase();
-  if (/format|change ?part|cambio/.test(text)) return "format";
-  if (/elevat|elevator/.test(text)) return "elevator";
-  return "machine";
-}
-
 function ImportManual({ machineId, onDone }: { machineId: string; onDone: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [range, setRange] = useState({ from: "", to: "" });
@@ -415,7 +408,9 @@ function ImportManual({ machineId, onDone }: { machineId: string; onDone: () => 
       const ids: { key: string; id: string }[] = r.sheets;
       for (let i = 0; i < ids.length; i++) {
         setStep(t("Saving drawing {n} of {total}", { n: i + 1, total: ids.length }));
-        const img = await pdf.pageImage(doc, Number(ids[i]!.key));
+        // Older manuals print the drawing on the page before the table.
+        const page = Number(ids[i]!.key);
+        const img = await pdf.pageImage(doc, result.sheets.find((x) => x.page === page)?.drawingPage ?? page);
         await apiPut(`/catalog/sheets/${enc(ids[i]!.id)}/drawing?w=${img.w}&h=${img.h}`, img.blob, img.blob.type);
       }
       toast(t("Imported {n} drawings", { n: ids.length }));

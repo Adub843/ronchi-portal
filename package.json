@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "ronchi-portal",
   "private": true,
   "version": "0.1.0",
@@ -22,6 +22,9 @@
     "build:demo": "vite build --config web/vite.demo.config.ts && node scripts/inline-demo.mjs",
     "cad:check": "esbuild scripts/cad-check.ts --bundle --platform=node --format=esm --external:occt-import-js --log-level=warning --outfile=node_modules/.cache/cad-check.mjs && node node_modules/.cache/cad-check.mjs",
     "cad:library": "esbuild scripts/cad-library.ts --bundle --platform=node --format=esm --external:occt-import-js --log-level=warning --outfile=node_modules/.cache/cad-library.mjs && node --max-old-space-size=12288 node_modules/.cache/cad-library.mjs",
+    "manual:check": "esbuild scripts/manual-check.ts --bundle --platform=node --format=esm --external:pdfjs-dist --log-level=warning --outfile=node_modules/.cache/manual-check.mjs && node node_modules/.cache/manual-check.mjs",
+    "manual:build": "esbuild scripts/manual-load.ts --bundle --platform=node --format=esm --external:pdfjs-dist --external:@napi-rs/canvas --external:tesseract.js --log-level=warning --outfile=node_modules/.cache/manual-load.mjs",
+    "manual:load": "npm run manual:build && node --max-old-space-size=8192 node_modules/.cache/manual-load.mjs",
     "cad:load": "esbuild scripts/cad-load.ts --bundle --platform=node --format=esm --external:occt-import-js --log-level=warning --outfile=node_modules/.cache/cad-load.mjs && node --max-old-space-size=12288 node_modules/.cache/cad-load.mjs",
     "loader:key": "node scripts/set-loader-key.mjs",
     "owner": "node scripts/set-owner.mjs"
@@ -41,11 +44,13 @@
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.6.1",
     "@cloudflare/workers-types": "5.20261110.1",
+    "@tesseract.js-data/eng": "1.0.0",
     "@types/node": "22.20.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/three": "0.187.0",
     "@vitejs/plugin-react": "6.3.0",
+    "tesseract.js": "7.0.0",
     "typescript": "5.9.3",
     "vite": "8.3.7",
     "vitest": "4.1.12",
