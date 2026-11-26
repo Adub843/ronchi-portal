@@ -190,8 +190,91 @@ function box(tokens: Token[]) {
 
 const GROUP_HEAD = /^(?:\d{1,2}\.\d{1,2}\s+)?GRUPP[IO]\b/i;
 
+// ---------- Older manuals: the table on its own page ----------
+//
+// Manuals up to about machine 4000 print each assembly as two pages: a table page, then the
+// drawing page. The table has a header line
+//     ITEM  CODE  REV.  DESCRIZIONE  DESCRIPTION  SPEC.  QTY
+// with the assembly's own number and names on the line above it ("GS089663/A  RIEMPITRICE
+// FILLING MACHINE"). Every cell is its own piece of text, so the columns are read by where the
+// header words sit. The drawing page has no text at all: its balloon numbers are drawn as lines,
+// so this reader can't place balloons (the PC loader finds them by reading the picture).
+
+const HEAD_WORDS = { item: /^ITEM$/i, code: /^CODE$/i, rev: /^REV\.?$/i, it: /^DESCRIZIONE$/i, en: /^DESCRIPTION$/i, spec: /^SPEC\.?$/i, qty: /^Q\.?TY\.?$/i };
+const OWN_CODE = /^(.+?)(?:\/([A-Z0-9]{1,2}))?$/;
+
+const listSheets = new WeakSet<ParsedSheet>();
+
+function readListPage(page: PageText): ParsedSheet | null {
+  const items = page.items.filter((t) => t.str.trim());
+  const find = (re: RegExp, near?: number) => items.find((t) => re.test(t.str.trim()) && (near === undefined || Math.abs(t.y - near) < 6));
+  const item = find(HEAD_WORDS.item);
+  if (!item) return null;
+  const col = { item, code: find(HEAD_WORDS.code, item.y), it: find(HEAD_WORDS.it, item.y), en: find(HEAD_WORDS.en, item.y), qty: find(HEAD_WORDS.qty, item.y), rev: find(HEAD_WORDS.rev, item.y), spec: find(HEAD_WORDS.spec, item.y) };
+  if (!col.code || !col.it || !col.en || !col.qty) return null;
+  const x = { code: col.code.x - 4, rev: (col.rev?.x ?? col.it.x) - 6, it: col.it.x - 4, en: col.en.x - 4, spec: (col.spec?.x ?? col.qty.x - 60) - 4, qty: col.qty.x - 14 };
+  const text = (list: TextItem[]) => [...list].sort((a, b) => a.y - b.y || a.x - b.x).map((t) => t.str.trim()).join(" ").replace(/\s+/g, " ");
+  const warnings: string[] = [];
+  const sheet: ParsedSheet = { page: page.page, code: null, rev: null, titleIt: "", titleEn: "", group: null, rows: [], balloons: [], warnings };
+
+  // The assembly's own line: just above the header, never the page header (machine number, chapter).
+  const lineH = Math.max(item.h, 6);
+  const own = items.filter((t) => t.y < item.y - lineH * 0.5 && t.y > item.y - lineH * 3.2);
+  for (const t of own.filter((o) => o.x < x.it)) {
+    const m = OWN_CODE.exec(t.str.trim().toUpperCase().replace(/\s+/g, ""));
+    if (m && isPartCode(m[1]!)) {
+      sheet.code = m[1]!;
+      sheet.rev = m[2] ?? null;
+      break;
+    }
+  }
+  sheet.titleIt = text(own.filter((t) => t.x >= x.it && t.x < x.en));
+  sheet.titleEn = text(own.filter((t) => t.x >= x.en));
+
+  // Rows: every position number under ITEM starts a row; other cells join the nearest one.
+  const below = items.filter((t) => t.y > item.y + lineH * 0.5 && t.y < page.height * 0.94);
+  const anchors = below.filter((t) => t.x < x.code && INT.test(t.str.trim())).sort((a, b) => a.y - b.y);
+  if (!anchors.length) return sheet.code ? sheet : null;
+  const mid = (t: TextItem) => t.y + t.h / 2;
+  const cells = anchors.map(() => [] as TextItem[]);
+  for (const t of below) {
+    if (t.x < x.code) continue;
+    let best = 0;
+    for (let i = 1; i < anchors.length; i++) if (Math.abs(mid(anchors[i]!) - mid(t)) < Math.abs(mid(anchors[best]!) - mid(t))) best = i;
+    if (Math.abs(mid(anchors[best]!) - mid(t)) < lineH * 2.5) cells[best]!.push(t);
+  }
+  const seen = new Set<string>();
+  anchors.forEach((a, i) => {
+    const c = cells[i]!;
+    const pos = a.str.trim();
+    const raw = text(c.filter((t) => t.x >= x.code && t.x < x.rev)).toUpperCase().replace(/\s+/g, "");
+    if (!isPartCode(raw)) {
+      if (raw) warnings.push(`Position ${pos}: "${raw.slice(0, 30)}" is not a Ronchi part number, left out.`);
+      return;
+    }
+    if (seen.has(`${pos}|${raw}`)) return;
+    seen.add(`${pos}|${raw}`);
+    const rev = text(c.filter((t) => t.x >= x.rev && t.x < x.it));
+    const qtyText = text(c.filter((t) => t.x >= x.qty)).replace(",", ".");
+    const qm = /^(\d{1,4}(?:\.\d{1,3})?)\s*([A-Za-z.]*)$/.exec(qtyText);
+    const qty = qm ? Number(qm[1]) : null;
+    if (qty === null) warnings.push(`Row ${raw} has no quantity.`);
+    sheet.rows.push({
+      pos, code: raw, rev: REV.test(rev) ? rev : null,
+      nameIt: text(c.filter((t) => t.x >= x.it && t.x < x.en)),
+      nameEn: text(c.filter((t) => t.x >= x.en && t.x < x.spec)),
+      qty, unit: qm && /^m(?:t|\.)?$/i.test(qm[2] ?? "") ? "m" : null,
+    });
+  });
+  if (!sheet.code) warnings.push("The sheet's own part code was not found.");
+  listSheets.add(sheet);
+  return sheet;
+}
+
 /** Read one page of chapter 11. Pages without a parts table come back with no rows. */
 export function readPage(page: PageText): ParsedSheet {
+  const listed = readListPage(page);
+  if (listed) return listed;
   const tokens = words(page.items);
   const warnings: string[] = [];
   const sheet: ParsedSheet = { page: page.page, code: null, rev: null, titleIt: "", titleEn: "", group: null, rows: [], balloons: [], warnings };
@@ -295,6 +378,7 @@ export function readChapter11(pages: PageText[]): { sheets: ParsedSheet[]; skipp
   const sheets: ParsedSheet[] = [];
   const skipped: number[] = [];
   let group: string | null = null;
+  const tablePages = new Map<ParsedSheet, number>();   // each sheet's last table page
   for (const p of pages) {
     const s = readPage(p);
     if (s.group) group = s.group;
@@ -303,7 +387,25 @@ export function readChapter11(pages: PageText[]): { sheets: ParsedSheet[]; skipp
       continue;
     }
     s.group ??= group;
+    // A table that runs over two pages: the same assembly again on the next page joins the first.
+    const last = sheets[sheets.length - 1];
+    if (last && s.code && last.code === s.code && last.page === p.page - 1 && listSheets.has(last) && listSheets.has(s)) {
+      const have = new Set(last.rows.map((r) => `${r.pos}|${r.code}`));
+      last.rows.push(...s.rows.filter((r) => !have.has(`${r.pos}|${r.code}`)));
+      last.warnings.push(...s.warnings);
+      tablePages.set(last, p.page);
+      continue;
+    }
     sheets.push(s);
+    tablePages.set(s, p.page);
+  }
+  // Older manuals: a table page with no balloons, followed by a page with no table, is drawn from that next page.
+  const byPage = new Map(pages.map((p) => [p.page, p]));
+  const rowPages = new Set(sheets.map((s) => s.page));
+  for (const s of sheets) {
+    if (s.balloons.length || !listSheets.has(s)) continue;
+    const next = byPage.get(tablePages.get(s)! + 1);
+    if (next && !rowPages.has(next.page) && skipped.includes(next.page) && next.items.length <= 12) s.drawingPage = next.page;
   }
   return { sheets, skipped };
 }
@@ -323,4 +425,12 @@ export function linkSubAssemblies(sheets: ParsedSheet[]): Map<number, number> {
     }
   }
   return parent;
+}
+
+/** Which part of the catalogue a sheet belongs in, from its group and names. */
+export function guessSection(s: ParsedSheet): "machine" | "format" | "elevator" {
+  const text = `${s.group ?? ""} ${s.titleEn} ${s.titleIt}`.toLowerCase();
+  if (/format|change ?part|cambio/.test(text)) return "format";
+  if (/elevat|elevator/.test(text)) return "elevator";
+  return "machine";
 }

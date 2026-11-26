@@ -110,6 +110,15 @@ const W = {
   "Maker": ["Fabricante", "Produttore"],
   "Show in 3D": ["Ver en 3D", "Mostra in 3D"],
   "Drawing or 3D": ["Dibujo o 3D", "Disegno o 3D"],
+  "Look straight down": ["Ver desde arriba", "Vista dall'alto"],
+  "Manual drawing shown in 3D. There is no CAD model for this assembly yet.": [
+    "Dibujo del manual mostrado en 3D. Todavía no hay modelo CAD de este conjunto.",
+    "Disegno del manuale mostrato in 3D. Non c'è ancora un modello CAD di questo gruppo.",
+  ],
+  "Drag to tilt and turn. Shift-drag, right-drag or two fingers to move. Scroll or pinch to zoom. Click a number to find its part.": [
+    "Arrastre para inclinar y girar. Mayús + arrastrar, botón derecho o dos dedos para mover. Rueda o pellizco para acercar. Pulse un número para encontrar su pieza.",
+    "Trascina per inclinare e ruotare. Maiusc + trascina, tasto destro o due dita per spostare. Rotella o pizzico per lo zoom. Clicca un numero per trovare il ricambio.",
+  ],
   "Other parts lists here": ["Otras listas de piezas aquí", "Altre distinte qui"],
   "Find in parts list": ["Buscar en la lista de piezas", "Cerca nella distinta"],
   "Untitled drawing": ["Dibujo sin título", "Disegno senza titolo"],

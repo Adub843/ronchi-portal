@@ -134,7 +134,7 @@ catalog.get("/machines/:id", async (c) => {
   ).bind(m.id).all();
   const { results: imports } = await c.env.DB.prepare(
     `SELECT i.id, i.file_name, i.pages, i.sheets, i.rows, i.warnings, i.created_at, u.name AS by_name
-       FROM catalog_imports i JOIN users u ON u.id = i.user_id WHERE i.machine_id = ? ORDER BY i.created_at DESC LIMIT 20`,
+       FROM catalog_imports i LEFT JOIN users u ON u.id = i.user_id WHERE i.machine_id = ? ORDER BY i.created_at DESC LIMIT 20`,
   ).bind(m.id).all();
   return c.json({
     machine: { id: m.id, serial: m.serial, model: m.model, customer: m.customer, site: m.site, notes: m.notes, catalog_published_at: m.catalog_published_at },
@@ -150,9 +150,13 @@ catalog.get("/machines/:id", async (c) => {
  */
 catalog.post("/machines/:id/import", async (c) => {
   const u = requirePerm(c, "catalog.edit");
-  const db = c.env.DB;
-  const m = await machineById(db, c.req.param("id"));
-  const b = await body(c);
+  const m = await machineById(c.env.DB, c.req.param("id"));
+  return c.json(await importManual(c.env, m, await body(c), { userId: u.id, ip: c.get("ip") }));
+});
+
+/** The import itself, shared by the staff page above and the PC catalog loader (routes/catalog-loader.ts). */
+export async function importManual(env: AppEnv["Bindings"], m: { id: string }, b: Record<string, unknown>, who: { userId: string | null; ip?: string }) {
+  const db = env.DB;
   const fileName = mustStr(b.fileName, 200, "File name");
   if (!Array.isArray(b.sheets) || !b.sheets.length) fail(400, "Nothing was read from the file.");
   if (b.sheets.length > MAX_SHEETS) fail(400, "Too many drawings in one import.");
@@ -214,15 +218,15 @@ catalog.post("/machines/:id/import", async (c) => {
   const warnings = Array.isArray(b.warnings) ? (b.warnings as unknown[]).slice(0, 500).map((w) => String(w).slice(0, 300)) : [];
   const rowCount = incoming.reduce((n, s) => n + s.rows.length, 0);
   stmts.push(db.prepare("INSERT INTO catalog_imports (id, machine_id, file_name, pages, sheets, rows, warnings, user_id, created_at) VALUES (?,?,?,?,?,?,?,?,?)")
-    .bind(randomId(), m.id, fileName, num(b.pages, 100000) ?? 0, incoming.length, rowCount, JSON.stringify(warnings), u.id, t));
+    .bind(randomId(), m.id, fileName, num(b.pages, 100000) ?? 0, incoming.length, rowCount, JSON.stringify(warnings), who.userId, t));
   await runAll(db, stmts);
   if (old.results.length) {
-    await c.env.FILES.delete(old.results.map((r) => fileKey(r.id, "drawing")));
-    await dropModelFiles(c.env, old.results);
+    await env.FILES.delete(old.results.map((r) => fileKey(r.id, "drawing")));
+    await dropModelFiles(env, old.results);
   }
-  await audit(db, { userId: u.id, action: "catalog.import", targetType: "machine", targetId: m.id, detail: { fileName, sheets: incoming.length, rows: rowCount }, ip: c.get("ip") });
-  return c.json({ sheets: incoming.map((s) => ({ key: s.key, id: s.id })) });
-});
+  await audit(db, { userId: who.userId, action: who.userId ? "catalog.import" : "catalog.import.load", targetType: "machine", targetId: m.id, detail: { fileName, sheets: incoming.length, rows: rowCount }, ip: who.ip });
+  return { sheets: incoming.map((s) => ({ key: s.key, id: s.id })) };
+}
 
 /** Add a sheet by hand, or for a 3D assembly from CAD. */
 catalog.post("/machines/:id/sheets", async (c) => {

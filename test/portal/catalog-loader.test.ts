@@ -35,7 +35,7 @@ describe("PC catalog loader", () => {
     const list = await call("/machines", { key: KEY });
     expect(list.status).toBe(200);
     const m = ((await list.json()) as any).machines.find((x: any) => x.serial === serial);
-    expect(m.sheets).toEqual([{ id: sheet, code: "MB000100", title: "Capping head", has_model: false }]);
+    expect(m.sheets).toEqual([{ id: sheet, code: "MB000100", title: "Capping head", source: "manual", has_model: false, has_drawing: false }]);
 
     const put = await call(`/sheets/${sheet}/model`, { method: "PUT", key: KEY, type: "model/gltf-binary", body: GLB });
     expect(put.status).toBe(200);
@@ -93,5 +93,35 @@ describe("PC catalog loader", () => {
   it("can't do anything else in the portal with the key", async () => {
     const res = await app.request(`${env.ORIGIN}/api/machines`, { headers: { authorization: `Bearer ${KEY}`, "cf-connecting-ip": "10.9.9.8" } }, { ...env, CATALOG_LOADER_KEY_HASH: await sha256Hex(KEY) });
     expect(res.status).toBe(401);
+  });
+
+  it("saves parts lists and drawings read from a manual on the PC, and only for a machine the portal has", async () => {
+    const admin = await person("admin");
+    const serial = `${6100 + Math.floor(Math.random() * 800)}MB`;
+    const m = await admin.json("/api/machines", { body: { serial, model: "EXACTA" } });
+    const sheets = [
+      { key: "5", page: 5, code: "MB000200", title: "Filling group", rows: [{ pos: "1", code: "GF092618", qty: 2, nameEn: "Support", hotspots: [{ x: 0.2, y: 0.3, w: 0.02, h: 0.02 }] }] },
+      { key: "6", parentKey: "5", page: 6, code: "GF092618", title: "Support", rows: [] },
+    ];
+    const post = (to: string, key?: string) => call(`/machines/${to}/import`, { method: "POST", key, type: "application/json", body: JSON.stringify({ fileName: "chapter 11.pdf", pages: 9, sheets }) });
+    expect((await post(serial)).status).toBe(404);
+    expect((await post("0000ZZ", KEY)).status).toBe(404);
+    const res = await post(serial.toLowerCase(), KEY);
+    expect(res.status).toBe(200);
+    const ids = ((await res.json()) as any).sheets as { key: string; id: string }[];
+    expect(ids.map((x) => x.key)).toEqual(["5", "6"]);
+
+    const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+    expect((await call(`/sheets/${ids[0]!.id}/drawing?w=800&h=600`, { method: "PUT", key: KEY, type: "image/png", body: PNG })).status).toBe(200);
+    expect((await call(`/sheets/${ids[0]!.id}/drawing`, { method: "PUT", key: KEY, type: "image/png", body: PNG })).status).toBe(400);
+    expect((await call(`/sheets/${ids[0]!.id}/drawing?w=800&h=600`, { method: "PUT", type: "image/png", body: PNG })).status).toBe(404);
+
+    const tree = await admin.json(`/api/catalog/machines/${m.data.id}`);
+    expect(tree.data.sheets.map((s: any) => [s.code, !!s.has_drawing, s.rows])).toEqual([["MB000200", true, 1], ["GF092618", false, 0]]);
+    expect(tree.data.sheets[1].parent_id).toBe(ids[0]!.id);
+    // The import shows in the machine's history with nobody's name on it.
+    expect(tree.data.imports[0]).toMatchObject({ file_name: "chapter 11.pdf", sheets: 2, rows: 1, by_name: null });
+    const sheet = await admin.json(`/api/catalog/sheets/${ids[0]!.id}`);
+    expect(sheet.data.rows[0].hotspots).toEqual([{ x: 0.2, y: 0.3, w: 0.02, h: 0.02 }]);
   });
 });
