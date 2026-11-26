@@ -27,6 +27,8 @@ export interface SheetRec {
   id: string; machine_id: string; parent_id: string | null; section: string; grp: string | null; code: string | null; rev: string | null;
   title: string; title_it: string; source: string; page: number | null; sort: number;
   image_w: number | null; image_h: number | null; model_size: number | null; mesh_map: string | null;
+  /** Set when the model is a shared file (see sharedKey); NULL for a file of the sheet's own. */
+  model_ref?: string | null;
 }
 
 async function machineById(db: Db, id: string) {
@@ -88,6 +90,24 @@ function upsertPart(db: Db, p: { code: string; rev: string | null; nameEn: strin
 }
 
 const fileKey = (sheetId: string, file: string) => `catalog/${sheetId}/${file === "model" ? "model.glb" : "drawing"}`;
+// A 3D model is stored once by what's in it (SHA-256), so the same assembly on 50 machines is one file.
+const sharedKey = (ref: string) => `catalog/shared/${ref}.glb`;
+const modelKey = (s: { id: string; model_ref?: string | null }) => (s.model_ref ? sharedKey(s.model_ref) : fileKey(s.id, "model"));
+const SHA = /^[0-9a-f]{64}$/;
+
+/** Delete the model files these sheets held, once the sheets no longer point at them. A shared file goes only when no parts list uses it. */
+async function dropModelFiles(env: AppEnv["Bindings"], sheets: { id: string; model_ref?: string | null }[]) {
+  const own = sheets.filter((s) => !s.model_ref).map((s) => fileKey(s.id, "model"));
+  if (own.length) await env.FILES.delete(own);
+  for (const ref of new Set(sheets.map((s) => s.model_ref).filter((r): r is string => !!r))) {
+    const used = await env.DB.prepare("SELECT 1 AS x FROM catalog_sheets WHERE model_ref = ? LIMIT 1").bind(ref).first();
+    if (!used) await env.FILES.delete(sharedKey(ref));
+  }
+}
+
+async function sha256Bytes(bytes: ArrayBuffer) {
+  return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 // ---------- Machines ----------
 
@@ -156,7 +176,7 @@ catalog.post("/machines/:id/import", async (c) => {
   });
   const byKey = new Map(incoming.map((s) => [s.key, s.id]));
 
-  const old = await db.prepare("SELECT id FROM catalog_sheets WHERE machine_id = ? AND source = 'manual'").bind(m.id).all<{ id: string }>();
+  const old = await db.prepare("SELECT id, model_ref FROM catalog_sheets WHERE machine_id = ? AND source = 'manual'").bind(m.id).all<{ id: string; model_ref: string | null }>();
   const base = await db.prepare("SELECT COALESCE(MAX(sort), -1) AS n FROM catalog_sheets WHERE machine_id = ? AND source <> 'manual'").bind(m.id).first<{ n: number }>();
 
   const stmts: D1PreparedStatement[] = [
@@ -196,7 +216,10 @@ catalog.post("/machines/:id/import", async (c) => {
   stmts.push(db.prepare("INSERT INTO catalog_imports (id, machine_id, file_name, pages, sheets, rows, warnings, user_id, created_at) VALUES (?,?,?,?,?,?,?,?,?)")
     .bind(randomId(), m.id, fileName, num(b.pages, 100000) ?? 0, incoming.length, rowCount, JSON.stringify(warnings), u.id, t));
   await runAll(db, stmts);
-  if (old.results.length) await c.env.FILES.delete(old.results.flatMap((r) => [fileKey(r.id, "drawing"), fileKey(r.id, "model")]));
+  if (old.results.length) {
+    await c.env.FILES.delete(old.results.map((r) => fileKey(r.id, "drawing")));
+    await dropModelFiles(c.env, old.results);
+  }
   await audit(db, { userId: u.id, action: "catalog.import", targetType: "machine", targetId: m.id, detail: { fileName, sheets: incoming.length, rows: rowCount }, ip: c.get("ip") });
   return c.json({ sheets: incoming.map((s) => ({ key: s.key, id: s.id })) });
 });
@@ -330,7 +353,8 @@ catalog.delete("/sheets/:id", async (c) => {
     db.prepare("DELETE FROM catalog_rows WHERE sheet_id = ?").bind(s.id),
     db.prepare("DELETE FROM catalog_sheets WHERE id = ?").bind(s.id),
   ]);
-  await c.env.FILES.delete([fileKey(s.id, "drawing"), fileKey(s.id, "model")]);
+  await c.env.FILES.delete(fileKey(s.id, "drawing"));
+  await dropModelFiles(c.env, [s]);
   await audit(db, { userId: u.id, action: "catalog.sheet.delete", targetType: "catalog_sheet", targetId: s.id, detail: { title: s.title }, ip: c.get("ip") });
   return c.json({ ok: true });
 });
@@ -355,20 +379,36 @@ export async function saveSheetFile(
     : ascii.startsWith("RIFF") && ascii.slice(8, 12) === "WEBP";
   if (!ok) fail(400, "That file isn't what its type says.");
   if (file === "drawing" && !(size.w! > 0 && size.w! <= 20000 && size.h! > 0 && size.h! <= 20000)) fail(400, "Send the drawing's width and height.");
-  await env.FILES.put(fileKey(s.id, file), bytes, { httpMetadata: { contentType: type } });
   if (file === "model") {
-    await env.DB.prepare("UPDATE catalog_sheets SET model_size = ?, updated_at = ? WHERE id = ?").bind(bytes.byteLength, now(), s.id).run();
+    const ref = await sha256Bytes(bytes);
+    if (!(await env.FILES.head(sharedKey(ref)))) await env.FILES.put(sharedKey(ref), bytes, { httpMetadata: { contentType: type } });
+    await env.DB.prepare("UPDATE catalog_sheets SET model_size = ?, model_ref = ?, updated_at = ? WHERE id = ?").bind(bytes.byteLength, ref, now(), s.id).run();
+    if (s.model_size && s.model_ref !== ref) await dropModelFiles(env, [s]);
   } else {
+    await env.FILES.put(fileKey(s.id, file), bytes, { httpMetadata: { contentType: type } });
     await env.DB.prepare("UPDATE catalog_sheets SET image_w = ?, image_h = ?, updated_at = ? WHERE id = ?").bind(Math.round(size.w!), Math.round(size.h!), now(), s.id).run();
   }
   await audit(env.DB, { userId: who.userId, action: who.action ?? `catalog.${file}.upload`, targetType: "catalog_sheet", targetId: s.id, detail: { bytes: bytes.byteLength }, ip: who.ip });
 }
 
+/**
+ * Point a parts list at a 3D model the portal already holds (same file, by its SHA-256), so the
+ * PC loader sends each assembly once however many machines use it. 404 when the file isn't here yet.
+ */
+export async function linkSheetModel(env: AppEnv["Bindings"], s: SheetRec, ref: string, who: { userId: string | null; ip?: string; action?: string }) {
+  if (!SHA.test(ref)) fail(400, "Send the model's SHA-256.");
+  const obj = await env.FILES.head(sharedKey(ref));
+  if (!obj) fail(404, "The portal doesn't have that 3D model yet.");
+  await env.DB.prepare("UPDATE catalog_sheets SET model_size = ?, model_ref = ?, updated_at = ? WHERE id = ?").bind(obj.size, ref, now(), s.id).run();
+  if (s.model_size && s.model_ref !== ref) await dropModelFiles(env, [s]);
+  await audit(env.DB, { userId: who.userId, action: who.action ?? "catalog.model.link", targetType: "catalog_sheet", targetId: s.id, detail: { bytes: obj.size, shared: true }, ip: who.ip });
+}
+
 /** Take a sheet's 3D model off (a wrong or empty model). Shared by staff and the PC catalog loader. */
 export async function removeSheetModel(env: AppEnv["Bindings"], s: SheetRec, who: { userId: string | null; ip?: string; action?: string }) {
   if (!s.model_size) fail(404, "That parts list has no 3D model.");
-  await env.FILES.delete(fileKey(s.id, "model"));
-  await env.DB.prepare("UPDATE catalog_sheets SET model_size = NULL, updated_at = ? WHERE id = ?").bind(now(), s.id).run();
+  await env.DB.prepare("UPDATE catalog_sheets SET model_size = NULL, model_ref = NULL, updated_at = ? WHERE id = ?").bind(now(), s.id).run();
+  await dropModelFiles(env, [s]);
   await audit(env.DB, { userId: who.userId, action: who.action ?? "catalog.model.remove", targetType: "catalog_sheet", targetId: s.id, detail: { bytes: s.model_size }, ip: who.ip });
 }
 
@@ -392,7 +432,7 @@ catalog.get("/sheets/:id/:file{drawing|model}", async (c) => {
   requirePerm(c, "catalog.view");
   const s = await sheetById(c.env.DB, c.req.param("id"));
   const file = c.req.param("file");
-  const obj = await c.env.FILES.get(fileKey(s.id, file));
+  const obj = await c.env.FILES.get(file === "model" ? modelKey(s) : fileKey(s.id, file));
   if (!obj) fail(404, "Not found.");
   return new Response(obj.body, {
     headers: {
@@ -566,11 +606,11 @@ catalog.post("/machines/:id/publish/files", async (c) => {
   const ids = Array.isArray(b.sheets) ? (b.sheets as unknown[]).filter((v): v is string => typeof v === "string" && ID.test(v)).slice(0, 10) : [];
   let copied = 0;
   for (const id of ids) {
-    const s = await c.env.DB.prepare("SELECT id, image_w, model_size FROM catalog_sheets WHERE id = ? AND machine_id = ?").bind(id, m.id).first<{ id: string; image_w: number | null; model_size: number | null }>();
+    const s = await c.env.DB.prepare("SELECT id, image_w, model_size, model_ref FROM catalog_sheets WHERE id = ? AND machine_id = ?").bind(id, m.id).first<{ id: string; image_w: number | null; model_size: number | null; model_ref: string | null }>();
     if (!s) continue;
     for (const file of ["drawing", "model"] as const) {
       if (file === "drawing" ? !s.image_w : !s.model_size) continue;
-      const obj = await c.env.FILES.get(fileKey(s.id, file));
+      const obj = await c.env.FILES.get(file === "model" ? modelKey(s) : fileKey(s.id, file));
       if (!obj) continue;
       await partsCall(c.env, `/files/sheets/${s.id}/${file}`, { method: "PUT", raw: obj.body, type: obj.httpMetadata?.contentType ?? (file === "model" ? "model/gltf-binary" : "image/webp") });
       copied++;
