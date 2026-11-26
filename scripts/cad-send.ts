@@ -3,7 +3,9 @@
 // request that points at it.
 import { createHash } from "node:crypto";
 
-export async function sendModel(portal: string, auth: Record<string, string>, sheetId: string, glb: Uint8Array): Promise<{ ok: boolean; shared: boolean; error?: string }> {
+export async function sendModel(portal: string, auth: Record<string, string>, sheetId: string, model: Uint8Array | ArrayBuffer): Promise<{ ok: boolean; shared: boolean; error?: string }> {
+  // three.js's GLB writer gives an ArrayBuffer; Node's hash wants a typed array.
+  const glb = model instanceof Uint8Array ? model : new Uint8Array(model);
   const sha256 = createHash("sha256").update(glb).digest("hex");
   const base = `${portal}/api/catalog-loader/sheets/${sheetId}`;
   const link = await fetch(`${base}/model-ref`, { method: "PUT", headers: { ...auth, "content-type": "application/json" }, body: JSON.stringify({ sha256 }) });
