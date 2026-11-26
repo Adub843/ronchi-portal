@@ -192,8 +192,8 @@ const GROUP_HEAD = /^(?:\d{1,2}\.\d{1,2}\s+)?GRUPP[IO]\b/i;
 
 // ---------- Older manuals: the table on its own page ----------
 //
-// Manuals up to about machine 4000 print each assembly as two pages: a table page, then the
-// drawing page. The table has a header line
+// Manuals up to about machine 4000 print each assembly as two pages: the drawing page, then the
+// table page. The table has a header line
 //     ITEM  CODE  REV.  DESCRIZIONE  DESCRIPTION  SPEC.  QTY
 // with the assembly's own number and names on the line above it ("GS089663/A  RIEMPITRICE
 // FILLING MACHINE"). Every cell is its own piece of text, so the columns are read by where the
@@ -378,7 +378,6 @@ export function readChapter11(pages: PageText[]): { sheets: ParsedSheet[]; skipp
   const sheets: ParsedSheet[] = [];
   const skipped: number[] = [];
   let group: string | null = null;
-  const tablePages = new Map<ParsedSheet, number>();   // each sheet's last table page
   for (const p of pages) {
     const s = readPage(p);
     if (s.group) group = s.group;
@@ -393,19 +392,21 @@ export function readChapter11(pages: PageText[]): { sheets: ParsedSheet[]; skipp
       const have = new Set(last.rows.map((r) => `${r.pos}|${r.code}`));
       last.rows.push(...s.rows.filter((r) => !have.has(`${r.pos}|${r.code}`)));
       last.warnings.push(...s.warnings);
-      tablePages.set(last, p.page);
       continue;
     }
     sheets.push(s);
-    tablePages.set(s, p.page);
   }
-  // Older manuals: a table page with no balloons, followed by a page with no table, is drawn from that next page.
+  // Older manuals: the drawing is the page just before its table, a page with no table and no text
+  // of its own beyond the page header.
   const byPage = new Map(pages.map((p) => [p.page, p]));
-  const rowPages = new Set(sheets.map((s) => s.page));
+  const used = new Set<number>();
   for (const s of sheets) {
-    if (s.balloons.length || !listSheets.has(s)) continue;
-    const next = byPage.get(tablePages.get(s)! + 1);
-    if (next && !rowPages.has(next.page) && skipped.includes(next.page) && next.items.length <= 12) s.drawingPage = next.page;
+    if (!listSheets.has(s)) continue;
+    const before = byPage.get(s.page - 1);
+    if (before && skipped.includes(before.page) && before.items.length <= 12 && !used.has(before.page)) {
+      s.drawingPage = before.page;
+      used.add(before.page);
+    }
   }
   return { sheets, skipped };
 }

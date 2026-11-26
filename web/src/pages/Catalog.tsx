@@ -408,7 +408,7 @@ function ImportManual({ machineId, onDone }: { machineId: string; onDone: () => 
       const ids: { key: string; id: string }[] = r.sheets;
       for (let i = 0; i < ids.length; i++) {
         setStep(t("Saving drawing {n} of {total}", { n: i + 1, total: ids.length }));
-        // Older manuals print the drawing on the page after the table.
+        // Older manuals print the drawing on the page before the table.
         const page = Number(ids[i]!.key);
         const img = await pdf.pageImage(doc, result.sheets.find((x) => x.page === page)?.drawingPage ?? page);
         await apiPut(`/catalog/sheets/${enc(ids[i]!.id)}/drawing?w=${img.w}&h=${img.h}`, img.blob, img.blob.type);

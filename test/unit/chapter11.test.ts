@@ -104,7 +104,7 @@ describe("sub-assemblies", () => {
   });
 });
 
-// Manuals up to about machine 4000: the table on one page, its drawing (no text at all) on the next.
+// Manuals up to about machine 4000: the drawing (no text at all) on one page, its table on the next.
 describe("older manuals with the table on its own page", () => {
   const head = [t("529/292", 529, 805, 27, 12), t("11", 515, 51, 26, 24), t("3979 MB", 343, 60, 49, 12)];
   const list = (page: number, own: string, rows: TextItem[]): PageText => ({
@@ -143,12 +143,14 @@ describe("older manuals with the table on its own page", () => {
     expect(s.warnings).toEqual(['Position 24: "XYZ" is not a Ronchi part number, left out.']);
   });
 
-  it("draws the sheet from the page after the table, and joins a table that runs over two pages", () => {
+  it("draws the sheet from the page before the table, and joins a table that runs over two pages", () => {
     const more = list(34, "GF089845/A", cells(124, "25", "CM009055", "A", "CHIUSURA", "CLOSING DEVICE", "2"));
-    const { sheets } = readChapter11([TABLE, DRAWING]);
-    expect(sheets.map((s) => [s.page, s.drawingPage, s.rows.length])).toEqual([[33, 34, 4]]);
-    const long = readChapter11([TABLE, more, { ...DRAWING, page: 35 }]);
-    expect(long.sheets.map((s) => [s.page, s.drawingPage, s.rows.length])).toEqual([[33, 35, 5]]);
+    const { sheets } = readChapter11([{ ...DRAWING, page: 32 }, TABLE]);
+    expect(sheets.map((s) => [s.page, s.drawingPage, s.rows.length])).toEqual([[33, 32, 4]]);
+    const long = readChapter11([{ ...DRAWING, page: 32 }, TABLE, more, { ...DRAWING, page: 35 }]);
+    expect(long.sheets.map((s) => [s.page, s.drawingPage, s.rows.length])).toEqual([[33, 32, 5]]);
+    // A table with no drawing page before it keeps none, rather than borrowing a neighbour's.
+    expect(readChapter11([TABLE]).sheets[0]!.drawingPage).toBeUndefined();
   });
 
   it("leaves the newer one-page layout alone", () => {

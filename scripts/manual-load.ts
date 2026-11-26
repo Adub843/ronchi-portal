@@ -106,7 +106,7 @@ for (const job of jobs) {
     const ids = ((await res.json()) as { sheets: { key: string; id: string }[] }).sheets;
     let drawings = 0, bytes = 0, bad = 0;
     for (const { key, id } of ids) {
-      // Older manuals print the drawing on the page after the table.
+      // Older manuals print the drawing on the page before the table.
       const img = await pageImage(doc, sheets.find((x) => x.page === Number(key))?.drawingPage ?? Number(key));
       const put = await fetch(`${PORTAL}/api/catalog-loader/sheets/${id}/drawing?w=${img.w}&h=${img.h}`, { method: "PUT", headers: { ...auth, "content-type": "image/webp" }, body: img.bytes });
       if (put.ok) { drawings++; bytes += img.bytes.byteLength; } else bad++;
