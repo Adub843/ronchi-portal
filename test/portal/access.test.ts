@@ -39,19 +39,20 @@ describe("deny by default: each role sees only its part", () => {
     expect((await p.json("/api/auth/me")).data.user).toBeNull();
   });
 
-  it("an admin invite returns a one-time link and records it in the audit log", async () => {
+  it("adding an employee makes their login at once (no link) and records it in the audit log", async () => {
     const admin = await person("admin");
     const r = await admin.json("/api/users/invite", { body: { email: "lola@example.com", name: "Lola Parker", role: "billing" } });
-    expect(r.data.link).toMatch(/\/welcome#[A-Za-z0-9_-]{40,}$/);
+    expect(r.data).toMatchObject({ ok: true, login: "lola@example.com" });
+    expect(r.data.link).toBeUndefined();
     const log = await admin.json("/api/users/audit/recent");
-    expect(log.data.entries.some((e: any) => e.action === "invite.create")).toBe(true);
+    expect(log.data.entries.some((e: any) => e.action === "user.add")).toBe(true);
   });
 
   it("a login can be a plain username instead of an email", async () => {
     const admin = await person("admin");
     const ok = await admin.fetch("/api/users/invite", { body: { email: "SteveW", name: "Steve Williams", role: "service" } });
     expect(ok.status).toBe(200);
-    expect((await admin.json("/api/users")).data.invites.some((i: any) => i.email === "SteveW")).toBe(true);
+    expect((await admin.json("/api/users")).data.users.some((u: any) => u.email === "SteveW" && !u.has_password)).toBe(true);
     for (const bad of ["ab", "steve w", "steve@", "<script>"]) {
       expect((await admin.fetch("/api/users/invite", { body: { email: bad, name: "X", role: "tech" } })).status, bad).toBe(400);
     }

@@ -1,8 +1,9 @@
-// Sign-in with passkeys only. No passwords, no text or email codes.
+// Sign-in with a username and password (since 2026-11-26).
 //
-// New person:   admin makes an invite -> person opens the link -> creates a passkey -> signed in.
-// Returning:    "Sign in" -> the phone or computer offers their passkey -> signed in.
-// Extra device: a signed-in person makes an "add device" link for themselves (routes/users.ts).
+// New person:   admin adds them on People -> they sign in with their username -> make their own password.
+// Returning:    username + password.
+// Forgot it:    an admin presses "Reset password"; the next sign-in asks for a new one.
+// The passkey routes below still work for anyone who made a passkey before, but the pages no longer offer them.
 import { Hono, type Context } from "hono";
 import {
   generateAuthenticationOptions,
@@ -12,6 +13,7 @@ import {
 } from "@simplewebauthn/server";
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
 import { fromBase64Url, randomId, sha256Hex, toBase64Url } from "../../shared/crypto";
+import { hashPassword, passwordProblem, verifyPassword } from "../../shared/password";
 import type { AppEnv } from "../env";
 import { addSeconds, audit, now } from "../lib/db";
 import { body, fail, requireUser } from "../lib/http";
@@ -198,6 +200,113 @@ auth.post("/login/verify", async (c) => {
   await c.env.DB.prepare("UPDATE passkeys SET counter = ?, last_used_at = ? WHERE id = ?").bind(result.authenticationInfo.newCounter, now(), pk.id).run();
   await audit(c.env.DB, { userId: pk.user_id, action: "login", ip: c.get("ip") });
   await startSession(c, pk.user_id);
+  return c.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Username and password (Aaron, 2026-11-26: "this should just be a user name and password log in",
+// "each user to create their own password on their first login"). An admin adds the person; the
+// first time they sign in with their username, they make their own password.
+
+const WRONG = "Wrong username or password.";
+
+interface LoginRow { id: string; name: string; status: string; removed_at: string | null; password_hash: string | null }
+
+async function findLogin(db: D1Database, raw: unknown): Promise<LoginRow | null> {
+  if (typeof raw !== "string" || !raw.trim() || raw.length > 200) return null;
+  const v = raw.trim();
+  const cols = "id, name, status, removed_at, password_hash";
+  // Exact first (usernames keep their case), then ignoring case so "aaronl" finds "AaronL".
+  return (
+    (await db.prepare(`SELECT ${cols} FROM users WHERE email = ?`).bind(v).first<LoginRow>()) ??
+    (await db.prepare(`SELECT ${cols} FROM users WHERE lower(email) = lower(?) ORDER BY created_at LIMIT 1`).bind(v).first<LoginRow>())
+  );
+}
+
+const usable = (u: LoginRow | null): boolean => !!u && u.status === "active" && !u.removed_at;
+
+/** Sign in with a username (or work email) and password. A person with no password yet is told to make one. */
+auth.post("/password/login", async (c) => {
+  await rateLimit(c);
+  const b = await body(c);
+  const u = await findLogin(c.env.DB, b.login);
+  if (!u || !usable(u)) {
+    await audit(c.env.DB, { userId: u?.id ?? null, action: "login.failed", detail: { reason: u ? "disabled" : "unknown_login", how: "password" }, ip: c.get("ip") });
+    fail(401, WRONG);
+  }
+  if (!u.password_hash) return c.json({ firstTime: true, name: u.name });
+  if (typeof b.password !== "string" || !(await verifyPassword(b.password, u.password_hash))) {
+    await audit(c.env.DB, { userId: u.id, action: "login.failed", detail: { reason: "wrong_password" }, ip: c.get("ip") });
+    fail(401, WRONG);
+  }
+  await audit(c.env.DB, { userId: u.id, action: "login", detail: { how: "password" }, ip: c.get("ip") });
+  await startSession(c, u.id);
+  return c.json({ ok: true });
+});
+
+/** First sign-in: the person makes their own password, then is signed in. Only while they have none. */
+auth.post("/password/first", async (c) => {
+  await rateLimit(c);
+  const b = await body(c);
+  const u = await findLogin(c.env.DB, b.login);
+  if (!u || !usable(u)) fail(401, WRONG);
+  if (u.password_hash) fail(409, "This login already has a password. Sign in with it, or ask an admin to reset it.");
+  const problem = passwordProblem(b.password);
+  if (problem) fail(400, problem);
+  const t = now();
+  // Only if nobody set one in the meantime.
+  const r = await c.env.DB.prepare("UPDATE users SET password_hash = ?, password_set_at = ?, updated_at = ? WHERE id = ? AND password_hash IS NULL")
+    .bind(await hashPassword(b.password as string), t, t, u.id)
+    .run();
+  if (!r.meta.changes) fail(409, "This login already has a password. Sign in with it, or ask an admin to reset it.");
+  await audit(c.env.DB, { userId: u.id, action: "password.first", targetType: "user", targetId: u.id, ip: c.get("ip") });
+  await startSession(c, u.id);
+  return c.json({ ok: true });
+});
+
+/** A signed-in person changes their own password. Their other devices are signed out. */
+auth.post("/password/change", async (c) => {
+  const me = requireUser(c);
+  await rateLimit(c);
+  const b = await body(c);
+  const row = await c.env.DB.prepare("SELECT password_hash FROM users WHERE id = ?").bind(me.id).first<{ password_hash: string | null }>();
+  if (row?.password_hash && (typeof b.current !== "string" || !(await verifyPassword(b.current, row.password_hash)))) fail(401, "Your current password isn't right.");
+  const problem = passwordProblem(b.password);
+  if (problem) fail(400, problem);
+  const t = now();
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE users SET password_hash = ?, password_set_at = ?, updated_at = ? WHERE id = ?").bind(await hashPassword(b.password as string), t, t, me.id),
+    c.env.DB.prepare("DELETE FROM sessions WHERE user_id = ? AND id_hash <> ?").bind(me.id, me.sessionHash),
+  ]);
+  await audit(c.env.DB, { userId: me.id, action: "password.change", targetType: "user", targetId: me.id, ip: c.get("ip") });
+  return c.json({ ok: true });
+});
+
+/** An invite link made before passwords: the person makes their password with it and is signed in. */
+auth.post("/invite/password", async (c) => {
+  await rateLimit(c);
+  const b = await body(c);
+  const inv = await findInvite(c.env.DB, b.token);
+  const problem = passwordProblem(b.password);
+  if (problem) fail(400, problem);
+  const t = now();
+  const hash = await hashPassword(b.password as string);
+  let userId = inv.user_id;
+  const stmts: D1PreparedStatement[] = [];
+  if (userId) {
+    stmts.push(c.env.DB.prepare("UPDATE users SET password_hash = ?, password_set_at = ?, updated_at = ? WHERE id = ?").bind(hash, t, t, userId));
+  } else {
+    if (await c.env.DB.prepare("SELECT 1 FROM users WHERE email = ?").bind(inv.email).first()) fail(409, "Someone with this email or username already has a login.");
+    userId = randomId();
+    stmts.push(
+      c.env.DB.prepare("INSERT INTO users (id, email, name, role, status, created_at, updated_at, password_hash, password_set_at) VALUES (?,?,?,?, 'active', ?,?,?,?)")
+        .bind(userId, inv.email, inv.name, inv.role, t, t, hash, t),
+    );
+  }
+  stmts.push(c.env.DB.prepare("UPDATE invites SET used_at = ?, user_id = ? WHERE id = ? AND used_at IS NULL").bind(t, userId, inv.id));
+  await c.env.DB.batch(stmts);
+  await audit(c.env.DB, { userId, action: inv.user_id ? "password.change" : "user.signup", targetType: "user", targetId: userId, ip: c.get("ip") });
+  await startSession(c, userId);
   return c.json({ ok: true });
 });
 

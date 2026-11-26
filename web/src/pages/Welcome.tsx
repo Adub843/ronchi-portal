@@ -1,7 +1,6 @@
 import logoUrl from "../assets/ronchi-logo.png";
-// Opened from an invite link: /welcome#<token>. Creates the person's passkey.
+// Opened from an older invite link: /welcome#<token>. The person makes their password and is signed in.
 import { useEffect, useState } from "react";
-import { startRegistration } from "@simplewebauthn/browser";
 import { api } from "../api";
 import { ErrorNote } from "../components/ui";
 import { t } from "../i18n";
@@ -10,6 +9,8 @@ import { navigate } from "../router";
 export function Welcome({ onDone }: { onDone: () => void }) {
   const [token] = useState(() => location.hash.slice(1));
   const [invite, setInvite] = useState<{ name: string; email: string; addingDevice: boolean } | null>(null);
+  const [password, setPassword] = useState("");
+  const [again, setAgain] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -20,18 +21,17 @@ export function Welcome({ onDone }: { onDone: () => void }) {
     api("/auth/invite/check", { body: { token } }).then(setInvite, (e: Error) => setError(e.message));
   }, [token]);
 
-  async function create() {
+  async function create(e: React.FormEvent) {
+    e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const { challengeId, userId, options } = await api("/auth/register/options", { body: { token } });
-      const response = await startRegistration({ optionsJSON: options });
-      await api("/auth/register/verify", { body: { token, challengeId, userId, response, nickname: navigator.platform || null } });
+      if (password !== again) throw new Error(t("The two passwords don't match."));
+      await api("/auth/invite/password", { body: { token, password } });
       navigate("/");
       onDone();
-    } catch (e) {
-      const err = e as Error;
-      setError(err.name === "NotAllowedError" ? t("Passkey creation was cancelled. Try again.") : err.message);
+    } catch (x) {
+      setError((x as Error).message);
     } finally {
       setBusy(false);
     }
@@ -39,27 +39,30 @@ export function Welcome({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="center">
-      <div className="panel signin">
+      <form className="panel signin" onSubmit={create}>
         <img src={logoUrl} alt="Ronchi" />
         {invite ? (
           <>
             <div>
-              <h1>{invite.addingDevice ? t("Add this device") : t("Welcome, {name}", { name: invite.name.split(" ")[0]! })}</h1>
-              <p className="sub">
-                {invite.addingDevice
-                  ? t("Create a passkey on this phone or computer so you can sign in here too.")
-                  : t("Your Ronchi Portal login is {email}. Create a passkey to finish. Nothing to remember: you'll sign in with Face ID, your fingerprint or your device PIN.", { email: invite.email })}
-              </p>
+              <h1>{t("Welcome, {name}", { name: invite.name.split(" ")[0]! })}</h1>
+              <p className="sub">{t("Your username is {email}. Make your own password: at least 8 characters.", { email: invite.email })}</p>
             </div>
-            <button className="btn primary" onClick={create} disabled={busy}>
-              {busy ? t("Follow the prompt on your device…") : t("Create my passkey")}
-            </button>
+            <input type="text" name="username" autoComplete="username" value={invite.email} readOnly hidden />
+            <div className="field">
+              <label htmlFor="wl-pass">{t("New password")}</label>
+              <input id="wl-pass" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} maxLength={200} autoFocus />
+            </div>
+            <div className="field">
+              <label htmlFor="wl-again">{t("Type it again")}</label>
+              <input id="wl-again" type="password" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} required minLength={8} maxLength={200} />
+            </div>
+            <button className="btn primary" type="submit" disabled={busy}>{busy ? t("Signing in…") : t("Save password and sign in")}</button>
           </>
         ) : (
           !error && <p className="muted">{t("Checking your invite…")}</p>
         )}
         <ErrorNote error={error} />
-      </div>
+      </form>
     </div>
   );
 }

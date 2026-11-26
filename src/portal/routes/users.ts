@@ -182,6 +182,7 @@ users.get("/", async (c) => {
             (SELECT n.email FROM notice_emails n WHERE n.user_id = u.id) AS notify_email,
             (SELECT r.perms FROM roles r WHERE r.id = u.role) AS role_perms,
             (SELECT COUNT(*) FROM passkeys p WHERE p.user_id = u.id) AS passkeys,
+            (u.password_hash IS NOT NULL) AS has_password,
             (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id) AS sessions
        FROM users u ORDER BY u.name`,
   ).all();
@@ -215,9 +216,27 @@ users.post("/invite", async (c) => {
   const exists = await c.env.DB.prepare("SELECT removed_at FROM users WHERE email = ?").bind(email).first<{ removed_at: string | null }>();
   if (exists?.removed_at) fail(409, "This person was removed. Find them under Removed employees and press Restore.");
   if (exists) fail(409, "Someone with this email or username already has a login.");
-  const link = await createInvite(c.env, { email, name, role: b.role as string, createdBy: admin.id });
-  await audit(c.env.DB, { userId: admin.id, action: "invite.create", detail: { email, role: b.role }, ip: c.get("ip") });
-  return c.json({ link });
+  // The login is made straight away, with no password: the person makes their own the first time
+  // they sign in (Aaron, 2026-11-26). No link to send.
+  const id = randomId();
+  const t = now();
+  await c.env.DB.prepare("INSERT INTO users (id, email, name, role, status, created_at, updated_at) VALUES (?,?,?,?, 'active', ?,?)")
+    .bind(id, email, name, b.role as string, t, t)
+    .run();
+  await audit(c.env.DB, { userId: admin.id, action: "user.add", targetType: "user", targetId: id, detail: { email, role: b.role }, ip: c.get("ip") });
+  return c.json({ ok: true, id, login: email });
+});
+
+/** Forgotten password: clear it and sign them out; their next sign-in asks them to make a new one. */
+users.post("/:id/reset-password", async (c) => {
+  const admin = requirePerm(c, "users.manage");
+  const id = c.req.param("id");
+  if (id !== admin.id && !admin.owner && (await isOwnerId(c.env.DB, id))) fail(403, "Only the portal owner can reset the owner's password.");
+  const r = await c.env.DB.prepare("UPDATE users SET password_hash = NULL, password_set_at = NULL, updated_at = ? WHERE id = ? AND removed_at IS NULL").bind(now(), id).run();
+  if (!r.meta.changes) fail(404, "Not found.");
+  const sessions = await endAllSessions(c.env.DB, id);
+  await audit(c.env.DB, { userId: admin.id, action: "user.reset_password", targetType: "user", targetId: id, detail: { sessions }, ip: c.get("ip") });
+  return c.json({ ok: true });
 });
 
 /** Change a person's role, or disable them. */

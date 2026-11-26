@@ -25,7 +25,8 @@ describe("roles an admin makes", () => {
     expect((await olivia.fetch("/api/change-parts")).status).toBe(403);
     // The role shows up in the list, with its people count, and its name in the pickers.
     const list = await admin.json("/api/users/roles");
-    expect(list.data.list.find((x: any) => x.id === id)).toMatchObject({ builtIn: false, people: 1, perms: ["boards.use"] });
+    // Two people: Olivia, added from People (her login exists at once), and the test's signed-in person.
+    expect(list.data.list.find((x: any) => x.id === id)).toMatchObject({ builtIn: false, people: 2, perms: ["boards.use"] });
     expect(list.data.named[id]).toMatch(/^Shipping/);
     // Boards can be shared with it.
     expect((await admin.fetch("/api/boards", { body: { name: "Dock", audience: [id] } })).status).toBe(200);

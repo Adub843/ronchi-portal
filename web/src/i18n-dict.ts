@@ -8,6 +8,7 @@ import { PARTS_ORDERS_DYNAMIC, PARTS_ORDERS_ES, PARTS_ORDERS_IT } from "./i18n-p
 import { WORKBOOK_DYNAMIC, WORKBOOK_ES, WORKBOOK_IT } from "./i18n-workbook";
 import { ERRORS_ES, ERRORS_IT } from "./i18n-errors";
 import { THEME_ES, THEME_IT } from "./i18n-themes";
+import { PASSWORD_ES, PASSWORD_IT } from "./i18n-password";
 import { THEMES } from "../../src/shared/themes";
 
 /** Texts shown through a variable (role names, menu tabs) or sent by the server, so the test can't find them in t("...") calls. */
@@ -2104,6 +2105,8 @@ DYNAMIC.push(...WORKBOOK_DYNAMIC);
 // The look descriptions in Settings (i18n-themes.ts).
 Object.assign(ES, THEME_ES);
 Object.assign(IT, THEME_IT);
+Object.assign(ES, PASSWORD_ES);
+Object.assign(IT, PASSWORD_IT);
 DYNAMIC.push(...THEMES.map((th) => th.blurb));
 
 // Parts orders (i18n-parts-orders.ts). Words already translated elsewhere keep their translation.

@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { afterEach, describe, expect, it } from "vitest";
+import { createInvite } from "../../src/portal/lib/invites";
 import { forgetSettings } from "../../src/portal/lib/settings-store";
 import { person } from "./helpers";
 
@@ -97,7 +98,9 @@ describe("Settings > Admin controls", () => {
   it("invite links last as long as the setting says", async () => {
     const admin = await person("admin");
     await admin.json("/api/settings", { method: "PUT", body: { people: { inviteHours: 24 } } });
-    await admin.json("/api/users/invite", { body: { email: "dayone", name: "Day One", role: "tech" } });
+    // Adding an employee no longer makes a link (2026-11-26); older-style links (still made for
+    // other uses) follow the setting.
+    await createInvite(env, { email: "dayone", name: "Day One", role: "tech", createdBy: null });
     const inv = (await admin.json("/api/users")).data.invites.find((i: any) => i.email === "dayone");
     const hours = (Date.parse(inv.expires_at) - Date.now()) / 3600_000;
     expect(hours).toBeGreaterThan(23.9);
