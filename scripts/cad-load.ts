@@ -90,8 +90,12 @@ console.log(`Read ${file} in ${((Date.now() - t0) / 1000).toFixed(0)} s.`);
 const hits = findAssemblies(root, byCode.keys());
 console.log(`${hits.size} of ${byCode.size} parts list numbers are in the 3D file.`);
 
-let saved = 0, skipped = 0, tooBig = 0, failed = 0, bytesSent = 0;
+let saved = 0, skipped = 0, tooBig = 0, failed = 0, empty = 0, bytesSent = 0;
 for (const [code, node] of hits) {
+  // An assembly name with no shapes under it (a placeholder in the CAD) would load an empty 3D view.
+  let meshes = 0;
+  node.traverse((o) => { if ((o as { isMesh?: boolean }).isMesh) meshes++; });
+  if (!meshes) { empty += byCode.get(code)?.length ?? 0; console.log(`  ${code}: no shapes in the 3D file, skipped`); continue; }
   for (const s of byCode.get(code) ?? []) {
     if (s.has_model && !flags.has("--replace")) { skipped++; continue; }
     const glb = await objectToGlbBytes(node);
@@ -102,5 +106,5 @@ for (const [code, node] of hits) {
     else { failed++; console.log(`  ${code} ${s.title}: failed (${r.status} ${await r.text()})`); }
   }
 }
-console.log(`\n${flags.has("--dry-run") ? "Would load" : "Loaded"} 3D on ${saved} parts lists (${(bytesSent / 1048576).toFixed(1)} MB). Already had 3D: ${skipped}. Too big: ${tooBig}. Failed: ${failed}.`);
+console.log(`\n${flags.has("--dry-run") ? "Would load" : "Loaded"} 3D on ${saved} parts lists (${(bytesSent / 1048576).toFixed(1)} MB). Already had 3D: ${skipped}. Too big: ${tooBig}. Empty in the 3D file: ${empty}. Failed: ${failed}.`);
 process.exit(failed ? 1 : 0);
