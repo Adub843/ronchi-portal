@@ -6,7 +6,8 @@
 // Job details boxes, opening it in its own window, and the job chat.
 import { useRef, useState } from "react";
 import { api, can, type Me } from "../api";
-import { toast, useLoad } from "../components/ui";
+import { PageHead, toast, useLoad } from "../components/ui";
+import { JobListTabs } from "./Jobs";
 import { t } from "../i18n";
 import { navigate } from "../router";
 
@@ -18,12 +19,24 @@ function detailsFor(job: any): [string, string][] {
   return [["job", job.job_number ?? ""], ["customer", job.customer ?? ""], ["location", (job.location ?? "").split("\n").join(", ")], ["contact", contact], ["serial", job.machine ?? ""]];
 }
 
-export function FieldServiceWorkbook({ job, me }: { job: any; me: Me }) {
+/** The Jobs list's Work order tab: the workbook on its own, without a job. */
+export function WorkbookPage({ me }: { me: Me }) {
+  return (
+    <>
+      <PageHead title={t("Jobs")} />
+      <JobListTabs me={me} on="workbook" />
+      <FieldServiceWorkbook job={null} me={me} />
+    </>
+  );
+}
+
+export function FieldServiceWorkbook({ job, me }: { job: any | null; me: Me }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [note, setNote] = useState("");
-  const { data } = useLoad(() => api(`/workbook/${encodeURIComponent(job.id)}`), [job.id]);
+  const { data } = useLoad(() => (job ? api(`/workbook/${encodeURIComponent(job.id)}`) : Promise.resolve(null)), [job?.id]);
 
   function fill() {
+    if (!job) return;
     const doc = frame.current?.contentDocument;
     const win = frame.current?.contentWindow as (Window & typeof globalThis) | null;
     const box = (k: string) => doc?.getElementById(`job-${k}`) as HTMLInputElement | null;
@@ -47,7 +60,7 @@ export function FieldServiceWorkbook({ job, me }: { job: any; me: Me }) {
 
   async function chat() {
     try {
-      const c = await api(`/workbook/${encodeURIComponent(job.id)}/chat`, { body: {} });
+      const c = await api(`/workbook/${encodeURIComponent(job!.id)}/chat`, { body: {} });
       navigate(`/chats/${c.id}`);
     } catch (e) {
       toast((e as Error).message);
@@ -62,8 +75,8 @@ export function FieldServiceWorkbook({ job, me }: { job: any; me: Me }) {
           <p className="muted" style={{ margin: 0 }}>{note || t("Service report and time sheet. It saves on this device; download the PDF or Excel when you're done.")}</p>
         </div>
         <span className="spacer" />
-        <button className="btn" onClick={fill}>{t("Fill in this job's details")}</button>
-        {can(me, "boards.use") && data?.canFill && <button className="btn" onClick={chat}>{data.chat ? t("Open the job chat") : t("Start the job chat")}</button>}
+        {job && <button className="btn" onClick={fill}>{t("Fill in this job's details")}</button>}
+        {job && can(me, "boards.use") && data?.canFill && <button className="btn" onClick={chat}>{data.chat ? t("Open the job chat") : t("Start the job chat")}</button>}
         <a className="btn" href={PAGE} target="_blank" rel="noopener">{t("Open in its own window")}</a>
       </div>
       <iframe ref={frame} src={PAGE} title={t("Field Service Workbook")} className="no-print" style={{ width: "100%", height: "85vh", border: 0, borderRadius: 8, background: "#fff" }} />

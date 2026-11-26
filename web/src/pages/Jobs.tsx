@@ -107,13 +107,16 @@ export function JobList({ me, workbook }: { me: Me; workbook: boolean }) {
   );
 }
 
-/** With the workbook on, people who bill customers get a second tab on the Jobs list: the billing week. */
-export function JobListTabs({ me, on }: { me: Me; on: "jobs" | "billing" }) {
-  if (!can(me, "workbook.billing")) return null;
+/**
+ * With the workbook on, the Jobs list has tabs: Jobs, Work order (Aaron's original Field Service
+ * Workbook, opened without a job; Aaron, 2026-11-26) and, for people who bill customers, the billing week.
+ */
+export function JobListTabs({ me, on }: { me: Me; on: "jobs" | "workbook" | "billing" }) {
   return (
     <div className="row cp-tabs" role="tablist">
       <Link to="/jobs" className={`btn${on === "jobs" ? " primary" : ""}`} aria-current={on === "jobs" ? "page" : undefined}>{t("Jobs")}</Link>
-      <Link to="/jobs/billing" className={`btn${on === "billing" ? " primary" : ""}`} aria-current={on === "billing" ? "page" : undefined}>{t("Billing from work orders")}</Link>
+      <Link to="/jobs/workbook" className={`btn${on === "workbook" ? " primary" : ""}`} aria-current={on === "workbook" ? "page" : undefined}>{t("Work order")}</Link>
+      {can(me, "workbook.billing") && <Link to="/jobs/billing" className={`btn${on === "billing" ? " primary" : ""}`} aria-current={on === "billing" ? "page" : undefined}>{t("Billing from work orders")}</Link>}
     </div>
   );
 }
