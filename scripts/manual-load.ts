@@ -17,6 +17,7 @@ import { basename, join } from "node:path";
 import { homedir } from "node:os";
 import { createCanvas } from "@napi-rs/canvas";
 import { closeReader, findBalloons } from "./balloons";
+import { send } from "./cad-send";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { guessSection, linkSubAssemblies, readChapter11, type PageText, type TextItem } from "../src/shared/catalog/chapter11";
 
@@ -112,7 +113,7 @@ for (const job of jobs) {
     const balloonNote = drawn ? { drawingsWithDrawnBalloons: drawn, rowsWithSpot: spots, rowsWithoutSpot: noSpot } : {};
     if (dry) { done++; note(serial, "dry run", { pages: doc.numPages, sheets: sheets.length, rows, noNumber: sheets.filter((x) => !x.code).length, noDrawing: sheets.filter((x) => !x.balloons.length && x.drawingPage === undefined).length, warnings: warnings.length, ...balloonNote }); continue; }
 
-    const res = await fetch(`${PORTAL}/api/catalog-loader/machines/${encodeURIComponent(serial)}/import`, {
+    const res = await send(`${PORTAL}/api/catalog-loader/machines/${encodeURIComponent(serial)}/import`, {
       method: "POST", headers: { ...auth, "content-type": "application/json" },
       body: JSON.stringify({
         fileName: basename(job.pdf), pages: doc.numPages, warnings,
@@ -130,7 +131,7 @@ for (const job of jobs) {
     let drawings = 0, bytes = 0, bad = 0;
     for (const { key, id } of ids) {
       const img = pictures.get(Number(key))!;
-      const put = await fetch(`${PORTAL}/api/catalog-loader/sheets/${id}/drawing?w=${img.w}&h=${img.h}`, { method: "PUT", headers: { ...auth, "content-type": "image/webp" }, body: img.bytes });
+      const put = await send(`${PORTAL}/api/catalog-loader/sheets/${id}/drawing?w=${img.w}&h=${img.h}`, { method: "PUT", headers: { ...auth, "content-type": "image/webp" }, body: img.bytes });
       if (put.ok) { drawings++; bytes += img.bytes.byteLength; } else bad++;
     }
     await doc.destroy();
