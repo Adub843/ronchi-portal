@@ -134,7 +134,7 @@ for (const job of jobs) {
       const put = await send(`${PORTAL}/api/catalog-loader/sheets/${id}/drawing?w=${img.w}&h=${img.h}`, { method: "PUT", headers: { ...auth, "content-type": "image/webp" }, body: img.bytes });
       if (put.ok) { drawings++; bytes += img.bytes.byteLength; } else bad++;
     }
-    await doc.destroy();
+    await doc.loadingTask.destroy();
     if (bad) failed++; else done++;
     note(serial, bad ? "loaded, but some drawings were refused" : "loaded", { ...balloonNote, sheets: ids.length, rows, drawings, drawingsRefused: bad, mb: +(bytes / 1048576).toFixed(1), warnings: warnings.length, seconds: Math.round((Date.now() - t0) / 1000) });
   } catch (e) {
