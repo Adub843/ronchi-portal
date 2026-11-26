@@ -24,6 +24,7 @@ import { Customers, Quotes } from "./pages/Customers";
 import { Settings } from "./pages/Settings";
 import { JobList, JobPage, NewJob } from "./pages/Jobs";
 import { BillingWeek } from "./pages/Workbook";
+import { WorkbookPage } from "./pages/FieldServiceWorkbook";
 import { Learn } from "./pages/Learn";
 import { NewShipment, ShipmentPage, Shipping } from "./pages/Shipping";
 import { fromOldAddress, menuFor, pageAllowed } from "./nav";
@@ -136,6 +137,7 @@ export function App() {
   else if (m?.[1] === "boards" || m?.[1] === "chats") page = <BoardPage key={m[2]} id={m[2]!} me={me} />;
   else if (m?.[1] === "machines") page = <MachinePage id={m[2]!} me={me} />;
   else if (path === "/jobs/new") page = <NewJob me={me} />;
+  else if (path === "/jobs/workbook") page = switches.workbook ? <WorkbookPage me={me} /> : <JobList me={me} workbook={false} />;
   else if (path === "/jobs/billing") page = switches.workbook ? <BillingWeek me={me} /> : <JobList me={me} workbook={false} />;
   else if (m?.[1] === "jobs") page = <JobPage key={m[2]} id={m[2]!} me={me} />;
   else if (wo) page = <JobPage key={wo[1]} id={wo[1]!} me={me} tab="work-order" />;
