@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "ronchi-portal",
   "private": true,
   "version": "0.1.0",
@@ -21,6 +21,7 @@
     "set:help-key": "node scripts/set-help-key.mjs",
     "build:demo": "vite build --config web/vite.demo.config.ts && node scripts/inline-demo.mjs",
     "cad:check": "esbuild scripts/cad-check.ts --bundle --platform=node --format=esm --external:occt-import-js --log-level=warning --outfile=node_modules/.cache/cad-check.mjs && node node_modules/.cache/cad-check.mjs",
+    "cad:library": "esbuild scripts/cad-library.ts --bundle --platform=node --format=esm --external:occt-import-js --log-level=warning --outfile=node_modules/.cache/cad-library.mjs && node --max-old-space-size=12288 node_modules/.cache/cad-library.mjs",
     "cad:load": "esbuild scripts/cad-load.ts --bundle --platform=node --format=esm --external:occt-import-js --log-level=warning --outfile=node_modules/.cache/cad-load.mjs && node --max-old-space-size=12288 node_modules/.cache/cad-load.mjs",
     "loader:key": "node scripts/set-loader-key.mjs",
     "owner": "node scripts/set-owner.mjs"
