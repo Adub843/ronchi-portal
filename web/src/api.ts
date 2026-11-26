@@ -6,6 +6,8 @@ import type { PublicSettings } from "../../src/portal/lib/settings";
 // came from these pages and not from another website.
 
 export class ApiError extends Error {
+  /** Set when the server says this is the person's first sign-in and they must choose a password. */
+  firstTime?: boolean;
   constructor(public status: number, message: string) {
     super(message);
   }
@@ -22,7 +24,11 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
     body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, (data as { error?: string }).error ?? "Something went wrong.");
+  if (!res.ok) {
+    const err = new ApiError(res.status, (data as { error?: string }).error ?? "Something went wrong.");
+    if ((data as { firstTime?: boolean }).firstTime) err.firstTime = true;
+    throw err;
+  }
   return data as T;
 }
 

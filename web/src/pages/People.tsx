@@ -20,7 +20,7 @@ export function People({ me }: { me: Me }) {
   const [removing, setRemoving] = useState<string | null>(null);
   const [restoreRole, setRestoreRole] = useState<Record<string, string>>({});
   const [form, setForm] = useState({ name: "", email: "", role: startRole });
-  const [link, setLink] = useState<string | null>(null);
+  const [added, setAdded] = useState<{ login: string; signInAt: string; until: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   async function invite(e: React.FormEvent) {
@@ -28,11 +28,20 @@ export function People({ me }: { me: Me }) {
     setErr(null);
     try {
       const r = await api("/users/invite", { body: form });
-      setLink(r.link);
+      setAdded({ login: r.login, signInAt: r.signInAt, until: r.until });
       setForm({ name: "", email: "", role: startRole });
       reload();
     } catch (x) {
       setErr((x as Error).message);
+    }
+  }
+  async function resetPassword(u: { id: string; name: string }) {
+    try {
+      const r = await api(`/users/${encodeURIComponent(u.id)}/reset-password`, { body: {} });
+      toast(t("{name} can choose a new password at their next sign-in, until {when}.", { name: u.name.split(" ")[0]!, when: fmtTime(r.until) }));
+      reload();
+    } catch (x) {
+      toast((x as Error).message);
     }
   }
   async function update(id: string, body: Record<string, unknown>) {
@@ -69,7 +78,7 @@ export function People({ me }: { me: Me }) {
   async function restore(id: string) {
     try {
       await api(`/users/${encodeURIComponent(id)}/restore`, { body: restoreRole[id] ? { role: restoreRole[id] } : {} });
-      toast(t("Restored. They can sign in again with their passkey."));
+      toast(t("Restored. They can sign in again."));
       reload();
       roles.reload();
     } catch (x) {
@@ -106,17 +115,17 @@ export function People({ me }: { me: Me }) {
         </div>
         <ErrorNote error={err} />
         {people?.invitesPaused && <p className="note-inline">{t("New invites are paused. The portal owner can turn them back on in Settings > Command center.")}</p>}
-        <div><button className="btn primary" type="submit" disabled={people?.invitesPaused}>{t("Create invite link")}</button></div>
+        <div><button className="btn primary" type="submit" disabled={people?.invitesPaused}>{t("Add employee")}</button></div>
       </form>
-      {link && (
+      {added && (
         <div className="panel stack">
-          <b>{(people?.inviteHours ?? 72) % 24 === 0 ? t("Invite link (shown once, works for {n} day(s))", { n: (people?.inviteHours ?? 72) / 24 }) : t("Invite link (shown once, works for {n} hour(s))", { n: people?.inviteHours ?? 72 })}</b>
-          <code className="mono" style={{ overflowWrap: "anywhere" }}>{link}</code>
+          <b>{t("Added. Tell them how to sign in:")}</b>
+          <span>{t("Go to {site}, type the username {login} and press Sign in. The portal then asks them to choose their own password.", { site: added.signInAt.replace(/^https?:\/\//, ""), login: added.login })}</span>
+          <span className="muted">{t("Their first sign-in is open until {when}. After that, press Reset password next to their name to open it again.", { when: fmtTime(added.until) })}</span>
           <div className="row">
-            <button className="btn" onClick={() => navigator.clipboard.writeText(link).then(() => toast(t("Copied")))}>{t("Copy")}</button>
-            <button className="btn" onClick={() => setLink(null)}>{t("Done")}</button>
+            <button className="btn" onClick={() => navigator.clipboard.writeText(`${added.signInAt}\n${t("Username")}: ${added.login}`).then(() => toast(t("Copied")))}>{t("Copy")}</button>
+            <button className="btn" onClick={() => setAdded(null)}>{t("Done")}</button>
           </div>
-          <span className="muted">{t("Send it to them directly (Teams or text). Anyone with the link can create this login, so don't post it anywhere public.")}</span>
         </div>
       )}
       <ErrorNote error={error} />
@@ -151,10 +160,11 @@ export function People({ me }: { me: Me }) {
                   {changed > 0 && <div className="access-note">{changed === 1 ? t("1 change from the role") : t("{n} changes from the role", { n: changed })}</div>}
                 </td>
                 <td><span className={`pill ${u.status === "active" ? "p-ok" : "p-acc"}`}>{u.status === "active" ? t("active") : t("disabled")}</span></td>
-                <td className="muted">{t("{p} passkey(s), {s} signed in", { p: u.passkeys, s: u.sessions })}</td>
+                <td className="muted">{u.has_password ? t("Password set, {s} signed in", { s: u.sessions }) : u.password_setup_until && u.password_setup_until > new Date().toISOString() ? t("First sign-in open until {when}", { when: fmtTime(u.password_setup_until) }) : t("No password yet. Press Reset password.")}</td>
                 <td><div className="acts">
                   {adjustable && <button className={`btn small${open === u.id ? " on" : ""}`} aria-expanded={open === u.id} onClick={() => setOpen(open === u.id ? null : u.id)}>{t("Access")}</button>}
                   <button className="btn small" onClick={() => signOutAll(u.id)}>{t("Sign out everywhere")}</button>
+                  {u.status === "active" && <button className="btn small" title={t("Their old password stops working and their next sign-in asks them to choose a new one.")} onClick={() => resetPassword(u)}>{t("Reset password")}</button>}
                   {u.id !== me.id && (
                     <button className="btn small" title={t("Blocks sign-in for now. They stay on the list.")} onClick={() => update(u.id, { status: u.status === "active" ? "disabled" : "active" })}>{u.status === "active" ? t("Disable") : t("Re-enable")}</button>
                   )}
@@ -178,7 +188,7 @@ export function People({ me }: { me: Me }) {
         </table>
         {!!data?.invites.length && (
           <>
-            <h2 style={{ marginTop: 16 }}>{t("Invites not used yet")}</h2>
+            <h2 style={{ marginTop: 16 }}>{t("Added, not signed in yet")}</h2>
             {data.invites.map((i: any) => (
               <div key={i.id} className="row" style={{ padding: "4px 0" }}>
                 <span>{t("{name} ({email}), expires {when}", { name: i.name, email: i.email, when: fmtTime(i.expires_at) })}</span>

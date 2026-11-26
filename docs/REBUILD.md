@@ -115,9 +115,9 @@ Then Dashboard → the zone → Security → WAF → turn on the Cloudflare Mana
 npm run invite:first-admin -- --name "Aaron Lewis" --username AaronL   # or --email someone@company.com
 ```
 
-Open the printed link and create a passkey. Paolo then invites everyone else from
-**People**. (If you restored from a backup, skip this: people sign in as before. If their
-passkeys were made for a different domain, use RECOVERY.md section 2.)
+Open the portal, type that username, press Sign in and choose a password. The admin then
+adds everyone else from **People**. (If you restored from a backup, skip this: people sign
+in with their username and password as before.)
 
 ## 8. Check it
 

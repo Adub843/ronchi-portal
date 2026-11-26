@@ -4,8 +4,8 @@
 //   npm run invite:first-admin -- --name "Aaron Lewis" --username AaronL   # or --email someone@company.com            (live)
 //   npm run invite:first-admin -- --name "Test Admin" --email test@example.com --local             (laptop)
 //
-// It prints a one-time link. Open it on your phone or computer to create your passkey.
-// The link is not saved anywhere; only a hash of it goes into the database.
+// Then open the portal, type that username, press Sign in and choose your password.
+// This first sign-in is open for 24 hours.
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -55,10 +55,9 @@ if (!local && !origin?.startsWith("https://")) {
   console.error("Couldn't find the live ORIGIN in wrangler.portal.jsonc.");
   process.exit(1);
 }
-console.log(`\nFirst admin invite for ${name} (${email}). Works once, for 24 hours:\n\n  ${origin}/welcome#${token}\n`);
-// --open: also open the link in this computer's browser, so nobody has to copy it.
+console.log(`\nFirst admin added: ${name}. Open ${origin}, type the username ${email}, press Sign in and choose your password. Open for 24 hours.\n`);
+// --open: also open the portal in this computer's browser.
 if (args.includes("--open")) {
-  const url = `${origin}/welcome#${token}`;
-  if (process.platform === "win32") execFileSync("rundll32", ["url.dll,FileProtocolHandler", url]);
-  else execFileSync(process.platform === "darwin" ? "open" : "xdg-open", [url]);
+  if (process.platform === "win32") execFileSync("rundll32", ["url.dll,FileProtocolHandler", origin]);
+  else execFileSync(process.platform === "darwin" ? "open" : "xdg-open", [origin]);
 }

@@ -7,6 +7,7 @@ import { SOFTWARE_DYNAMIC, SOFTWARE_ES, SOFTWARE_IT } from "./i18n-software";
 import { PARTS_ORDERS_DYNAMIC, PARTS_ORDERS_ES, PARTS_ORDERS_IT } from "./i18n-parts-orders";
 import { WORKBOOK_DYNAMIC, WORKBOOK_ES, WORKBOOK_IT } from "./i18n-workbook";
 import { ERRORS_ES, ERRORS_IT } from "./i18n-errors";
+import { SIGNIN_ES, SIGNIN_IT } from "./i18n-signin";
 import { THEME_ES, THEME_IT } from "./i18n-themes";
 import { THEMES } from "../../src/shared/themes";
 
@@ -2100,6 +2101,10 @@ DYNAMIC.push(...SOFTWARE_DYNAMIC);
 Object.assign(ES, WORKBOOK_ES);
 Object.assign(IT, WORKBOOK_IT);
 DYNAMIC.push(...WORKBOOK_DYNAMIC);
+
+// Username-and-password sign-in (i18n-signin.ts). Words already translated elsewhere keep their translation.
+for (const [k, v] of Object.entries(SIGNIN_ES)) ES[k] ??= v;
+for (const [k, v] of Object.entries(SIGNIN_IT)) IT[k] ??= v;
 
 // The look descriptions in Settings (i18n-themes.ts).
 Object.assign(ES, THEME_ES);

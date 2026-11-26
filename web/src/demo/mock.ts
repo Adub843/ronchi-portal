@@ -293,6 +293,8 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     return { ok: true, invites: n };
   }
   if (path === "/auth/logout") throw new Fail(400, "Sign-out is turned off in this preview.");
+  if (path === "/auth/password/change") return { ok: true };
+  if (seg[0] === "users" && seg[2] === "reset-password") { log("password.reset"); return { ok: true, until: iso(new Date(Date.now() + 72 * 3600000)) }; }
   if (path === "/auth/add-device") return { link: "https://portal.ronchiamerica.com/welcome#example-one-time-link" };
   if (path === "/prefs/tips") {
     db.tips ??= [];
@@ -421,13 +423,13 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     return { changes: next, permissions: [...effective(t.role, next, savedPerms(t.role))] };
   }
   if (path === "/users" && method === "GET")
-    return { users: db.users.map((x) => ({ ...x, access: x.role === "admin" ? {} : (x.access ?? {}), until: x.until ?? {}, permissions: [...effective(x.role, x.access, savedPerms(x.role))], passkeys: 1 + (x.id === u.id ? 1 : 0), sessions: x.status === "active" ? 1 : 0 })), invites: db.invites };
+    return { users: db.users.map((x) => ({ ...x, access: x.role === "admin" ? {} : (x.access ?? {}), until: x.until ?? {}, permissions: [...effective(x.role, x.access, savedPerms(x.role))], passkeys: 0, has_password: 1, password_setup_until: null, sessions: x.status === "active" ? 1 : 0 })), invites: db.invites };
   if (path === "/users/invite") {
     if (db.settings.people.invitesPaused) throw new Fail(403, "New invites are paused. The portal owner can turn them back on in Settings > Command center.");
     if (!body.name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email ?? "")) throw new Fail(400, "Enter a name and a valid email.");
     db.invites.unshift({ id: id(), email: body.email, name: body.name, role: body.role, expires_at: iso(new Date(Date.now() + 72 * 3600000)) });
     log("invite.create");
-    return { link: `https://portal.ronchiamerica.com/welcome#example-link-for-${body.name.split(" ")[0].toLowerCase()}` };
+    return { link: "", login: String(body.email).toLowerCase(), signInAt: "https://portal.ronchiamerica.com", until: iso(new Date(Date.now() + 72 * 3600000)) };
   }
   if (path === "/users/audit/recent") return { entries: db.audit };
   if (path === "/users/me/devices")

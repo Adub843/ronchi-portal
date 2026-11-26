@@ -15,35 +15,26 @@ Cloudflare dashboard: https://dash.cloudflare.com → Workers & Pages.
    previous one → **Rollback**. Or run `npx wrangler rollback -c wrangler.portal.jsonc --env production`.
 4. If the database is the problem, see section 5.
 
-## 2. Someone is locked out (lost phone, new phone)
+## 2. Someone is locked out (forgot password, lost phone)
 
-1. An admin opens **People** → that person → **Sign out everywhere** (this kills any
-   session on the lost phone).
-2. Create a new invite for the same email: since the login exists, use the person's
-   own **Settings → Add a phone or computer** link from another signed-in device; if
-   they have none, an admin runs this to make a one-hour device link:
-   ```bash
-   # replace the email; prints nothing secret to logs except the link itself
-   node -e "
-   const c=require('crypto');const t=c.randomBytes(32).toString('base64url');
-   console.log('LINK: https://portal.ronchiamerica.com/welcome#'+t);
-   console.log('HASH:',c.createHash('sha256').update(t).digest('hex'))"
-   npx wrangler d1 execute portal-db --remote --env production -c wrangler.portal.jsonc --command \
-     "INSERT INTO invites (id,email,name,role,token_hash,created_at,expires_at,user_id)
-      SELECT lower(hex(randomblob(16))), email, name, role, '<HASH>', datetime('now'), strftime('%Y-%m-%dT%H:%M:%fZ','now','+1 hour'), id
-      FROM users WHERE email='person@ronchiamerica.com'"
-   ```
-3. Send them the link directly. They open it and create a new passkey.
-4. Old passkeys can be removed by the person in **Settings**.
+1. An admin opens **People** and presses **Reset password** next to that person. Their old
+   password stops working, they're signed out everywhere, and their next sign-in asks them
+   to choose a new password (open for the invite lifetime, 72 hours by default).
+2. Lost phone only: **Sign out everywhere** on the same row ends the session on that phone.
 
 ## 3. The only admin is locked out
 
-Same as section 2, step 2, using the admin's email. If the admin was disabled by mistake:
+Reopen the admin's first sign-in from the command line. Put the admin's username (lower
+case) in place of `aaronl`. For the next 2 hours, signing in with that username asks for a
+new password:
 
 ```bash
 npx wrangler d1 execute portal-db --remote --env production -c wrangler.portal.jsonc --command \
-  "UPDATE users SET status='active', role='admin' WHERE email='paolo@ronchiamerica.com'"
+  "UPDATE users SET status='active', password_hash=NULL, failed_logins=0, locked_until=NULL, password_setup_until=strftime('%Y-%m-%dT%H:%M:%fZ','now','+2 hours') WHERE email='aaronl'; DELETE FROM sessions WHERE user_id=(SELECT id FROM users WHERE email='aaronl')"
 ```
+
+Sign in straight away: until a password is chosen, anyone who knows the username could
+choose it.
 
 ## 4. Suspected break-in or a leaked link
 

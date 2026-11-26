@@ -113,13 +113,13 @@ export const GUIDES: Guide[] = [
   {
     id: "sign-in", area: "basics", needs: [],
     title: T("Sign in for the first time", "Iniciar sesión por primera vez", "Accedere la prima volta"),
-    summary: T("There's no password. You sign in with a passkey: Face ID, your fingerprint, Windows Hello or your device PIN.", "No hay contraseña. Se entra con una llave de acceso: Face ID, su huella, Windows Hello o el PIN del dispositivo.", "Non c'è password. Si accede con una passkey: Face ID, impronta, Windows Hello o il PIN del dispositivo."),
+    summary: T("You sign in with a username and a password. The first time, you choose the password yourself.", "Se entra con un nombre de usuario y una contraseña. La primera vez, usted mismo elige la contraseña.", "Si accede con un nome utente e una password. La prima volta scegli tu la password."),
     steps: [
-      T("Open the invite link an admin sent you. It works once, for 3 days.", "Abra el enlace de invitación que le envió un administrador. Funciona una vez, durante 3 días.", "Apri il link di invito che ti ha mandato un amministratore. Funziona una volta, per 3 giorni."),
-      T("Press Create my passkey and follow your phone or computer's prompt.", "Pulse Crear mi llave de acceso y siga las indicaciones de su teléfono o computadora.", "Premi Crea la mia passkey e segui le istruzioni del telefono o del computer."),
-      T("Next time, open the portal and press Sign in with passkey.", "La próxima vez, abra el portal y pulse Iniciar sesión con llave de acceso.", "La prossima volta apri il portale e premi Accedi con passkey."),
+      T("Open the portal and type the username an admin gave you. Leave the password empty and press Sign in.", "Abra el portal y escriba el nombre de usuario que le dio un administrador. Deje la contraseña vacía y pulse Iniciar sesión.", "Apri il portale e scrivi il nome utente che ti ha dato un amministratore. Lascia vuota la password e premi Accedi."),
+      T("Type a new password of at least 8 characters, twice, and press Save password and sign in.", "Escriba una contraseña nueva de al menos 8 caracteres, dos veces, y pulse Guardar contraseña e iniciar sesión.", "Scrivi una nuova password di almeno 8 caratteri, due volte, e premi Salva la password e accedi."),
+      T("Next time, type your username and that password.", "La próxima vez, escriba su nombre de usuario y esa contraseña.", "La prossima volta scrivi il nome utente e quella password."),
     ],
-    tip: T("Lost the link, or it expired? Ask an admin for a new one.", "¿Perdió el enlace o venció? Pida uno nuevo a un administrador.", "Hai perso il link o è scaduto? Chiedine uno nuovo a un amministratore."),
+    tip: T("Forgot your password, or your first sign-in ran out? Ask an admin to press Reset password.", "¿Olvidó su contraseña o venció su primer inicio de sesión? Pida a un administrador que pulse Restablecer contraseña.", "Hai dimenticato la password o il primo accesso è scaduto? Chiedi a un amministratore di premere Reimposta password."),
   },
   {
     id: "find-your-way", area: "basics", needs: [],
@@ -135,12 +135,12 @@ export const GUIDES: Guide[] = [
   },
   {
     id: "add-device", area: "basics", needs: [], open: "/settings",
-    title: T("Add your phone or another computer", "Agregar su teléfono u otra computadora", "Aggiungere il telefono o un altro computer"),
-    summary: T("Each phone or computer gets its own passkey. Add it from a device that's already signed in.", "Cada teléfono o computadora tiene su propia llave de acceso. Agréguelo desde un dispositivo que ya tenga la sesión iniciada.", "Ogni telefono o computer ha la sua passkey. Aggiungilo da un dispositivo già collegato."),
+    title: T("Change your password", "Cambiar su contraseña", "Cambiare la password"),
+    summary: T("You can change your password any time. The same username and password work on your phone and every computer.", "Puede cambiar su contraseña cuando quiera. El mismo nombre de usuario y contraseña sirven en su teléfono y en cualquier computadora.", "Puoi cambiare la password quando vuoi. Lo stesso nome utente e la stessa password valgono sul telefono e su ogni computer."),
     steps: [
-      T("On the device you're signed in on, open Settings and find Your devices.", "En el dispositivo donde ya inició sesión, abra Configuración y busque Sus dispositivos.", "Sul dispositivo già collegato apri Impostazioni e cerca I tuoi dispositivi."),
-      T("Press Add a phone or computer and copy the link.", "Pulse Agregar un teléfono o computadora y copie el enlace.", "Premi Aggiungi un telefono o computer e copia il link."),
-      T("Open the link on the new device within 1 hour and create a passkey there.", "Abra el enlace en el dispositivo nuevo antes de 1 hora y cree allí una llave de acceso.", "Apri il link sul nuovo dispositivo entro 1 ora e crea lì una passkey."),
+      T("Open Settings and find Your devices.", "Abra Configuración y busque Sus dispositivos.", "Apri Impostazioni e cerca I tuoi dispositivi."),
+      T("Press Change password. Type your current password, then the new one twice.", "Pulse Cambiar contraseña. Escriba su contraseña actual y luego la nueva dos veces.", "Premi Cambia password. Scrivi la password attuale, poi quella nuova due volte."),
+      T("Press Save password. Your other devices are signed out and need the new password.", "Pulse Guardar contraseña. Sus otros dispositivos cierran sesión y necesitan la contraseña nueva.", "Premi Salva password. Gli altri dispositivi vengono disconnessi e servirà la nuova password."),
     ],
   },
   {
@@ -162,7 +162,7 @@ export const GUIDES: Guide[] = [
       T("Open Settings and find Your devices.", "Abra Configuración y busque Sus dispositivos.", "Apri Impostazioni e cerca I tuoi dispositivi."),
       T("Press Sign out next to the device you lost.", "Pulse Cerrar sesión junto al dispositivo perdido.", "Premi Esci accanto al dispositivo perso."),
     ],
-    tip: T("No other device to sign in with? Ask an admin to sign you out everywhere and send a new invite.", "¿No tiene otro dispositivo? Pida a un administrador que cierre su sesión en todas partes y le envíe una invitación nueva.", "Nessun altro dispositivo? Chiedi a un amministratore di disconnetterti ovunque e mandarti un nuovo invito."),
+    tip: T("Think someone knows your password? Change it here, or ask an admin to press Reset password.", "¿Cree que alguien conoce su contraseña? Cámbiela aquí, o pida a un administrador que pulse Restablecer contraseña.", "Pensi che qualcuno conosca la tua password? Cambiala qui, o chiedi a un amministratore di premere Reimposta password."),
   },
   {
     id: "language-look", area: "basics", needs: [], open: "/settings",
@@ -719,11 +719,12 @@ export const GUIDES: Guide[] = [
   {
     id: "invite-employee", area: "people", needs: ["users.manage"],
     title: T("Add an employee", "Agregar un empleado", "Aggiungere un dipendente"),
-    summary: T("Make an invite link so a new person can create their login.", "Cree un enlace de invitación para que una persona nueva cree su acceso.", "Crea un link di invito perché una persona nuova crei il suo accesso."),
+    summary: T("Add a new person with a username. They choose their own password the first time they sign in.", "Agregue a una persona nueva con un nombre de usuario. Ella elige su propia contraseña la primera vez que inicia sesión.", "Aggiungi una persona nuova con un nome utente. Sceglie la propria password al primo accesso."),
     steps: [
       T("Open People, then Employees, and find Add an employee.", "Abra Personas, luego Empleados, y busque Agregar un empleado.", "Apri Persone, poi Dipendenti, e cerca Aggiungi un dipendente."),
       T("Type their full name, work email or a username, and pick their role.", "Escriba su nombre completo, correo de trabajo o un nombre de usuario, y elija su rol.", "Scrivi nome completo, email di lavoro o un nome utente, e scegli il ruolo."),
-      T("Press Create invite link and send it to them directly, by Teams or text. It's shown once and works for 3 days.", "Pulse Crear enlace de invitación y envíeselo directamente, por Teams o mensaje. Se muestra una vez y funciona 3 días.", "Premi Crea link di invito e mandalo direttamente, via Teams o messaggio. Si vede una volta e funziona 3 giorni."),
+      T("Press Add employee, then tell them the portal's address and their username. Their first sign-in is open for 3 days.", "Pulse Añadir empleado y dígale la dirección del portal y su nombre de usuario. Su primer inicio de sesión está abierto 3 días.", "Premi Aggiungi dipendente, poi comunica l'indirizzo del portale e il nome utente. Il primo accesso resta aperto 3 giorni."),
+      T("Forgot password? Press Reset password next to their name. They choose a new one at their next sign-in.", "¿Olvidó la contraseña? Pulse Restablecer contraseña junto a su nombre. Elegirá una nueva en su próximo inicio de sesión.", "Password dimenticata? Premi Reimposta password accanto al nome. Ne sceglierà una nuova al prossimo accesso."),
     ],
   },
   {
