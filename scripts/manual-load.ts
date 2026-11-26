@@ -17,6 +17,7 @@ import { basename, join } from "node:path";
 import { homedir } from "node:os";
 import { createCanvas } from "@napi-rs/canvas";
 import { closeReader, findBalloons } from "./balloons";
+import { send } from "./cad-send";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { guessSection, linkSubAssemblies, readChapter11, type PageText, type TextItem } from "../src/shared/catalog/chapter11";
 
@@ -94,15 +95,14 @@ for (const job of jobs) {
     // One picture per drawing. Older manuals draw their balloon numbers instead of typing them,
     // so those are read off the picture here, before the parts lists are sent.
     const pictures = new Map<number, { bytes: Buffer; w: number; h: number }>();
-    const sizes = new Map<number, number>();
     let drawn = 0, spots = 0, noSpot = 0;
     for (const s of sheets) {
       const img = await pageImage(doc, s.drawingPage ?? s.page);
       pictures.set(s.page, { bytes: img.bytes, w: img.w, h: img.h });
       if (!readBalloons || s.balloons.length || s.drawingPage === undefined || !s.rows.length) continue;
-      const settled = [...sizes].find(([, n]) => n >= 3)?.[0];
-      const found = await findBalloons(img.canvas, img.pointsWide, new Set(s.rows.map((r) => r.pos)), settled);
-      if (found.radius) sizes.set(found.radius, (sizes.get(found.radius) ?? 0) + 1);
+      const want = new Set(s.rows.map((r) => r.pos));
+      const found = await findBalloons(img.canvas, img.pointsWide, want);
+      if (process.env.RONCHI_BALLOON_LOG) console.log(`  p${s.drawingPage} ${s.code} rows ${want.size} spots ${new Set(found.balloons.map((b) => b.pos)).size} circles ${found.circles} turn ${found.turn}`);
       s.balloons = found.balloons;
       drawn++;
       const have = new Set(found.balloons.map((b) => b.pos));
@@ -113,7 +113,7 @@ for (const job of jobs) {
     const balloonNote = drawn ? { drawingsWithDrawnBalloons: drawn, rowsWithSpot: spots, rowsWithoutSpot: noSpot } : {};
     if (dry) { done++; note(serial, "dry run", { pages: doc.numPages, sheets: sheets.length, rows, noNumber: sheets.filter((x) => !x.code).length, noDrawing: sheets.filter((x) => !x.balloons.length && x.drawingPage === undefined).length, warnings: warnings.length, ...balloonNote }); continue; }
 
-    const res = await fetch(`${PORTAL}/api/catalog-loader/machines/${encodeURIComponent(serial)}/import`, {
+    const res = await send(`${PORTAL}/api/catalog-loader/machines/${encodeURIComponent(serial)}/import`, {
       method: "POST", headers: { ...auth, "content-type": "application/json" },
       body: JSON.stringify({
         fileName: basename(job.pdf), pages: doc.numPages, warnings,
@@ -131,7 +131,7 @@ for (const job of jobs) {
     let drawings = 0, bytes = 0, bad = 0;
     for (const { key, id } of ids) {
       const img = pictures.get(Number(key))!;
-      const put = await fetch(`${PORTAL}/api/catalog-loader/sheets/${id}/drawing?w=${img.w}&h=${img.h}`, { method: "PUT", headers: { ...auth, "content-type": "image/webp" }, body: img.bytes });
+      const put = await send(`${PORTAL}/api/catalog-loader/sheets/${id}/drawing?w=${img.w}&h=${img.h}`, { method: "PUT", headers: { ...auth, "content-type": "image/webp" }, body: img.bytes });
       if (put.ok) { drawings++; bytes += img.bytes.byteLength; } else bad++;
     }
     await doc.destroy();
