@@ -43,6 +43,22 @@ describe("PC catalog loader", () => {
     expect(tree.data.sheets.find((s: any) => s.id === sheet).has_model).toBeTruthy();
   });
 
+  it("takes a wrong 3D model off again, by key or by staff", async () => {
+    const { sheet, admin, machineId } = await machineWithSheet();
+    const hasModel = async () => (await admin.json(`/api/catalog/machines/${machineId}`)).data.sheets.find((s: any) => s.id === sheet).has_model;
+    await call(`/sheets/${sheet}/model`, { method: "PUT", key: KEY, type: "model/gltf-binary", body: GLB });
+    expect((await call(`/sheets/${sheet}/model`, { method: "DELETE", key: KEY })).status).toBe(200);
+    expect(await hasModel()).toBeFalsy();
+    expect((await call(`/sheets/${sheet}/model`, { method: "DELETE", key: KEY })).status).toBe(404);
+    expect((await call(`/sheets/${sheet}/model`, { method: "DELETE" })).status).toBe(404);
+
+    await call(`/sheets/${sheet}/model`, { method: "PUT", key: KEY, type: "model/gltf-binary", body: GLB });
+    expect((await admin.fetch(`/api/catalog/sheets/${sheet}/model`, { method: "DELETE" })).status).toBe(200);
+    expect(await hasModel()).toBeFalsy();
+    const viewer = await person("tech");
+    expect((await viewer.fetch(`/api/catalog/sheets/${sheet}/model`, { method: "DELETE" })).status).toBe(403);
+  });
+
   it("only takes real GLB files", async () => {
     const { sheet } = await machineWithSheet();
     expect((await call(`/sheets/${sheet}/model`, { method: "PUT", key: KEY, type: "model/gltf-binary", body: new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) })).status).toBe(400);

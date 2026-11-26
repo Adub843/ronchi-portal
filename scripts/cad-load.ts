@@ -5,6 +5,7 @@
 //   npm run cad:load -- list                          every machine: parts lists, how many have 3D
 //   npm run cad:load -- <machine number> <file.stp>   load one machine (add --dry-run to only check,
 //                                                     --replace to redo parts lists that already have 3D)
+//   npm run cad:load -- remove <machine number> <parts list number> ...   take 3D off those parts lists
 //
 // It needs the loader key (made once with `npm run loader:key`), read from the file
 // %USERPROFILE%\.ronchi\catalog-loader-key. PORTAL_URL picks the portal (default: the live one).
@@ -30,7 +31,7 @@ const args = process.argv.slice(2);
 const flags = new Set(args.filter((a) => a.startsWith("--")));
 const [cmd, file] = args.filter((a) => !a.startsWith("--"));
 if (!cmd) {
-  console.error("Usage: npm run cad:load -- list\n       npm run cad:load -- <machine number> <file.stp|.glb> [--dry-run] [--replace]");
+  console.error("Usage: npm run cad:load -- list\n       npm run cad:load -- <machine number> <file.stp|.glb> [--dry-run] [--replace]\n       npm run cad:load -- remove <machine number> <parts list number> ...");
   process.exit(2);
 }
 
@@ -60,6 +61,22 @@ if (cmd === "list") {
   const withCatalog = all.filter((m) => m.sheets.length);
   console.log(`\n${all.length} machines, ${withCatalog.length} with a parts catalog, ${withCatalog.filter((m) => m.sheets.some((s) => s.has_model)).length} with some 3D.`);
   process.exit(0);
+}
+
+if (cmd === "remove") {
+  const [serialArg, ...codes] = args.filter((a) => !a.startsWith("--")).slice(1);
+  const mm = serialArg ? (await machines()).find((x) => x.serial.toUpperCase() === serialArg.toUpperCase()) : undefined;
+  if (!mm || !codes.length) { console.error("Give the machine number and the parts list numbers to take 3D off."); process.exit(2); }
+  const want = new Set(codes.map((c) => c.toUpperCase()));
+  let removed = 0, failed = 0;
+  for (const s of mm.sheets) {
+    if (!s.code || !want.has(s.code.toUpperCase()) || !s.has_model) continue;
+    const r = await fetch(`${PORTAL}/api/catalog-loader/sheets/${s.id}/model`, { method: "DELETE", headers: auth });
+    if (r.ok) { removed++; console.log(`  ${s.code} ${s.title}: 3D removed`); }
+    else { failed++; console.log(`  ${s.code} ${s.title}: failed (${r.status} ${await r.text()})`); }
+  }
+  console.log(`\nRemoved 3D from ${removed} parts lists. Failed: ${failed}.`);
+  process.exit(failed ? 1 : 0);
 }
 
 if (!file) {
