@@ -14,10 +14,8 @@ interface Circle { x: number; y: number; r: number; score: number }
 
 const lum = (d: Uint8ClampedArray, i: number) => (d[i * 4]! * 3 + d[i * 4 + 1]! * 6 + d[i * 4 + 2]!) / 10;
 
-/** Circles with a clear rim and a little ink inside, on a grey picture. Radii in pixels. */
-export function findCircles(gray: Uint8Array, W: number, H: number, rMin: number, rMax: number): Circle[] {
-  const ink = new Uint8Array(W * H);
-  for (let i = 0; i < W * H; i++) if (gray[i]! < 200) ink[i] = 1;
+/** Circles with a clear rim and a little ink inside. `ink` is 1 where the picture is dark. Radii in pixels. */
+export function findCircles(ink: Uint8Array, W: number, H: number, rMin: number, rMax: number): Circle[] {
   const ANG = 40, cos: number[] = [], sin: number[] = [];
   for (let a = 0; a < ANG; a++) { cos.push(Math.cos((a / ANG) * 2 * Math.PI)); sin.push(Math.sin((a / ANG) * 2 * Math.PI)); }
   const RING = 72, rc: number[] = [], rs: number[] = [];
@@ -53,7 +51,7 @@ export function findCircles(gray: Uint8Array, W: number, H: number, rMin: number
         if (d < r * 0.62) { area++; inside += ink[(y + dy) * W + x + dx]!; }
         else if (d > r * 0.72 && d < r * 0.86) { bandN++; band += ink[(y + dy) * W + x + dx]!; }
       }
-      if (inside / area < 0.03 || inside / area > 0.5 || band / bandN > 0.1) continue;
+      if (inside / area < 0.012 || inside / area > 0.5 || band / bandN > 0.1) continue;
       // A balloon stands clear of the drawing: around it there is only its leader line.
       let around = 0, aroundN = 0;
       const R2 = Math.ceil(r * 1.45);
@@ -86,13 +84,15 @@ function reader(): Promise<Worker> {
 export async function closeReader() { if (worker) await (await worker).terminate(); worker = null; }
 
 /** One balloon's inside, cut round, blown up to `size` pixels and its lines thickened by `thick`. */
-function crop(page: Canvas, cx: number, cy: number, R: number, size: number, thick: number): Buffer {
+function crop(page: Canvas, cx: number, cy: number, R: number, size: number, thick: number, turn: number): Buffer {
   const s = R * 0.8, P = 40;
   const c = createCanvas(size + P * 2, size + P * 2);
   const g = c.getContext("2d");
   g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
   g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
   g.save(); g.beginPath(); g.arc(c.width / 2, c.height / 2, size / 2, 0, Math.PI * 2); g.clip();
+  // Drawings printed sideways have their numbers on their side: turn the cut so they stand up.
+  g.translate(c.width / 2, c.height / 2); g.rotate((turn * Math.PI) / 180); g.translate(-c.width / 2, -c.height / 2);
   g.drawImage(page, cx - s, cy - s, s * 2, s * 2, P, P, size, size); g.restore();
   const im = g.getImageData(0, 0, c.width, c.height), w = c.width, h = c.height;
   const dark = new Uint8Array(w * h);
@@ -114,51 +114,66 @@ const LOOKS: [size: number, thick: number][] = [[420, 4], [420, 2], [300, 1]];
 
 /**
  * The balloons on a drawn page. `page` is the page picture, `pointsWide` the page's width in PDF
- * points (balloons are 5 to 13 points in radius), `positions` the position numbers in its parts list,
- * `radius` the balloon size other pages of this manual settled on (in the 2 pixels per point copy), to look faster.
- * Answers spots as fractions of the picture, like the typed-balloon reader does.
+ * points, `positions` the position numbers in its parts list. Balloons differ a lot from drawing
+ * to drawing (5 to 45 points in radius), and some drawings are printed sideways, so every size
+ * and three ways up are tried. Answers spots as fractions of the picture, like the typed-balloon reader.
  */
-export async function findBalloons(page: Canvas, pointsWide: number, positions: Set<string>, radius?: number): Promise<{ balloons: Balloon[]; circles: number; unread: number; radius: number }> {
-  // Look for circles on a copy at 2 pixels per point: fast, and the rim is still a clean line.
-  const W = Math.round(pointsWide * 2), f = W / page.width, H = Math.round(page.height * f);
-  const small = createCanvas(W, H);
-  const g = small.getContext("2d");
-  g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
-  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
-  g.drawImage(page, 0, 0, W, H);
-  const d = g.getImageData(0, 0, W, H).data;
-  const gray = new Uint8Array(W * H);
-  for (let i = 0; i < gray.length; i++) gray[i] = lum(d, i);
-  const circles = radius ? findCircles(gray, W, H, radius - 2, radius + 2) : findCircles(gray, W, H, 10, 26);
-  const w = await reader();
-  const read: { c: Circle; pos: string; votes: number }[] = [];
-  let unread = 0;
-  for (const c of circles) {
-    const votes = new Map<string, number>();
-    for (const [size, thick] of LOOKS) {
-      const t = (await w.recognize(crop(page, c.x / f, c.y / f, c.r / f, size, thick))).data.text.trim().replace(/^0+(?=\d)/, "");
-      if (t) votes.set(t, (votes.get(t) ?? 0) + 1);
-      // Two the same settle it; no need for the third look.
-      if ((votes.get(t) ?? 0) >= 2) break;
+export async function findBalloons(page: Canvas, pointsWide: number, positions: Set<string>): Promise<{ balloons: Balloon[]; circles: number; unread: number; turn: number }> {
+  const PW = page.width, PH = page.height;
+  const d = page.getContext("2d").getImageData(0, 0, PW, PH).data;
+  // A smaller copy where a pixel is ink if anything under it is: thin grey lines survive the shrink.
+  const shrink = (pxPerPoint: number) => {
+    const f = (pointsWide * pxPerPoint) / PW, W = Math.ceil(PW * f), H = Math.ceil(PH * f);
+    const ink = new Uint8Array(W * H);
+    for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) if (lum(d, y * PW + x) < 200) ink[Math.floor(y * f) * W + Math.floor(x * f)] = 1;
+    return { ink, W, H, f };
+  };
+  // Small balloons on a 2 pixels per point copy, big ones on a coarser one: both stay quick.
+  const circles: Circle[] = [];
+  for (const [ppp, rMin, rMax] of [[2, 10, 27], [0.7, 9, 32]] as const) {
+    const { ink, W, H, f } = shrink(ppp);
+    for (const c of findCircles(ink, W, H, rMin, rMax)) {
+      const full = { x: c.x / f, y: c.y / f, r: c.r / f, score: c.score };
+      if (!circles.some((k) => Math.hypot(k.x - full.x, k.y - full.y) < Math.max(k.r, full.r))) circles.push(full);
     }
-    const best = [...votes].sort((a, b) => b[1] - a[1])[0];
-    if (best && best[1] >= 2 && positions.has(best[0])) read.push({ c, pos: best[0], votes: best[1] });
-    else unread++;
   }
-  // The same number on two balloons while another position has none usually means a digit was
-  // missed (71 read as 7). Keep the surest one and leave the others out.
+  const w = await reader();
+  const readAll = async (turn: number) => {
+    const read: { c: Circle; pos: string; votes: number }[] = [];
+    for (const c of circles) {
+      const votes = new Map<string, number>();
+      for (const [size, thick] of LOOKS) {
+        const t = (await w.recognize(crop(page, c.x, c.y, c.r, size, thick, turn))).data.text.trim().replace(/^0+(?=\d)/, "");
+        if (t) votes.set(t, (votes.get(t) ?? 0) + 1);
+        // Two the same settle it; no need for the third look.
+        if ((votes.get(t) ?? 0) >= 2) break;
+      }
+      const best = [...votes].sort((a, b) => b[1] - a[1])[0];
+      if (best && best[1] >= 2 && positions.has(best[0])) read.push({ c, pos: best[0], votes: best[1] });
+    }
+    return read;
+  };
+  // Upright first; when that reads under half the circles, the drawing is probably on its side.
+  let turn = 0;
+  let read = await readAll(0);
+  if (circles.length >= 2 && read.length < circles.length * 0.5) {
+    for (const t of [90, -90]) {
+      const r = await readAll(t);
+      if (r.length > read.length) { read = r; turn = t; }
+    }
+  }
   // Every balloon on a page is drawn the same size; a "balloon" of another size is a round part of
   // the drawing that happened to read as a number.
-  const sizes = new Map<number, number>();
-  for (const r of read) sizes.set(r.c.r, (sizes.get(r.c.r) ?? 0) + 1);
-  const usual = [...sizes].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 0;
-  for (let i = read.length - 1; i >= 0; i--) if (Math.abs(read[i]!.c.r - usual) > 1) { read.splice(i, 1); unread++; }
+  const usual = read.map((r) => r.c.r).sort((a, b) => a - b)[Math.floor(read.length / 2)] ?? 0;
+  read = read.filter((r) => Math.abs(r.c.r - usual) <= Math.max(usual * 0.08, PW / (pointsWide * 2)));
+  // The same number on two balloons while another position has none usually means a digit was
+  // missed (71 read as 7). Keep the surest one and leave the others out.
   const missing = [...positions].some((p) => !read.some((r) => r.pos === p));
   const balloons: Balloon[] = [];
   for (const r of read.sort((a, b) => b.votes - a.votes || b.c.score - a.c.score)) {
-    if (missing && balloons.some((b) => b.pos === r.pos)) { unread++; continue; }
-    const size = (r.c.r * 2.1) / f;
-    balloons.push({ pos: r.pos, x: Math.max(0, (r.c.x / f - size / 2) / page.width), y: Math.max(0, (r.c.y / f - size / 2) / page.height), w: size / page.width, h: size / page.height });
+    if (missing && balloons.some((b) => b.pos === r.pos)) continue;
+    const size = r.c.r * 2.1;
+    balloons.push({ pos: r.pos, x: Math.max(0, (r.c.x - size / 2) / PW), y: Math.max(0, (r.c.y - size / 2) / PH), w: size / PW, h: size / PH });
   }
-  return { balloons, circles: circles.length, unread, radius: balloons.length >= 3 ? usual : 0 };
+  return { balloons, circles: circles.length, unread: circles.length - balloons.length, turn };
 }
