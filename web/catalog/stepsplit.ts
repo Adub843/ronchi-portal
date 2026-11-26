@@ -15,9 +15,10 @@ export interface StepIndex {
 }
 
 // One entity: "#12=" then anything up to the ";" that ends it, with quoted strings (which may hold
-// ";" or "''") skipped whole.
-const ENTITY = /#(\d+)\s*=\s*((?:[^;']|'(?:[^']|'')*')*);/g;
-const STRING = /'(?:[^']|'')*'/g;
+// ";") skipped whole. A doubled quote inside a string ('it''s') reads as two strings back to back,
+// which skips the same text and leaves the pattern only one way to match.
+const ENTITY = /#(\d+)\s*=\s*((?:[^;']|'[^']*')*);/g;
+const STRING = /'[^']*'/g;
 const REF = /#(\d+)/g;
 
 /** The entity ids an entity's text points at, leaving out anything inside quoted strings. */
