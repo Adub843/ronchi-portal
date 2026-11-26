@@ -1,7 +1,7 @@
 // People: invites, roles, disabling, and signing out devices.
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
-import { audit, now } from "../lib/db";
+import { addSeconds, audit, now } from "../lib/db";
 import { body, fail, has, mustStr, requirePerm, requireUser } from "../lib/http";
 import { createInvite } from "../lib/invites";
 import { ACCESS_LIVE, adjustable, effective, isPermission, isRole, PERMISSION_GROUPS, readChanges, VIEW_PERMS, type AccessChanges, type Permission } from "../lib/roles";
@@ -182,6 +182,7 @@ users.get("/", async (c) => {
             (SELECT n.email FROM notice_emails n WHERE n.user_id = u.id) AS notify_email,
             (SELECT r.perms FROM roles r WHERE r.id = u.role) AS role_perms,
             (SELECT COUNT(*) FROM passkeys p WHERE p.user_id = u.id) AS passkeys,
+            u.password_hash IS NOT NULL AS has_password, u.password_setup_until,
             (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id) AS sessions
        FROM users u ORDER BY u.name`,
   ).all();
@@ -217,7 +218,8 @@ users.post("/invite", async (c) => {
   if (exists) fail(409, "Someone with this email or username already has a login.");
   const link = await createInvite(c.env, { email, name, role: b.role as string, createdBy: admin.id });
   await audit(c.env.DB, { userId: admin.id, action: "invite.create", detail: { email, role: b.role }, ip: c.get("ip") });
-  return c.json({ link });
+  // The person signs in with this username and chooses a password; `link` is the older passkey link.
+  return c.json({ link, login: email, signInAt: c.env.ORIGIN, until: addSeconds(now(), getSettings().people.inviteHours * 3600) });
 });
 
 /** Change a person's role, or disable them. */
@@ -273,6 +275,26 @@ users.post("/:id/sign-out-everywhere", async (c) => {
   const n = await endAllSessions(c.env.DB, id);
   await audit(c.env.DB, { userId: admin.id, action: "user.sign_out_all", targetType: "user", targetId: id, detail: { sessions: n }, ip: c.get("ip") });
   return c.json({ ok: true, sessions: n });
+});
+
+/**
+ * Reset a person's password: the old one stops working, they're signed out everywhere, and their
+ * next sign-in is a first sign-in again (username, then choose a new password). Nobody ever sees
+ * or sets someone else's password.
+ */
+users.post("/:id/reset-password", async (c) => {
+  const admin = requirePerm(c, "users.manage");
+  const id = c.req.param("id");
+  const target = await c.env.DB.prepare("SELECT id, name, status, removed_at FROM users WHERE id = ?").bind(id).first<{ id: string; name: string; status: string; removed_at: string | null }>();
+  if (!target) fail(404, "Not found.");
+  if (target.removed_at || target.status !== "active") fail(409, "This login is switched off. Switch it on first.");
+  if (id !== admin.id && !admin.owner && (await isOwnerId(c.env.DB, id))) fail(403, "Only the portal owner can change the owner's login.");
+  const until = addSeconds(now(), getSettings().people.inviteHours * 3600);
+  await c.env.DB.prepare("UPDATE users SET password_hash = NULL, password_set_at = NULL, password_setup_until = ?, failed_logins = 0, locked_until = NULL, updated_at = ? WHERE id = ?").bind(until, now(), id).run();
+  // The admin's own session stays, so resetting your own password doesn't lock you out mid-click.
+  const sessions = id === admin.id ? 0 : await endAllSessions(c.env.DB, id);
+  await audit(c.env.DB, { userId: admin.id, action: "password.reset", targetType: "user", targetId: id, detail: { name: target.name, sessions }, ip: c.get("ip") });
+  return c.json({ ok: true, until });
 });
 
 /**

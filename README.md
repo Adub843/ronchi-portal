@@ -3,7 +3,7 @@
 The control hub for Ronchi America: one sign-in for staff (computer or phone), plus a
 separate public help center and a customer parts site. Written so any web developer can pick it up.
 
-- **Staff portal** (`ronchi-portal.business-console.workers.dev` for now): sign-in with passkeys, message boards,
+- **Staff portal** (`ronchi-portal.business-console.workers.dev` for now): sign-in with a username and password, message boards,
   the machine registry, change-part orders and the knowledge base (one search box with filters, Issue
   and Fix articles, quick notes, search by machine number or customer). Later steps add workbook
   Submit, the schedule and remote support (see the plan).
@@ -33,7 +33,7 @@ All mainstream, nothing homemade:
 | Server | Cloudflare Workers with [Hono](https://hono.dev) |
 | Database | Cloudflare D1 (SQLite) |
 | Staff app | React + Vite, served by the portal Worker |
-| Sign-in | Passkeys via [SimpleWebAuthn](https://simplewebauthn.dev) |
+| Sign-in | Username and password (salted PBKDF2 hash, `src/portal/lib/password.ts`) |
 | Files | Cloudflare R2 |
 | Manual reading | [pdf.js](https://mozilla.github.io/pdf.js/), in the browser |
 | 3D | [three.js](https://threejs.org); STEP is turned into glTF in the browser by [occt-import-js](https://github.com/kovacsv/occt-import-js) (OpenCascade, LGPL 2.1, loaded as its own unmodified file) |
@@ -78,8 +78,8 @@ npm run invite:first-admin -- --name "Your Name" --email you@example.com --local
 npm run dev                              # builds the app, serves it at http://localhost:8787
 ```
 
-Open the printed `http://localhost:8787/welcome#...` link and create a passkey
-(Windows Hello, Touch ID, or your phone). The help center runs with `npm run dev:help`
+Open http://localhost:8787, type that email as the username, press Sign in and choose
+a password. The help center runs with `npm run dev:help`
 on http://localhost:8788.
 
 The parts site runs with `npm run dev:parts` on http://localhost:8789. To publish to it
@@ -122,9 +122,12 @@ peer list. All peers the project needs are listed directly in `package.json`.)
 
 ## How security works
 
-- **Passkeys only.** No passwords and no text codes. A person gets a one-time invite link
-  (72 hours unless an admin changes it in Settings) from an admin, and creates a passkey. Extra devices are added from
-  Settings with a one-hour link.
+- **Username and password.** An admin adds a person on People. The first time that person
+  signs in (within 72 hours unless an admin changes it in Settings) they type their username
+  and choose their own password. Only a salted, slow hash is stored. Eight wrong passwords
+  lock the login for 15 minutes. An admin's **Reset password** makes the next sign-in a first
+  sign-in again; nobody ever sets or sees someone else's password. (The staff portal's older
+  passkey routes are still in `routes/auth.ts`, unused by the sign-in page.)
 - **Sessions** are a random 256-bit token in an `HttpOnly`, `Secure`, `SameSite=Strict`
   cookie. Only its SHA-256 hash is stored. Sessions end after 14 idle days or 30 days (both adjustable in Settings > Admin controls),
   and can be ended from Settings (own devices) or People (anyone, by an admin).

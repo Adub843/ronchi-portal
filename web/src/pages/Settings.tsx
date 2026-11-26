@@ -2,7 +2,7 @@
 // The portal owner also gets a second tab, Command center (pages/AdminSettings.tsx).
 import { useState } from "react";
 import { api, can, fmtTime, type Me } from "../api";
-import { Link, PageHead, toast, useLoad, Tip } from "../components/ui";
+import { ErrorNote, Link, PageHead, toast, useLoad, Tip } from "../components/ui";
 import { AdminSettings } from "./AdminSettings";
 import { showAllTips, useHiddenTipCount } from "../tips";
 import { LANGS, t } from "../i18n";
@@ -37,7 +37,8 @@ function MySettings({ me, tabs, prefs, onPrefs, onSignOut, sound, onSound, switc
   me: Me; tabs: React.ReactNode; prefs: Prefs | null; switches: Switches; onSwitches: (s: Switches) => void; onPrefs: (p: Partial<Prefs> | { reset: true }) => void; onSignOut: () => void; sound: boolean; onSound: (on: boolean) => void;
 }) {
   const devices = useLoad(() => api("/users/me/devices"));
-  const [deviceLink, setDeviceLink] = useState<string | null>(null);
+  const [pw, setPw] = useState<{ current: string; next: string; again: string } | null>(null);
+  const [pwError, setPwError] = useState<string | null>(null);
 
   // Only the looks and languages an admin allows (Settings > Command center).
   const themes = THEMES.filter((th) => !me.settings || me.settings.look.allowedThemes.includes(th.id));
@@ -47,12 +48,18 @@ function MySettings({ me, tabs, prefs, onPrefs, onSignOut, sound, onSound, switc
     if (!others.length) return;
     onPrefs({ theme: others[Math.floor(Math.random() * others.length)]!.id });
   }
-  async function addDevice() {
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pw) return;
+    setPwError(null);
+    if (pw.next !== pw.again) return setPwError(t("The two passwords don't match."));
     try {
-      const r = await api("/auth/add-device", { body: {} });
-      setDeviceLink(r.link);
-    } catch (e) {
-      toast((e as Error).message);
+      await api("/auth/password/change", { body: { current: pw.current, password: pw.next } });
+      setPw(null);
+      devices.reload();
+      toast(t("Password changed. Your other devices were signed out."));
+    } catch (x) {
+      setPwError((x as Error).message);
     }
   }
 
@@ -128,7 +135,7 @@ function MySettings({ me, tabs, prefs, onPrefs, onSignOut, sound, onSound, switc
         <div className="row">
           <h2 style={{ margin: 0 }}>{t("Your devices")}</h2>
           <span className="spacer" />
-          <button className="btn" onClick={addDevice}>{t("Add a phone or computer")}</button>
+          <button className="btn" onClick={() => { setPw(pw ? null : { current: "", next: "", again: "" }); setPwError(null); }}>{t("Change password")}</button>
         </div>
         <table>
           <thead><tr><th>{t("Signed in on")}</th><th>{t("Last used")}</th><th /></tr></thead>
@@ -142,17 +149,19 @@ function MySettings({ me, tabs, prefs, onPrefs, onSignOut, sound, onSound, switc
             ))}
           </tbody>
         </table>
-        {deviceLink && (
-          <div className="stack" style={{ margin: "12px 0" }}>
-            <b>{t("Open this link on the new phone or computer within 1 hour:")}</b>
-            <code className="mono" style={{ overflowWrap: "anywhere" }}>{deviceLink}</code>
+        {pw && (
+          <form className="grid g2" style={{ margin: "12px 0" }} onSubmit={changePassword}>
+            <div className="field"><label htmlFor="pw-cur">{t("Current password")}</label><input id="pw-cur" type="password" autoComplete="current-password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} required maxLength={200} /></div>
+            <div className="field"><label htmlFor="pw-new">{t("New password")}</label><input id="pw-new" type="password" autoComplete="new-password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} required minLength={8} maxLength={200} /></div>
+            <div className="field"><label htmlFor="pw-again">{t("New password again")}</label><input id="pw-again" type="password" autoComplete="new-password" value={pw.again} onChange={(e) => setPw({ ...pw, again: e.target.value })} required maxLength={200} /></div>
+            <ErrorNote error={pwError} />
             <div className="row">
-              <button className="btn small" onClick={() => navigator.clipboard.writeText(deviceLink).then(() => toast(t("Copied")))}>{t("Copy")}</button>
-              <button className="btn small" onClick={() => setDeviceLink(null)}>{t("Done")}</button>
+              <button className="btn primary" type="submit">{t("Save password")}</button>
+              <button className="btn" type="button" onClick={() => setPw(null)}>{t("Cancel")}</button>
             </div>
-          </div>
+          </form>
         )}
-        <Tip id="settings.lost-phone">{t("Lost a phone? Sign it out here, or ask Paolo to sign you out everywhere.")}</Tip>
+        <Tip id="settings.lost-phone">{t("Lost a phone? Sign it out here, or ask your admin to sign you out everywhere.")}</Tip>
       </div>
     </>
   );

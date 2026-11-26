@@ -1,9 +1,13 @@
-// Sign-in with passkeys only. No passwords, no text or email codes.
+// Sign-in with a username and a password (Aaron, 2026-11-26).
 //
-// New person:   admin makes an invite -> person opens the link -> creates a passkey -> signed in.
-// Returning:    "Sign in" -> the phone or computer offers their passkey -> signed in.
-// Extra device: a signed-in person makes an "add device" link for themselves (routes/users.ts).
+// New person:   admin adds them on People -> they type their username on the sign-in page and
+//               choose a password (their "first sign-in", open for the invite lifetime).
+// Returning:    username + password.
+// Forgot it:    an admin presses Reset password on People; the next sign-in is a first sign-in again.
+//
+// The passkey routes further down are the earlier way in. The sign-in page no longer uses them.
 import { Hono, type Context } from "hono";
+import { HTTPException } from "hono/http-exception";
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
@@ -18,6 +22,8 @@ import { body, fail, requireUser } from "../lib/http";
 import { createInvite } from "../lib/invites";
 import { getSettings } from "../lib/settings-store";
 import { publicPart } from "../lib/settings";
+import { loginId } from "../../shared/login";
+import { checkPassword, hashPassword, passwordProblem } from "../lib/password";
 import { endSession, startSession } from "../lib/session";
 
 const CHALLENGE_SECONDS = 300;
@@ -66,6 +72,120 @@ auth.get("/me", (c) => {
     settings: u ? publicPart(getSettings()) : null,
   });
 });
+
+// ---------- Username and password ----------
+
+const WRONG = "That username or password isn't right.";
+const MAX_FAILS = 8;
+const LOCK_SECONDS = 15 * 60;
+
+interface PwUser {
+  id: string; status: string; password_hash: string | null; password_setup_until: string | null;
+  failed_logins: number; locked_until: string | null;
+}
+const pwUser = (db: D1Database, login: string) =>
+  db.prepare("SELECT id, status, password_hash, password_setup_until, failed_logins, locked_until FROM users WHERE email = ?").bind(login).first<PwUser>();
+
+/** Someone an admin added who hasn't signed in yet. */
+const pendingInvite = (db: D1Database, login: string) =>
+  db.prepare("SELECT id, email, name, role FROM invites WHERE email = ? AND user_id IS NULL AND used_at IS NULL AND expires_at > ? ORDER BY created_at DESC LIMIT 1")
+    .bind(login, now()).first<{ id: string; email: string; name: string; role: string }>();
+
+/** Stop with "choose your password first": the sign-in page then shows the two new-password boxes. */
+function firstTime(): never {
+  throw new HTTPException(409, { res: Response.json({ error: "This is your first sign-in. Choose a password.", firstTime: true }, { status: 409 }) });
+}
+
+/** Sign in with a username and password. */
+auth.post("/login", async (c) => {
+  await rateLimit(c);
+  const b = await body(c);
+  const login = loginId(b.login);
+  const password = typeof b.password === "string" ? b.password.slice(0, 200) : "";
+  if (!login) fail(401, WRONG);
+  const u = await pwUser(c.env.DB, login);
+  if (!u) {
+    if (await pendingInvite(c.env.DB, login)) firstTime();
+    await checkPassword(password, null);
+    await audit(c.env.DB, { userId: null, action: "login.failed", detail: { reason: "unknown_login" }, ip: c.get("ip") });
+    fail(401, WRONG);
+  }
+  if (u.status !== "active") {
+    await audit(c.env.DB, { userId: u.id, action: "login.failed", detail: { reason: "disabled" }, ip: c.get("ip") });
+    fail(401, WRONG);
+  }
+  if (!u.password_hash) {
+    if (u.password_setup_until && u.password_setup_until > now()) firstTime();
+    fail(401, "This login has no password yet and its first sign-in has run out. Ask your admin to press Reset password.");
+  }
+  if (u.locked_until && u.locked_until > now()) fail(429, "Too many wrong passwords. Wait 15 minutes, or ask your admin to press Reset password.");
+  if (!(await checkPassword(password, u.password_hash))) {
+    const fails = u.failed_logins + 1;
+    await c.env.DB.prepare("UPDATE users SET failed_logins = ?, locked_until = ? WHERE id = ?")
+      .bind(fails >= MAX_FAILS ? 0 : fails, fails >= MAX_FAILS ? addSeconds(now(), LOCK_SECONDS) : null, u.id).run();
+    await audit(c.env.DB, { userId: u.id, action: "login.failed", detail: { reason: "bad_password", locked: fails >= MAX_FAILS }, ip: c.get("ip") });
+    fail(401, WRONG);
+  }
+  if (u.failed_logins || u.locked_until) await c.env.DB.prepare("UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id = ?").bind(u.id).run();
+  await audit(c.env.DB, { userId: u.id, action: "login", ip: c.get("ip") });
+  await startSession(c, u.id);
+  return c.json({ ok: true });
+});
+
+/** First sign-in: choose a password. Works once per person, while their first sign-in is open. */
+auth.post("/password/first", async (c) => {
+  await rateLimit(c);
+  const b = await body(c);
+  const login = loginId(b.login);
+  const closed = "This login isn't waiting for a first sign-in. Sign in with your password, or ask your admin to press Reset password.";
+  if (!login) fail(400, closed);
+  const problem = passwordProblem(b.password, login);
+  if (problem) fail(400, problem);
+  const hash = await hashPassword(b.password as string);
+  const t = now();
+  const u = await pwUser(c.env.DB, login);
+  if (u) {
+    if (u.status !== "active" || u.password_hash || !u.password_setup_until || u.password_setup_until <= t) fail(400, closed);
+    // Only if nobody set it in the meantime.
+    const r = await c.env.DB.prepare("UPDATE users SET password_hash = ?, password_set_at = ?, password_setup_until = NULL, failed_logins = 0, locked_until = NULL, updated_at = ? WHERE id = ? AND password_hash IS NULL")
+      .bind(hash, t, t, u.id).run();
+    if (!r.meta.changes) fail(400, closed);
+    await audit(c.env.DB, { userId: u.id, action: "password.create", targetType: "user", targetId: u.id, ip: c.get("ip") });
+    await startSession(c, u.id);
+    return c.json({ ok: true });
+  }
+  const inv = await pendingInvite(c.env.DB, login);
+  if (!inv) fail(400, closed);
+  const userId = randomId();
+  // Mark the invite used first, and only go on if this request was the one that used it.
+  const used = await c.env.DB.prepare("UPDATE invites SET used_at = ?, user_id = ? WHERE id = ? AND used_at IS NULL").bind(t, userId, inv.id).run();
+  if (!used.meta.changes) fail(400, closed);
+  await c.env.DB.prepare("INSERT INTO users (id, email, name, role, status, created_at, updated_at, password_hash, password_set_at) VALUES (?,?,?,?, 'active', ?,?,?,?)")
+    .bind(userId, inv.email, inv.name, inv.role, t, t, hash, t).run();
+  await audit(c.env.DB, { userId, action: "user.signup", targetType: "user", targetId: userId, ip: c.get("ip") });
+  await startSession(c, userId);
+  return c.json({ ok: true });
+});
+
+/** Change my own password. Other devices are signed out. */
+auth.post("/password/change", async (c) => {
+  const me = requireUser(c);
+  await rateLimit(c);
+  const b = await body(c);
+  const row = await c.env.DB.prepare("SELECT password_hash FROM users WHERE id = ?").bind(me.id).first<{ password_hash: string | null }>();
+  if (row?.password_hash && !(await checkPassword(typeof b.current === "string" ? b.current.slice(0, 200) : "", row.password_hash))) fail(400, "Your current password isn't right.");
+  const problem = passwordProblem(b.password, me.email);
+  if (problem) fail(400, problem);
+  const t = now();
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE users SET password_hash = ?, password_set_at = ?, password_setup_until = NULL, failed_logins = 0, locked_until = NULL, updated_at = ? WHERE id = ?").bind(await hashPassword(b.password as string), t, t, me.id),
+    c.env.DB.prepare("DELETE FROM sessions WHERE user_id = ? AND id_hash <> ?").bind(me.id, me.sessionHash),
+  ]);
+  await audit(c.env.DB, { userId: me.id, action: "password.change", targetType: "user", targetId: me.id, ip: c.get("ip") });
+  return c.json({ ok: true });
+});
+
+// ---------- Passkeys (the earlier way in) ----------
 
 /** Show who an invite is for, before they create a passkey. */
 auth.post("/invite/check", async (c) => {
