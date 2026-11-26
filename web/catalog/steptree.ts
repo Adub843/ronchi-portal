@@ -7,6 +7,8 @@
 export interface StepNode {
   name: string;
   children: StepNode[];
+  /** The PRODUCT_DEFINITION entity id (without "#"), so this node can be cut out of the file. */
+  def?: string;
 }
 
 const STR = "'((?:[^']|'')*)'";
@@ -51,6 +53,7 @@ export function readStepTree(bytes: Uint8Array, chunk = 16 * 1024 * 1024): StepN
   }
   const build = (def: string, seen: Set<string>): StepNode => ({
     name: nameOf(def),
+    def,
     // A loop in a broken file would never end; stop at it.
     children: (inside.get(def) ?? []).filter((c) => !seen.has(c)).map((c) => build(c, new Set(seen).add(c))),
   });

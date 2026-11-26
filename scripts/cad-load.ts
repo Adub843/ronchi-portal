@@ -4,7 +4,9 @@
 //
 //   npm run cad:load -- list                          every machine: parts lists, how many have 3D
 //   npm run cad:load -- <machine number> <file.stp>   load one machine (add --dry-run to only check,
-//                                                     --replace to redo parts lists that already have 3D)
+//                                                     --replace to redo parts lists that already have 3D,
+//                                                     --whole to read a STEP file in one go instead of
+//                                                     cutting out each assembly)
 //   npm run cad:load -- remove <machine number> <parts list number> ...   take 3D off those parts lists
 //
 // It needs the loader key (made once with `npm run loader:key`), read from the file
@@ -13,7 +15,10 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import occtimportjs from "occt-import-js";
+import type * as THREE from "three";
 import { findAssemblies } from "../web/catalog/split";
+import { cutStep, indexStep } from "../web/catalog/stepsplit";
+import { readStepTree } from "../web/catalog/steptree";
 import { objectToGlbBytes, occtToObject, STEP_READ_OPTIONS, type OcctResult } from "../web/catalog/step-core";
 
 // three.js's GLB writer uses the browser's FileReader; Node has Blob but no FileReader.
@@ -91,29 +96,63 @@ for (const s of m.sheets) if (s.code) byCode.set(s.code.toUpperCase(), [...(byCo
 if (!byCode.size) throw new Error(`Machine ${serial} has no parts lists with an assembly number yet. Import its manual first.`);
 
 const t0 = Date.now();
-let root;
+const secs = (t: number) => ((Date.now() - t) / 1000).toFixed(0);
 const bytes = new Uint8Array(readFileSync(file));
-if (/\.glb$/i.test(file)) {
-  const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
-  root = (await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, "")).scene;
-  root.updateMatrixWorld(true);
+const isGlb = /\.glb$/i.test(file);
+// The 3D for each parts list found in the file, made when it's needed.
+let hits: Map<string, () => Promise<THREE.Object3D | null>>;
+if (isGlb || flags.has("--whole")) {
+  // The whole file read at once (always for GLB). A big STEP fills occt-import-js's 2 GB memory
+  // this way and comes back with no triangles, so STEP files are cut up instead (below).
+  let root: THREE.Object3D;
+  if (isGlb) {
+    const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+    root = (await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, "")).scene;
+    root.updateMatrixWorld(true);
+  } else {
+    const occt = await occtimportjs();
+    const res = occt.ReadStepFile(bytes, STEP_READ_OPTIONS) as OcctResult;
+    if (!res.success) throw new Error("That STEP file couldn't be read. Export it again as STEP AP214 or AP242.");
+    root = occtToObject(res, bytes).root;
+  }
+  console.log(`Read ${file} in ${secs(t0)} s.`);
+  hits = new Map([...findAssemblies(root, byCode.keys())].map(([code, node]) => [code, async () => node]));
 } else {
-  const occt = await occtimportjs();
-  const res = occt.ReadStepFile(bytes, STEP_READ_OPTIONS) as OcctResult;
-  if (!res.success) throw new Error("That STEP file couldn't be read. Export it again as STEP AP214 or AP242.");
-  root = occtToObject(res, bytes).root;
+  // Find the assemblies in the STEP file's own tree, then cut each one out as a small STEP file
+  // and read only that.
+  const tree = readStepTree(bytes);
+  if (!tree) throw new Error("That STEP file has no assemblies in it. Use --whole to read it as one piece.");
+  const index = indexStep(bytes);
+  console.log(`Indexed ${file} in ${secs(t0)} s (${index.entities.size} entities).`);
+  hits = new Map([...findAssemblies(tree, byCode.keys())].map(([code, node]) => [code, async () => {
+    const piece = node.def ? cutStep(index, node.def) : null;
+    if (!piece) return null;
+    const t = Date.now();
+    // A fresh reader each time, so one piece's memory never carries over to the next.
+    const occt = await occtimportjs();
+    const res = occt.ReadStepFile(piece, STEP_READ_OPTIONS) as OcctResult;
+    if (!res.success) { console.log(`  ${code}: its piece of the STEP file couldn't be read`); return null; }
+    const tris = res.meshes.reduce((n, m) => n + m.index.array.length / 3, 0);
+    console.log(`  ${code} (${node.name}): ${(piece.byteLength / 1048576).toFixed(1)} MB of STEP, ${res.meshes.length} shapes, ${tris} triangles, ${secs(t)} s`);
+    return occtToObject(res, piece).root;
+  }]));
 }
-console.log(`Read ${file} in ${((Date.now() - t0) / 1000).toFixed(0)} s.`);
-const hits = findAssemblies(root, byCode.keys());
 console.log(`${hits.size} of ${byCode.size} parts list numbers are in the 3D file.`);
 
 let saved = 0, skipped = 0, tooBig = 0, failed = 0, empty = 0, bytesSent = 0;
-for (const [code, node] of hits) {
-  // An assembly name with no shapes under it (a placeholder in the CAD) would load an empty 3D view.
-  let meshes = 0;
-  node.traverse((o) => { if ((o as { isMesh?: boolean }).isMesh) meshes++; });
-  if (!meshes) { empty += byCode.get(code)?.length ?? 0; console.log(`  ${code}: no shapes in the 3D file, skipped`); continue; }
-  for (const s of byCode.get(code) ?? []) {
+for (const [code, make] of hits) {
+  const sheets = byCode.get(code) ?? [];
+  if (sheets.every((s) => s.has_model) && !flags.has("--replace")) { skipped += sheets.length; continue; }
+  const node = await make();
+  // An assembly name with no shapes under it (a placeholder in the CAD), or shapes that came back
+  // with no triangles, would load an empty 3D view.
+  let triangles = 0;
+  node?.traverse((o) => {
+    const g = (o as THREE.Mesh).isMesh ? (o as THREE.Mesh).geometry : null;
+    if (g) triangles += (g.index ? g.index.count : g.getAttribute("position")?.count ?? 0) / 3;
+  });
+  if (!node || !triangles) { empty += sheets.length; console.log(`  ${code}: no shapes in the 3D file, skipped`); continue; }
+  for (const s of sheets) {
     if (s.has_model && !flags.has("--replace")) { skipped++; continue; }
     const glb = await objectToGlbBytes(node);
     if (glb.byteLength > MAX) { tooBig++; console.log(`  ${code} ${s.title}: too big (${(glb.byteLength / 1048576).toFixed(0)} MB)`); continue; }
