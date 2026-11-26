@@ -15,6 +15,7 @@ import { loadSettings } from "./lib/settings-store";
 import { auth } from "./routes/auth";
 import { boards } from "./routes/boards";
 import { catalog } from "./routes/catalog";
+import { catalogLoader } from "./routes/catalog-loader";
 import { customers, quotes } from "./routes/customers";
 import { changeParts } from "./routes/change-parts";
 import { partsOrders } from "./routes/parts-orders";
@@ -52,7 +53,8 @@ app.use("*", async (c, next) => {
 });
 
 app.use("/api/*", async (c, next) => {
-  if (!SAFE_METHODS.has(c.req.method)) {
+  // The PC catalog loader has no browser or cookie; it proves itself with its key instead (routes/catalog-loader.ts).
+  if (!SAFE_METHODS.has(c.req.method) && !c.req.path.startsWith("/api/catalog-loader/")) {
     // Cross-site request protection, on top of the SameSite=Strict cookie.
     if (c.req.header("origin") !== c.env.ORIGIN || c.req.header("x-ronchi") !== "1") fail(403, "Request blocked.");
   }
@@ -77,6 +79,7 @@ app.route("/api/prefs", prefs);
 app.route("/api/settings", settings);
 app.route("/api/files", files);
 app.route("/api/catalog", catalog);
+app.route("/api/catalog-loader", catalogLoader);
 app.route("/api/customers", customers);
 app.route("/api/quotes", quotes);
 app.route("/api/change-parts", changeParts);
