@@ -197,6 +197,7 @@ const GROUP_HEAD = /^(?:\d{1,2}\.\d{1,2}\s+)?GRUPP[IO]\b/i;
 //     ITEM  CODE  REV.  DESCRIZIONE  DESCRIPTION  SPEC.  QTY
 //     ITEM CODE  REV. DESCRIZIONE  DESCRIPTION  QTY          (words run together, no SPEC.)
 //     CODE  REV.  DESCRIZIONE  BESCHREIBUNG  QTY             (no ITEM, another second language)
+//     ITEM  CODE  REV.  DESCRIPCIÓN  DESCRIPTION  SPEC.  QTY (the customer's language first)
 // with the assembly's own number and names on the line above it ("GS089663/A  RIEMPITRICE
 // FILLING MACHINE"). The second-language word, SPEC. and QTY always stand alone, so the names,
 // the SPEC. text and the quantity are read by where those words sit; the position, part number
@@ -216,13 +217,14 @@ function readListPage(page: PageText): ParsedSheet | null {
   if (!qtyHead) return null;
   const headLine = items.filter((t) => Math.abs(t.y - qtyHead.y) < 6);
   const codeHead = headLine.find((t) => /(?:^|\s)CODE$/i.test(word(t)));
-  const itHead = headLine.find((t) => /(?:^|\s)DESCRIZIONE$/i.test(word(t)));
-  if (!codeHead || !itHead) return null;
+  if (!codeHead) return null;
   const specHead = headLine.find((t) => /^SPEC\.?$/i.test(word(t)));
-  // The second language's heading: the word standing alone between DESCRIZIONE and SPEC. or QTY.
+  // The name headings. The first language is the customer's (DESCRIZIONE, DESCRIPCIÓN, OPIS ...)
+  // and sometimes runs together with REV.; the second-language heading always stands alone, and
+  // is the last heading before SPEC. or QTY.
   const enHead = headLine
-    .filter((t) => t !== specHead && t !== qtyHead && t.x > itHead.x && /^\p{L}{4,}$/u.test(word(t)))
-    .sort((a, b) => a.x - b.x)[0];
+    .filter((t) => t !== specHead && t !== qtyHead && t !== codeHead && t.x > codeHead.x && t.x < (specHead ?? qtyHead).x && /^\p{L}{4,}$/u.test(word(t)) && !/^ITEM$/i.test(word(t)))
+    .sort((a, b) => b.x - a.x)[0];
   if (!enHead) return null;
   const hasItem = headLine.some((t) => /^ITEM(?:\s|$)/i.test(word(t)));
   const x = { en: enHead.x - 4, spec: specHead ? specHead.x - 4 : qtyHead.x - 14, qty: qtyHead.x - 14 };
