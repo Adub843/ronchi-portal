@@ -19,6 +19,7 @@ import type * as THREE from "three";
 import { findAssemblies } from "../web/catalog/split";
 import { cutStep, indexStep } from "../web/catalog/stepsplit";
 import { readStepTree } from "../web/catalog/steptree";
+import { sendModel } from "./cad-send";
 import { objectToGlbBytes, occtToObject, STEP_READ_OPTIONS, type OcctResult } from "../web/catalog/step-core";
 
 // three.js's GLB writer uses the browser's FileReader; Node has Blob but no FileReader.
@@ -157,9 +158,9 @@ for (const [code, make] of hits) {
     const glb = await objectToGlbBytes(node);
     if (glb.byteLength > MAX) { tooBig++; console.log(`  ${code} ${s.title}: too big (${(glb.byteLength / 1048576).toFixed(0)} MB)`); continue; }
     if (flags.has("--dry-run")) { console.log(`  ${code} ${s.title}: would load ${(glb.byteLength / 1048576).toFixed(1)} MB`); bytesSent += glb.byteLength; saved++; continue; }
-    const r = await fetch(`${PORTAL}/api/catalog-loader/sheets/${s.id}/model`, { method: "PUT", headers: { ...auth, "content-type": "model/gltf-binary" }, body: glb });
-    if (r.ok) { saved++; bytesSent += glb.byteLength; console.log(`  ${code} ${s.title}: 3D loaded (${(glb.byteLength / 1048576).toFixed(1)} MB)`); }
-    else { failed++; console.log(`  ${code} ${s.title}: failed (${r.status} ${await r.text()})`); }
+    const r = await sendModel(PORTAL, auth, s.id, glb);
+    if (r.ok) { saved++; if (!r.shared) bytesSent += glb.byteLength; console.log(`  ${code} ${s.title}: 3D loaded (${(glb.byteLength / 1048576).toFixed(1)} MB${r.shared ? ", already stored" : ""})`); }
+    else { failed++; console.log(`  ${code} ${s.title}: failed (${r.error})`); }
   }
 }
 console.log(`\n${flags.has("--dry-run") ? "Would load" : "Loaded"} 3D on ${saved} parts lists (${(bytesSent / 1048576).toFixed(1)} MB). Already had 3D: ${skipped}. Too big: ${tooBig}. Empty in the 3D file: ${empty}. Failed: ${failed}.`);

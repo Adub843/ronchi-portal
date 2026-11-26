@@ -11,6 +11,7 @@ import type * as THREE from "three";
 import { cutStep, indexStep } from "../web/catalog/stepsplit";
 import { readStepTree, type StepNode } from "../web/catalog/steptree";
 import { codeOf } from "../web/catalog/codes";
+import { sendModel } from "./cad-send";
 import { objectToGlbBytes, occtToObject, STEP_READ_OPTIONS, type OcctResult } from "../web/catalog/step-core";
 
 class NodeFileReader {
@@ -79,14 +80,16 @@ for (const file of files) {
     } catch (e) { failed += targets.length; console.log(`  ${code}: ${(e as Error).message}`); continue; }
     done.add(code);
     if (glb.byteLength > MAX) { tooBig += targets.length; continue; }
+    let stored = false;
     for (const { serial, sheet } of targets) {
-      if (dry) { lists++; bytes += glb.byteLength; continue; }
-      const r = await fetch(`${PORTAL}/api/catalog-loader/sheets/${sheet.id}/model`, { method: "PUT", headers: { ...auth, "content-type": "model/gltf-binary" }, body: glb });
-      if (r.ok) { lists++; bytes += glb.byteLength; appendFileSync(LOG, `${new Date().toISOString()}\t${serial}\t${code}\t${sheet.title}\t${glb.byteLength}\t${basename(file)}\n`); }
-      else { failed++; console.log(`  ${serial} ${code}: failed ${r.status}`); }
+      // "bytes" counts storage: the portal keeps one copy of a model however many parts lists use it.
+      if (dry) { lists++; if (!stored) { bytes += glb.byteLength; stored = true; } continue; }
+      const r = await sendModel(PORTAL, auth, sheet.id, glb);
+      if (r.ok) { lists++; if (!r.shared) bytes += glb.byteLength; appendFileSync(LOG, `${new Date().toISOString()}\t${serial}\t${code}\t${sheet.title}\t${glb.byteLength}\t${basename(file)}\t${r.shared ? "shared" : "sent"}\n`); }
+      else { failed++; console.log(`  ${serial} ${code}: failed ${r.error}`); }
     }
     console.log(`  ${code} (${node === "whole" ? "whole file" : node.name}): ${(glb.byteLength / 1048576).toFixed(1)} MB x ${targets.length} lists (${targets.map((t) => t.serial).join(" ")})`);
   }
   console.log(`  ${basename(file)} done in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 }
-console.log(`\n${dry ? "Would load" : "Loaded"} 3D on ${lists} parts lists (${(bytes / 1048576).toFixed(1)} MB). Empty: ${empty}. Too big: ${tooBig}. Failed: ${failed}.`);
+console.log(`\n${dry ? "Would load" : "Loaded"} 3D on ${lists} parts lists (${(bytes / 1048576).toFixed(1)} MB of new storage). Empty: ${empty}. Too big: ${tooBig}. Failed: ${failed}.`);

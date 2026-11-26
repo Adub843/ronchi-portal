@@ -59,6 +59,31 @@ describe("PC catalog loader", () => {
     expect((await viewer.fetch(`/api/catalog/sheets/${sheet}/model`, { method: "DELETE" })).status).toBe(403);
   });
 
+  it("keeps one copy of a model that sits on many parts lists", async () => {
+    const one = await machineWithSheet();
+    const two = await machineWithSheet();
+    // A model nobody has sent yet can't be pointed at.
+    const glb = new Uint8Array([...GLB, 7, 7, 7, Math.floor(Math.random() * 250), Math.floor(Math.random() * 250)]);
+    const sha256 = [...new Uint8Array(await crypto.subtle.digest("SHA-256", glb))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const link = (sheet: string) => call(`/sheets/${sheet}/model-ref`, { method: "PUT", key: KEY, type: "application/json", body: JSON.stringify({ sha256 }) });
+    expect((await link(two.sheet)).status).toBe(404);
+    expect((await call(`/sheets/${two.sheet}/model-ref`, { method: "PUT", key: KEY, type: "application/json", body: JSON.stringify({ sha256: "nope" }) })).status).toBe(400);
+    // Sent once for the first list, then the second list only points at it.
+    expect((await call(`/sheets/${one.sheet}/model`, { method: "PUT", key: KEY, type: "model/gltf-binary", body: glb })).status).toBe(200);
+    expect((await link(two.sheet)).status).toBe(200);
+    const stored = await env.FILES.list({ prefix: `catalog/shared/${sha256}` });
+    expect(stored.objects.length).toBe(1);
+    const read = async (p: typeof one) => new Uint8Array(await (await p.admin.fetch(`/api/catalog/sheets/${p.sheet}/model`)).arrayBuffer());
+    expect(await read(one)).toEqual(glb);
+    expect(await read(two)).toEqual(glb);
+    // Taking it off one list leaves the other working; the file goes with the last list.
+    expect((await call(`/sheets/${one.sheet}/model`, { method: "DELETE", key: KEY })).status).toBe(200);
+    expect(await read(two)).toEqual(glb);
+    expect((await one.admin.fetch(`/api/catalog/sheets/${one.sheet}/model`)).status).toBe(404);
+    expect((await call(`/sheets/${two.sheet}/model`, { method: "DELETE", key: KEY })).status).toBe(200);
+    expect((await env.FILES.list({ prefix: `catalog/shared/${sha256}` })).objects.length).toBe(0);
+  });
+
   it("only takes real GLB files", async () => {
     const { sheet } = await machineWithSheet();
     expect((await call(`/sheets/${sheet}/model`, { method: "PUT", key: KEY, type: "model/gltf-binary", body: new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) })).status).toBe(400);

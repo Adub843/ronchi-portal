@@ -11,7 +11,7 @@ import { sameText, sha256Hex } from "../../shared/crypto";
 import type { AppEnv } from "../env";
 import { audit } from "../lib/db";
 import { fail } from "../lib/http";
-import { removeSheetModel, saveSheetFile, sheetById } from "./catalog";
+import { linkSheetModel, removeSheetModel, saveSheetFile, sheetById } from "./catalog";
 
 export const catalogLoader = new Hono<AppEnv>();
 
@@ -42,6 +42,14 @@ catalogLoader.put("/sheets/:id/model", async (c) => {
   const type = (c.req.header("content-type") ?? "").split(";")[0]!.trim();
   await saveSheetFile(c.env, s, "model", type, await c.req.arrayBuffer(), {}, { userId: null, ip: c.get("ip"), action: "catalog.model.load" });
   return c.json({ ok: true });
+});
+
+/** Put a model the portal already holds on another parts list: send its SHA-256, no file. 404 means send the file. */
+catalogLoader.put("/sheets/:id/model-ref", async (c) => {
+  const s = await sheetById(c.env.DB, c.req.param("id"));
+  const b = (await c.req.json().catch(() => ({}))) as { sha256?: unknown };
+  await linkSheetModel(c.env, s, typeof b.sha256 === "string" ? b.sha256.toLowerCase() : "", { userId: null, ip: c.get("ip"), action: "catalog.model.load" });
+  return c.json({ ok: true, shared: true });
 });
 
 /** Take a 3D model off one parts list (a wrong or empty match). */
