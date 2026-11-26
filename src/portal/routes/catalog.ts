@@ -364,6 +364,20 @@ export async function saveSheetFile(
   await audit(env.DB, { userId: who.userId, action: who.action ?? `catalog.${file}.upload`, targetType: "catalog_sheet", targetId: s.id, detail: { bytes: bytes.byteLength }, ip: who.ip });
 }
 
+/** Take a sheet's 3D model off (a wrong or empty model). Shared by staff and the PC catalog loader. */
+export async function removeSheetModel(env: AppEnv["Bindings"], s: SheetRec, who: { userId: string | null; ip?: string; action?: string }) {
+  if (!s.model_size) fail(404, "That parts list has no 3D model.");
+  await env.FILES.delete(fileKey(s.id, "model"));
+  await env.DB.prepare("UPDATE catalog_sheets SET model_size = NULL, updated_at = ? WHERE id = ?").bind(now(), s.id).run();
+  await audit(env.DB, { userId: who.userId, action: who.action ?? "catalog.model.remove", targetType: "catalog_sheet", targetId: s.id, detail: { bytes: s.model_size }, ip: who.ip });
+}
+
+catalog.delete("/sheets/:id/model", async (c) => {
+  const u = requirePerm(c, "catalog.edit");
+  await removeSheetModel(c.env, await sheetById(c.env.DB, c.req.param("id")), { userId: u.id, ip: c.get("ip") });
+  return c.json({ ok: true });
+});
+
 /** Upload a sheet's drawing (WebP or PNG, made in the browser from the manual page) or its 3D model (GLB). */
 catalog.put("/sheets/:id/:file{drawing|model}", async (c) => {
   const u = requirePerm(c, "catalog.edit");

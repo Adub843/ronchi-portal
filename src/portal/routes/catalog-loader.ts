@@ -5,13 +5,13 @@
 //
 // No staff session: every call needs the loader key (Authorization: Bearer ...), whose SHA-256 is
 // the CATALOG_LOADER_KEY_HASH secret. With no secret set, the loader is switched off (404).
-// It can only read machine numbers, parts-list numbers and titles, and save 3D models. Nothing else.
+// It can only read machine numbers, parts-list numbers and titles, and save or remove 3D models.
 import { Hono } from "hono";
 import { sameText, sha256Hex } from "../../shared/crypto";
 import type { AppEnv } from "../env";
 import { audit } from "../lib/db";
 import { fail } from "../lib/http";
-import { saveSheetFile, sheetById } from "./catalog";
+import { removeSheetModel, saveSheetFile, sheetById } from "./catalog";
 
 export const catalogLoader = new Hono<AppEnv>();
 
@@ -41,5 +41,11 @@ catalogLoader.put("/sheets/:id/model", async (c) => {
   const s = await sheetById(c.env.DB, c.req.param("id"));
   const type = (c.req.header("content-type") ?? "").split(";")[0]!.trim();
   await saveSheetFile(c.env, s, "model", type, await c.req.arrayBuffer(), {}, { userId: null, ip: c.get("ip"), action: "catalog.model.load" });
+  return c.json({ ok: true });
+});
+
+/** Take a 3D model off one parts list (a wrong or empty match). */
+catalogLoader.delete("/sheets/:id/model", async (c) => {
+  await removeSheetModel(c.env, await sheetById(c.env.DB, c.req.param("id")), { userId: null, ip: c.get("ip"), action: "catalog.model.unload" });
   return c.json({ ok: true });
 });
