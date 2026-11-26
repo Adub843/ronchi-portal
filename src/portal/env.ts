@@ -21,6 +21,9 @@ export interface Env {
   // knowledge base articles in; the help center can't call back. HELP_ADMIN_KEY is a secret.
   HELP?: Fetcher;
   HELP_ADMIN_KEY?: string;
+  // The PC catalog loader (scripts/cad-load.ts) puts 3D models on parts lists in bulk. It sends a
+  // key whose SHA-256 is this secret (set with `npm run loader:key` on the PC). Unset = loader off.
+  CATALOG_LOADER_KEY_HASH?: string;
   // Job emails to techs (Cloudflare Email Service). Both are optional: without them the portal
   // says "email isn't set up" and offers to send from the scheduler's own email app.
   EMAIL?: SendEmail;

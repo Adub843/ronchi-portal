@@ -23,7 +23,7 @@ const MAX_ROWS = 2000;
 
 type Db = D1Database;
 
-interface SheetRec {
+export interface SheetRec {
   id: string; machine_id: string; parent_id: string | null; section: string; grp: string | null; code: string | null; rev: string | null;
   title: string; title_it: string; source: string; page: number | null; sort: number;
   image_w: number | null; image_h: number | null; model_size: number | null; mesh_map: string | null;
@@ -37,7 +37,7 @@ async function machineById(db: Db, id: string) {
   return m;
 }
 
-async function sheetById(db: Db, id: string) {
+export async function sheetById(db: Db, id: string) {
   if (!ID.test(id)) fail(404, "Not found.");
   const s = await db.prepare("SELECT * FROM catalog_sheets WHERE id = ?").bind(id).first<SheetRec>();
   if (!s) fail(404, "Not found.");
@@ -335,15 +335,16 @@ catalog.delete("/sheets/:id", async (c) => {
   return c.json({ ok: true });
 });
 
-/** Upload a sheet's drawing (WebP or PNG, made in the browser from the manual page) or its 3D model (GLB). */
-catalog.put("/sheets/:id/:file{drawing|model}", async (c) => {
-  const u = requirePerm(c, "catalog.edit");
-  const s = await sheetById(c.env.DB, c.req.param("id"));
-  const file = c.req.param("file");
-  const type = (c.req.header("content-type") ?? "").split(";")[0]!.trim();
+/**
+ * Check and store a sheet's drawing or 3D model. Shared by the staff upload below and the PC
+ * catalog loader (routes/catalog-loader.ts), so both follow the same type, size and content rules.
+ */
+export async function saveSheetFile(
+  env: AppEnv["Bindings"], s: SheetRec, file: "drawing" | "model", type: string, bytes: ArrayBuffer,
+  size: { w?: number; h?: number }, who: { userId: string | null; ip?: string; action?: string },
+) {
   const allowed = file === "model" ? ["model/gltf-binary"] : ["image/webp", "image/png"];
   if (!allowed.includes(type)) fail(400, file === "model" ? "3D models must be GLB files." : "Drawings must be WebP or PNG images.");
-  const bytes = await c.req.arrayBuffer();
   if (!bytes.byteLength) fail(400, "The file is empty.");
   if (bytes.byteLength > (file === "model" ? 95 : 20) * 1024 * 1024) fail(413, "That file is too big.");
   // Check the file really is what it says (first bytes), not just its label.
@@ -353,16 +354,23 @@ catalog.put("/sheets/:id/:file{drawing|model}", async (c) => {
     : type === "image/png" ? head[0] === 0x89 && ascii.slice(1, 4) === "PNG"
     : ascii.startsWith("RIFF") && ascii.slice(8, 12) === "WEBP";
   if (!ok) fail(400, "That file isn't what its type says.");
-  await c.env.FILES.put(fileKey(s.id, file), bytes, { httpMetadata: { contentType: type } });
+  if (file === "drawing" && !(size.w! > 0 && size.w! <= 20000 && size.h! > 0 && size.h! <= 20000)) fail(400, "Send the drawing's width and height.");
+  await env.FILES.put(fileKey(s.id, file), bytes, { httpMetadata: { contentType: type } });
   if (file === "model") {
-    await c.env.DB.prepare("UPDATE catalog_sheets SET model_size = ?, updated_at = ? WHERE id = ?").bind(bytes.byteLength, now(), s.id).run();
+    await env.DB.prepare("UPDATE catalog_sheets SET model_size = ?, updated_at = ? WHERE id = ?").bind(bytes.byteLength, now(), s.id).run();
   } else {
-    const w = Number(c.req.query("w"));
-    const h = Number(c.req.query("h"));
-    if (!(w > 0 && w <= 20000 && h > 0 && h <= 20000)) fail(400, "Send the drawing's width and height.");
-    await c.env.DB.prepare("UPDATE catalog_sheets SET image_w = ?, image_h = ?, updated_at = ? WHERE id = ?").bind(Math.round(w), Math.round(h), now(), s.id).run();
+    await env.DB.prepare("UPDATE catalog_sheets SET image_w = ?, image_h = ?, updated_at = ? WHERE id = ?").bind(Math.round(size.w!), Math.round(size.h!), now(), s.id).run();
   }
-  await audit(c.env.DB, { userId: u.id, action: `catalog.${file}.upload`, targetType: "catalog_sheet", targetId: s.id, detail: { bytes: bytes.byteLength }, ip: c.get("ip") });
+  await audit(env.DB, { userId: who.userId, action: who.action ?? `catalog.${file}.upload`, targetType: "catalog_sheet", targetId: s.id, detail: { bytes: bytes.byteLength }, ip: who.ip });
+}
+
+/** Upload a sheet's drawing (WebP or PNG, made in the browser from the manual page) or its 3D model (GLB). */
+catalog.put("/sheets/:id/:file{drawing|model}", async (c) => {
+  const u = requirePerm(c, "catalog.edit");
+  const s = await sheetById(c.env.DB, c.req.param("id"));
+  const file = c.req.param("file") as "drawing" | "model";
+  const type = (c.req.header("content-type") ?? "").split(";")[0]!.trim();
+  await saveSheetFile(c.env, s, file, type, await c.req.arrayBuffer(), { w: Number(c.req.query("w")), h: Number(c.req.query("h")) }, { userId: u.id, ip: c.get("ip") });
   return c.json({ ok: true });
 });
 
