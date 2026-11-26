@@ -101,7 +101,14 @@ for (const job of jobs) {
       pictures.set(s.page, { bytes: img.bytes, w: img.w, h: img.h });
       if (!readBalloons || s.balloons.length || s.drawingPage === undefined || !s.rows.length) continue;
       const settled = [...sizes].find(([, n]) => n >= 3)?.[0];
-      const found = await findBalloons(img.canvas, img.pointsWide, new Set(s.rows.map((r) => r.pos)), settled);
+      const want = new Set(s.rows.map((r) => r.pos));
+      let found = await findBalloons(img.canvas, img.pointsWide, want, settled);
+      // The size other pages settled on found few of them: this drawing may be at another scale, so look at every size.
+      if (settled && new Set(found.balloons.map((b) => b.pos)).size < want.size * 0.6) {
+        const wide = await findBalloons(img.canvas, img.pointsWide, want);
+        if (wide.balloons.length > found.balloons.length) found = wide;
+      }
+      if (process.env.RONCHI_BALLOON_LOG) console.log(`  p${s.drawingPage} ${s.code} rows ${want.size} spots ${new Set(found.balloons.map((b) => b.pos)).size} circles ${found.circles} unread ${found.unread} r ${found.radius} settled ${settled ?? "-"}`);
       if (found.radius) sizes.set(found.radius, (sizes.get(found.radius) ?? 0) + 1);
       s.balloons = found.balloons;
       drawn++;
