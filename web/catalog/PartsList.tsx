@@ -22,7 +22,7 @@ export interface Row {
 }
 
 export function PartsList({
-  rows, selected, onSelect, lang, onOpenSheet, partLink, whereUsed, action, extra, query, head, onShow3D, has3D,
+  rows, selected, onSelect, lang, onOpenSheet, partLink, whereUsed, action, extra, query, head, onShow3D, has3D, thumb,
 }: {
   rows: Row[];
   selected: string | null;                       // selected row id
@@ -37,6 +37,7 @@ export function PartsList({
   head?: { code: string | null; title: string }; // the assembly this list belongs to
   onShow3D?: (row: Row) => void;                 // "Show in 3D"
   has3D?: (code: string) => boolean;             // whether this part is in the sheet's 3D model
+  thumb?: (code: string) => string | undefined;  // a small picture of the part, taken from the 3D model
 }) {
   const [info, setInfo] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -71,7 +72,7 @@ export function PartsList({
           onSelect(r);
         }}>
           <span className="pl-pos">{r.pos}</span>
-          <span className="pl-pic" aria-hidden="true">{r.sub_sheet ? IC.list : IC.gearPart}</span>
+          <span className="pl-pic" aria-hidden="true">{thumb?.(r.code) ? <img src={thumb(r.code)} alt="" /> : r.sub_sheet ? IC.list : IC.gearPart}</span>
           <span className="pl-what">
             <span className="pl-code">
               <b className="mono">{partLink(r.code)}</b>

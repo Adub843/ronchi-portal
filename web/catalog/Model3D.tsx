@@ -14,9 +14,11 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { IC, Ib } from "./icons";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { codeOf } from "./codes";
+import { autoLink, baseName, type PartRow } from "./autolink";
 import { w, type Lang } from "./words";
 
 interface TreeNode {
@@ -55,7 +57,7 @@ function storeViews(key: string, v: SavedView[]) {
 }
 
 export function Model3D({
-  src, meshMap, selected, onPick, lang, knownCodes, describe, card, fileName = "model", lead, label,
+  src, meshMap, selected, onPick, lang, knownCodes, describe, card, fileName = "model", lead, label, parts, onLinked,
 }: {
   src: string;
   meshMap: Record<string, string>;
@@ -68,6 +70,8 @@ export function Model3D({
   fileName?: string;                       // for the saved picture
   lead?: ReactNode;                        // buttons at the start of the toolbar (the Drawing / 3D switch)
   label?: string;                          // shown at the end of the toolbar, like Mario's "Sheet:" name
+  parts?: PartRow[];                       // the parts list, to link pieces the CAD file didn't name by part number
+  onLinked?: (found: { codes: Set<string>; thumbs: Record<string, string> }) => void; // the parts found in the model, with a small picture of each
 }) {
   const host = useRef<HTMLDivElement>(null);
   const engine = useRef<Engine | null>(null);
@@ -82,12 +86,20 @@ export function Model3D({
   const [full, setFull] = useState(false);
   const [mode, setMode] = useState<Mode>("turn");
   const [moved, setMoved] = useState(0);   // how many parts have been moved, for the Restore buttons
-  const [picked, setPicked] = useState<{ name: string; code: string | null } | null>(null);
+  const [picked, setPicked] = useState<Picked | null>(null);
+  // A piece picked in the model that has no row in the list: still selected, so it can be hidden or moved.
+  const free = useRef(false);
+  const partsRef = useRef(parts);
+  partsRef.current = parts;
+  const linkedRef = useRef(onLinked);
+  linkedRef.current = onLinked;
   const [hover, setHover] = useState<{ x: number; y: number; code: string | null; name: string } | null>(null);
   const viewKey = `ronchi-views:${src.split("?")[0]}`;
   const [views, setViews] = useState<SavedView[]>(() => loadViews(viewKey));
   const pickRef = useRef(onPick);
   pickRef.current = onPick;
+  const knownRef = useRef(knownCodes);
+  knownRef.current = knownCodes;
   const mapRef = useRef(meshMap);
   mapRef.current = meshMap;
 
@@ -98,8 +110,12 @@ export function Model3D({
     try {
       e = new Engine(el, {
         hit: (hit) => {
+          const listed = !!hit?.code && e.known.has(hit.code);
+          free.current = !!hit && !listed;
           setPicked(hit);
-          pickRef.current(hit?.code ?? null);
+          if (hit && !listed) e.selectObj(hit.id);
+          else if (!hit) e.clearSel();
+          pickRef.current(listed ? hit!.code : null);
         },
         hover: setHover,
         moved: setMoved,
@@ -112,8 +128,10 @@ export function Model3D({
     engine.current = e;
     setState("loading");
     e.load(src, () => mapRef.current).then(
-      (t) => {
-        setTree(t);
+      () => {
+        e.known = knownRef.current;
+        setTree(e.link(partsRef.current ?? []));
+        linkedRef.current?.({ codes: e.linkedCodes(), thumbs: e.thumbs() });
         setHidden(new Set());
         setState("ready");
       },
@@ -127,19 +145,27 @@ export function Model3D({
 
   useEffect(() => void (engine.current && (engine.current.known = knownCodes)), [knownCodes, state]);
   useEffect(() => {
-    engine.current?.setSelected(selected);
-    if (!selected) setPicked(null);
-    else setPicked((p) => (p?.code === selected ? p : { name: selected, code: selected }));
+    if (selected) {
+      free.current = false;
+      engine.current?.selectCode(selected);
+      setPicked((p) => (p?.code === selected ? p : { id: "", name: selected, code: selected, guess: engine.current?.isGuess(selected) ?? false }));
+    } else if (!free.current) {
+      engine.current?.clearSel();
+      setPicked(null);
+    }
   }, [selected, state]);
   useEffect(() => engine.current?.setHidden(hidden), [hidden, state]);
   useEffect(() => engine.current?.setXray(xray), [xray, state]);
   useEffect(() => engine.current?.setExplode(explode), [explode, state]);
   useEffect(() => engine.current?.setSection(section.axis, section.at), [section, state]);
-  useEffect(() => void (engine.current && (engine.current.mode = mode)), [mode, state]);
+  useEffect(() => engine.current?.setMode(mode), [mode, state, picked]);
   useEffect(() => engine.current?.resize(), [full, showTree]);
 
-  const selectedIds = () => engine.current?.idsFor(selected) ?? [];
-  const hide = () => setHidden((h) => new Set([...h, ...selectedIds()]));
+  const hasSel = !!picked;
+  const selectedIds = () => engine.current?.selIds() ?? [];
+  const clear = () => { free.current = false; engine.current?.clearSel(); setPicked(null); onPick(null); };
+  // Hiding takes the selection with it, like the Ronchi viewer: the next click starts fresh.
+  const hide = () => { const ids = selectedIds(); setHidden((h) => new Set([...h, ...ids])); clear(); };
   const isolate = () => {
     const keep = new Set(selectedIds());
     if (!keep.size || !engine.current) return;
@@ -176,9 +202,9 @@ export function Model3D({
     if ((e.target as HTMLElement).closest("input,select,textarea")) return;
     const k = e.key.toLowerCase();
     if (k === "f") engine.current?.fit();
-    else if (k === "s" && selected) engine.current?.zoomTo(selected);
-    else if (k === "h" && selected) hide();
-    else if (k === "i" && selected) isolate();
+    else if (k === "s" && hasSel) engine.current?.zoomSel();
+    else if (k === "h" && hasSel) hide();
+    else if (k === "i" && hasSel) isolate();
     else if (k === "a") showAll();
     else if (k === "home") home();
     else if (k === "+" || k === "=") engine.current?.zoom(0.8);
@@ -186,13 +212,13 @@ export function Model3D({
     else if (k === "escape") {
       if (mode !== "turn") setMode("turn");
       else if (full) setFull(false);
-      else { setPicked(null); onPick(null); }
+      else clear();
     } else return;
     e.preventDefault();
   };
 
   const hint = mode === "window" ? w(lang, "Drag a box around the area to zoom to.")
-    : mode === "move" ? w(lang, "Drag the selected part to move it. Restore puts it back.")
+    : mode === "move" ? w(lang, "Drag an arrow to move the selected part along it, or drag the part itself. Restore puts it back.")
     : w(lang, "Drag to turn. Right-drag or two fingers to move. Scroll or pinch to zoom. Click a part to select it, double-click to zoom to it.");
 
   return (
@@ -205,13 +231,13 @@ export function Model3D({
         <Ib icon={IC.zoomWindow} label={w(lang, "Zoom window")} pressed={mode === "window"} onClick={() => setMode(mode === "window" ? "turn" : "window")} />
         <Ib icon={IC.zoomIn} label={w(lang, "Zoom in")} onClick={() => engine.current?.zoom(0.8)} />
         <Ib icon={IC.zoomOut} label={w(lang, "Zoom out")} onClick={() => engine.current?.zoom(1.25)} />
-        <Ib icon={IC.zoomSelected} label={`${w(lang, "Zoom selected")} (S)`} disabled={!selected} onClick={() => selected && engine.current?.zoomTo(selected)} />
-        <Ib icon={IC.isolate} label={`${w(lang, "Isolate")} (I)`} disabled={!selected} onClick={isolate} />
-        <Ib icon={IC.hide} label={`${w(lang, "Hide selected")} (H)`} disabled={!selected} onClick={hide} />
+        <Ib icon={IC.zoomSelected} label={`${w(lang, "Zoom selected")} (S)`} disabled={!hasSel} onClick={() => engine.current?.zoomSel()} />
+        <Ib icon={IC.isolate} label={`${w(lang, "Isolate")} (I)`} disabled={!hasSel} onClick={isolate} />
+        <Ib icon={IC.hide} label={`${w(lang, "Hide selected")} (H)`} disabled={!hasSel} onClick={hide} />
         <Ib icon={IC.showAll} label={`${w(lang, "Unhide all")} (A)`} disabled={!hidden.size} onClick={showAll} />
-        <Ib icon={IC.move} label={w(lang, "Move part")} pressed={mode === "move"} disabled={!selected && mode !== "move"} onClick={() => setMode(mode === "move" ? "turn" : "move")} />
+        <Ib icon={IC.move} label={w(lang, "Move part")} pressed={mode === "move"} disabled={!hasSel && mode !== "move"} onClick={() => setMode(mode === "move" ? "turn" : "move")} />
         <Ib icon={IC.restoreAll} label={w(lang, "Restore all")} disabled={!moved} onClick={() => engine.current?.restoreAll()} />
-        <Ib icon={IC.restorePart} label={w(lang, "Restore part")} disabled={!moved || !selected} onClick={() => selected && engine.current?.restore(selected)} />
+        <Ib icon={IC.restorePart} label={w(lang, "Restore part")} disabled={!moved || !hasSel} onClick={() => engine.current?.restoreSel()} />
         <label className="cv-pick" title={w(lang, "Orientation")}>
           {IC.orient}{IC.caret}
           <select aria-label={w(lang, "Orientation")} value="" onChange={(e) => {
@@ -271,7 +297,13 @@ export function Model3D({
               for (const x of ids) allHidden ? n.delete(x) : n.add(x);
               return n;
             })}
-            onPick={(node) => { setPicked({ name: node.name, code: node.code }); onPick(node.code); }}
+            onPick={(node) => {
+              const listed = !!node.code && knownCodes.has(node.code);
+              free.current = !listed;
+              setPicked({ id: node.id, name: node.name, code: node.code, guess: false });
+              if (!listed) engine.current?.selectObj(node.id);
+              onPick(listed ? node.code : null);
+            }}
             lang={lang}
           />
         )}
@@ -289,10 +321,11 @@ export function Model3D({
               <div className="cv-card-head">
                 <b className="mono">{picked.code ?? picked.name}</b>
                 {picked.code && describe?.(picked.code) && <span>{describe(picked.code)}</span>}
-                <button type="button" className="cv-x" aria-label={w(lang, "Clear selection")} onClick={() => { setPicked(null); onPick(null); }}>×</button>
+                <button type="button" className="cv-x" aria-label={w(lang, "Clear selection")} onClick={clear}>×</button>
               </div>
               {picked.code && !knownCodes.has(picked.code) && <em className="cv-warn">{w(lang, "Not in the parts list")}</em>}
               {picked.code && knownCodes.has(picked.code) && card?.(picked.code)}
+              {picked.code && knownCodes.has(picked.code) && picked.guess && <em className="cv-note">{w(lang, "Matched to this row by name and quantity. Staff can correct it.")}</em>}
             </div>
           )}
         </div>
@@ -301,6 +334,8 @@ export function Model3D({
     </div>
   );
 }
+
+interface Picked { id: string; name: string; code: string | null; guess: boolean }
 
 function ModelTree({ tree, hidden, selected, onToggle, onPick, lang }: {
   tree: TreeNode; hidden: Set<string>; selected: string | null; onToggle: (id: string) => void; onPick: (n: TreeNode) => void; lang: Lang;
@@ -341,7 +376,7 @@ function ModelTree({ tree, hidden, selected, onToggle, onPick, lang }: {
 // The three.js side, kept apart from React so a re-render never rebuilds the scene.
 
 interface Events {
-  hit: (hit: { name: string; code: string | null } | null) => void;
+  hit: (hit: Picked | null) => void;
   hover: (h: { x: number; y: number; code: string | null; name: string } | null) => void;
   moved: (n: number) => void;
   windowDone: () => void;
@@ -364,13 +399,22 @@ class Engine {
   sphere = new THREE.Sphere();
   plane = new THREE.Plane();
   selectedIds = new Set<string>();
-  selectedCode: string | null = null;
+  sel: THREE.Object3D[] = [];               // what is selected: a listed part's nodes, or one piece picked in the model
+  auto = new Map<string, string>();         // node uuid -> code, for pieces linked by name and quantity
+  guessed = new Set<string>();              // codes whose link is a best guess
   hoverMesh: THREE.Mesh | null = null;
   known = new Set<string>();
   hidden = new Set<string>();
   xray = false;
   mode: Mode = "turn";
-  hl = new THREE.MeshStandardMaterial({ color: 0xe30613, emissive: 0x7a0008, metalness: 0.2, roughness: 0.45 });
+  // Selected parts are bright green, as in the Ronchi viewer.
+  hl = new THREE.MeshStandardMaterial({ color: 0x62d600, emissive: 0x2c6a00, metalness: 0.1, roughness: 0.5 });
+  gizmo: TransformControls;
+  pivot = new THREE.Object3D();
+  pivotStart = new THREE.Vector3();
+  gizmoObjs: { obj: THREE.Object3D; startLocal: THREE.Vector3; startWorld: THREE.Vector3 }[] = [];
+  triad = new THREE.Scene();
+  triadCam = new THREE.OrthographicCamera(-1.5, 1.5, 1.5, -1.5, 0.1, 10);
   hov = new THREE.MeshStandardMaterial({ color: 0x3a8dde, emissive: 0x0b2a4a, metalness: 0.2, roughness: 0.45 });
   ghost = new THREE.MeshStandardMaterial({ color: 0x9aa4ad, transparent: true, opacity: 0.12, depthWrite: false });
   glass = new THREE.MeshStandardMaterial({ color: 0xb8c2cc, transparent: true, opacity: 0.32, depthWrite: false, metalness: 0.1, roughness: 0.3 });
@@ -402,6 +446,21 @@ class Engine {
     this.controls.enableDamping = false;
     this.controls.screenSpacePanning = true;
     this.controls.addEventListener("change", () => this.render());
+    // The Transform arrows: drag one to slide the selected part along that axis.
+    this.scene.add(this.pivot);
+    this.gizmo = new TransformControls(this.camera, this.renderer.domElement);
+    this.gizmo.setSize(0.8);
+    this.gizmo.addEventListener("change", () => this.gizmoMoved());
+    this.gizmo.addEventListener("dragging-changed", (ev) => {
+      const on = !!(ev as unknown as { value: boolean }).value;
+      this.controls.enabled = !on;
+      if (on) this.gizmoStart();
+      else { this.fixOffsets(); this.on.moved(this.offsets.size); }
+    });
+    this.scene.add(this.gizmo.getHelper());
+    this.gizmo.enabled = false;
+    this.gizmo.getHelper().visible = false;
+    this.buildTriad();
     const c = this.renderer.domElement;
     c.addEventListener("pointerdown", (e) => this.pointerDown(e));
     c.addEventListener("pointermove", (e) => this.pointerMove(e));
@@ -409,9 +468,10 @@ class Engine {
     c.addEventListener("pointerleave", () => this.setHover(null, null));
     c.addEventListener("dblclick", (e) => {
       const hit = this.hitPart(e);
-      if (hit?.code) {
-        this.on.hit(hit);
-        this.zoomTo(hit.code);
+      if (hit) {
+        this.on.hit(this.picked(hit));
+        // The click handler has selected it by now, on the list or in the model.
+        setTimeout(() => this.zoomSel(), 0);
       }
     });
     this.ro = new ResizeObserver(() => this.resize());
@@ -443,6 +503,51 @@ class Engine {
     this.buildPieces(root);
     this.view("iso");
     return this.treeOf(root, 0);
+  }
+
+  /** The part a mesh belongs to when nothing names it: its group when that holds only bodies, else the mesh. */
+  unitOf(m: THREE.Object3D): THREE.Object3D {
+    const p = m.parent;
+    return p && p !== this.root && p.children.length > 0 && p.children.every((c) => (c as THREE.Mesh).isMesh) ? p : m;
+  }
+
+  /** Link pieces the CAD file didn't name by part number to rows of the parts list, then rebuild the tree. */
+  link(parts: PartRow[]): TreeNode {
+    const root = this.root!;
+    for (const id of this.auto.keys()) this.codes.set(id, null);
+    this.auto.clear();
+    this.guessed.clear();
+    const have = new Set<string>();
+    for (const c of this.codes.values()) if (c) have.add(c);
+    const units = new Map<THREE.Object3D, { names: string[]; verts: number }>();
+    for (const m of this.meshes) {
+      // Leave alone anything already under a part that is on the list.
+      let listed = false;
+      for (let o: THREE.Object3D | null = m; o; o = o.parent) { const c = this.codes.get(o.uuid); if (c && this.known.has(c)) { listed = true; break; } }
+      if (listed) continue;
+      const u = this.unitOf(m);
+      const e = units.get(u) ?? units.set(u, { names: [u.name], verts: 0 }).get(u)!;
+      if (m !== u) e.names.push(m.name);
+      e.verts += m.geometry.getAttribute("position")?.count ?? 0;
+    }
+    const rows = parts.filter((p) => !have.has(p.code));
+    if (units.size && rows.length) {
+      const list = [...units].map(([o, e]) => ({ id: o.uuid, names: e.names, sig: `${[...new Set(e.names.slice(1).map(baseName))].sort().join(",") || baseName(o.name)}|${e.verts}` }));
+      for (const [id, l] of autoLink(list, rows)) {
+        this.codes.set(id, l.code);
+        this.auto.set(id, l.code);
+        if (!l.sure) this.guessed.add(l.code);
+      }
+    }
+    return this.treeOf(root, 0);
+  }
+  linkedCodes(): Set<string> {
+    const out = new Set<string>();
+    for (const c of this.codes.values()) if (c) out.add(c);
+    return out;
+  }
+  isGuess(code: string) {
+    return this.guessed.has(code);
   }
 
   treeOf(o: THREE.Object3D, depth: number): TreeNode {
@@ -497,10 +602,143 @@ class Engine {
     return this.meshes.filter((m) => !keep.has(m.uuid)).map((m) => m.uuid);
   }
 
-  setSelected(code: string | null) {
-    this.selectedCode = code;
-    this.selectedIds = new Set(this.idsFor(code));
+  /** The little X Y Z axes in the corner, turning with the model. */
+  buildTriad() {
+    const axis = (dir: THREE.Vector3, color: number, letter: string) => {
+      const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(), 1, color, 0.24, 0.14);
+      for (const m of [arrow.line.material, arrow.cone.material] as THREE.Material[]) m.toneMapped = false;
+      this.triad.add(arrow);
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = 64;
+      const g = cv.getContext("2d");
+      if (g) {
+        g.font = "bold 44px sans-serif";
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        g.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
+        g.fillText(letter, 32, 34);
+      }
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, toneMapped: false }));
+      sp.scale.setScalar(0.42);
+      sp.position.copy(dir).multiplyScalar(1.25);
+      this.triad.add(sp);
+    };
+    axis(new THREE.Vector3(1, 0, 0), 0xd32f2f, "X");
+    axis(new THREE.Vector3(0, 1, 0), 0x2e9e3a, "Y");
+    axis(new THREE.Vector3(0, 0, 1), 0x2f5fd3, "Z");
+  }
+
+  setMode(mode: Mode) {
+    this.mode = mode;
+    this.placeGizmo();
+  }
+  /** Show the Transform arrows on the selection while Move is on. */
+  placeGizmo() {
+    const on = this.mode === "move" && this.sel.length > 0;
+    this.gizmo.enabled = on;
+    this.gizmo.getHelper().visible = on;
+    if (on) {
+      const b = new THREE.Box3();
+      for (const n of this.sel) b.expandByObject(n);
+      b.getCenter(this.pivot.position);
+      this.pivot.updateMatrixWorld(true);
+      this.gizmo.attach(this.pivot);
+    } else this.gizmo.detach();
+    this.render();
+  }
+  gizmoStart() {
+    this.pivotStart.copy(this.pivot.position);
+    this.gizmoObjs = this.sel.map((obj) => ({ obj, startLocal: obj.position.clone(), startWorld: obj.getWorldPosition(new THREE.Vector3()) }));
+  }
+  gizmoMoved() {
+    if (this.gizmo.dragging) this.shift(this.gizmoObjs, this.pivot.position.clone().sub(this.pivotStart));
+    this.render();
+  }
+  /** Move parts by a distance in the model's space, remembering where the CAD put them so Restore can put them back. */
+  shift(objs: { obj: THREE.Object3D; startLocal: THREE.Vector3; startWorld: THREE.Vector3 }[], delta: THREE.Vector3) {
+    for (const d of objs) {
+      const parent = d.obj.parent!;
+      const a = parent.worldToLocal(d.startWorld.clone());
+      const b = parent.worldToLocal(d.startWorld.clone().add(delta));
+      if (!this.offsets.has(d.obj)) this.offsets.set(d.obj, { orig: d.startLocal.clone(), off: new THREE.Vector3() });
+      d.obj.position.copy(d.startLocal).add(b.sub(a));
+    }
+  }
+
+  /** A small picture of each listed part, taken from the model, for the parts list. */
+  thumbs(): Record<string, string> {
+    const out: Record<string, string> = {};
+    const cv = document.createElement("canvas");
+    cv.width = 138;
+    cv.height = 114;
+    const g = cv.getContext("2d");
+    const src = this.renderer.domElement;
+    if (!g || src.width < 8 || src.height < 8) return out;
+    const keep = { pos: this.camera.position.clone(), target: this.controls.target.clone(), near: this.camera.near, far: this.camera.far };
+    const shown = this.meshes.map((m) => m.visible);
+    const helper = this.gizmo.getHelper().visible;
+    this.gizmo.getHelper().visible = false;
+    try {
+      let n = 0;
+      for (const code of this.known) {
+        const nodes = this.nodesFor(code);
+        if (!nodes.length || n++ >= 80) continue;
+        const ids = new Set<string>();
+        const b = new THREE.Box3();
+        // One copy is enough for the picture.
+        nodes[0]!.traverse((x) => (x as THREE.Mesh).isMesh && ids.add(x.uuid));
+        b.expandByObject(nodes[0]!);
+        if (b.isEmpty()) continue;
+        for (const m of this.meshes) m.visible = ids.has(m.uuid);
+        const s = b.getBoundingSphere(new THREE.Sphere());
+        this.camera.position.copy(s.center).addScaledVector(new THREE.Vector3(1, 0.8, 1).normalize(), this.distFor(s.radius) * Math.max(1, (src.height / src.width) * 1.25));
+        this.camera.near = Math.max(s.radius / 1000, 1e-5);
+        this.camera.far = s.radius * 100;
+        this.camera.lookAt(s.center);
+        this.camera.updateProjectionMatrix();
+        this.renderer.render(this.scene, this.camera);
+        // The middle of the view, cut to the picture's shape.
+        const side = Math.min(src.width, src.height * (cv.width / cv.height));
+        const sh = side * (cv.height / cv.width);
+        g.clearRect(0, 0, cv.width, cv.height);
+        g.drawImage(src, (src.width - side) / 2, (src.height - sh) / 2, side, sh, 0, 0, cv.width, cv.height);
+        out[code] = cv.toDataURL("image/png");
+      }
+    } catch {
+      /* a browser that won't read the canvas back: the list keeps its plain icons */
+    }
+    this.meshes.forEach((m, i) => (m.visible = shown[i]!));
+    this.gizmo.getHelper().visible = helper;
+    this.camera.near = keep.near;
+    this.camera.far = keep.far;
+    this.camera.position.copy(keep.pos);
+    this.controls.target.copy(keep.target);
+    this.camera.updateProjectionMatrix();
+    this.controls.update();
+    this.render();
+    return out;
+  }
+
+  setSel(nodes: THREE.Object3D[]) {
+    this.sel = nodes;
+    const ids = new Set<string>();
+    for (const n of nodes) n.traverse((x) => (x as THREE.Mesh).isMesh && ids.add(x.uuid));
+    this.selectedIds = ids;
+    this.placeGizmo();
     this.paint();
+  }
+  selectCode(code: string) {
+    this.setSel(this.nodesFor(code));
+  }
+  selectObj(id: string) {
+    const o = this.root?.getObjectByProperty("uuid", id);
+    this.setSel(o ? [o] : []);
+  }
+  clearSel() {
+    this.setSel([]);
+  }
+  selIds(): string[] {
+    return [...this.selectedIds];
   }
   setHidden(h: Set<string>) {
     this.hidden = h;
@@ -536,15 +774,17 @@ class Engine {
     this.explodeK = f;
     this.place();
   }
-  restore(code: string) {
-    for (const n of this.nodesFor(code)) this.offsets.delete(n);
+  restoreSel() {
+    for (const n of this.sel) this.offsets.delete(n);
     this.on.moved(this.offsets.size);
     this.place();
+    this.placeGizmo();
   }
   restoreAll() {
     this.offsets.clear();
     this.on.moved(0);
     this.place();
+    this.placeGizmo();
   }
 
   setSection(axis: "x" | "y" | "z" | null, at: number) {
@@ -591,9 +831,9 @@ class Engine {
     for (const m of this.meshes) if (m.visible) vis.expandByObject(m);
     this.fitBox(vis.isEmpty() ? this.box : vis);
   }
-  zoomTo(code: string) {
+  zoomSel() {
     const b = new THREE.Box3();
-    for (const n of this.nodesFor(code)) b.expandByObject(n);
+    for (const n of this.sel) b.expandByObject(n);
     this.fitBox(b);
   }
   zoom(f: number) {
@@ -647,19 +887,25 @@ class Engine {
     return { ray, hit: ray.intersectObjects(this.meshes.filter((m) => m.visible), false).find((h) => !clip || clip.distanceToPoint(h.point) >= 0) };
   }
   /** The part under the pointer: the first part on this sheet's list going up from the mesh, else the deepest coded part. */
-  hitPart(e: { clientX: number; clientY: number }): { name: string; code: string | null; mesh: THREE.Mesh; point: THREE.Vector3 } | null {
+  hitPart(e: { clientX: number; clientY: number }): { id: string; name: string; code: string | null; mesh: THREE.Mesh; point: THREE.Vector3 } | null {
     const { hit } = this.raycast(e);
     if (!hit) return null;
+    const mesh = hit.object as THREE.Mesh;
     let deepest: THREE.Object3D | null = null;
-    for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) {
+    for (let o: THREE.Object3D | null = mesh; o; o = o.parent) {
       const code = this.codes.get(o.uuid);
       if (!code) continue;
-      if (this.known.has(code)) return { name: o.name, code, mesh: hit.object as THREE.Mesh, point: hit.point };
+      if (this.known.has(code)) return { id: o.uuid, name: o.name, code, mesh, point: hit.point };
       deepest ??= o;
     }
-    return deepest
-      ? { name: deepest.name, code: this.codes.get(deepest.uuid)!, mesh: hit.object as THREE.Mesh, point: hit.point }
-      : { name: hit.object.name || "–", code: null, mesh: hit.object as THREE.Mesh, point: hit.point };
+    // Not on the list: the piece itself, never the whole assembly it sits in. A part number on the
+    // piece is shown; one that only belongs to the assembly around it is not.
+    const unit = this.unitOf(mesh);
+    const own = deepest && (deepest === unit || deepest === mesh) ? this.codes.get(deepest.uuid)! : null;
+    return { id: unit.uuid, name: unit.name || mesh.name || "–", code: own, mesh, point: hit.point };
+  }
+  picked(hit: { id: string; name: string; code: string | null }): Picked {
+    return { id: hit.id, name: hit.name, code: hit.code, guess: !!hit.code && this.guessed.has(hit.code) };
   }
 
   pointerDown(e: PointerEvent) {
@@ -671,15 +917,15 @@ class Engine {
       this.renderer.domElement.setPointerCapture(e.pointerId);
       return;
     }
-    if (this.mode === "move" && this.selectedCode) {
+    if (this.mode === "move" && this.sel.length && !this.gizmo.axis) {
       const hit = this.hitPart(e);
-      if (hit?.code === this.selectedCode) {
+      if (hit && this.selectedIds.has(hit.mesh.uuid)) {
         this.controls.enabled = false;
         this.renderer.domElement.setPointerCapture(e.pointerId);
         this.drag = {
           plane: new THREE.Plane().setFromNormalAndCoplanarPoint(this.dir(), hit.point),
           start: hit.point.clone(),
-          objs: this.nodesFor(this.selectedCode).map((obj) => ({ obj, startLocal: obj.position.clone(), startWorld: obj.getWorldPosition(new THREE.Vector3()) })),
+          objs: this.sel.map((obj) => ({ obj, startLocal: obj.position.clone(), startWorld: obj.getWorldPosition(new THREE.Vector3()) })),
         };
       }
     }
@@ -696,15 +942,7 @@ class Engine {
       const { ray } = this.raycast(e);
       const p = ray.ray.intersectPlane(this.drag.plane, new THREE.Vector3());
       if (!p) return;
-      const delta = p.sub(this.drag.start);
-      for (const d of this.drag.objs) {
-        const parent = d.obj.parent!;
-        const a = parent.worldToLocal(d.startWorld.clone());
-        const b = parent.worldToLocal(d.startWorld.clone().add(delta));
-        // Remember where the CAD put it the first time it's moved, so Restore can put it back.
-        if (!this.offsets.has(d.obj)) this.offsets.set(d.obj, { orig: d.startLocal.clone(), off: new THREE.Vector3() });
-        d.obj.position.copy(d.startLocal).add(b.sub(a));
-      }
+      this.shift(this.drag.objs, p.sub(this.drag.start));
       this.render();
       return;
     }
@@ -735,11 +973,13 @@ class Engine {
       this.controls.enabled = true;
       this.fixOffsets();
       this.on.moved(this.offsets.size);
+      this.placeGizmo();
       return;
     }
+    if (this.gizmo.dragging || (this.mode === "move" && this.gizmo.axis)) return;
     if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 5 && e.button === 0) {
       const hit = this.hitPart(e);
-      this.on.hit(hit ? { name: hit.name, code: hit.code } : null);
+      this.on.hit(hit ? this.picked(hit) : null);
     }
   }
   /** After a drag, store each moved part's offset from where explode (or the CAD) would put it. */
@@ -772,6 +1012,21 @@ class Engine {
     this.frame = requestAnimationFrame(() => {
       this.frame = 0;
       this.renderer.render(this.scene, this.camera);
+      // The axes, bottom left, turned the way the model is.
+      const size = this.renderer.getSize(new THREE.Vector2());
+      const px = Math.min(84, Math.round(size.y / 4));
+      this.triadCam.position.copy(this.dir()).multiplyScalar(4);
+      this.triadCam.up.copy(this.camera.up);
+      this.triadCam.lookAt(0, 0, 0);
+      this.renderer.autoClear = false;
+      this.renderer.clearDepth();
+      this.renderer.setViewport(6, 6, px, px);
+      const planes = this.renderer.clippingPlanes;
+      this.renderer.clippingPlanes = [];
+      this.renderer.render(this.triad, this.triadCam);
+      this.renderer.clippingPlanes = planes;
+      this.renderer.setViewport(0, 0, size.x, size.y);
+      this.renderer.autoClear = true;
     });
   }
   dispose() {
@@ -779,6 +1034,8 @@ class Engine {
     cancelAnimationFrame(this.hoverFrame);
     this.ro.disconnect();
     this.controls.dispose();
+    this.gizmo.detach();
+    this.gizmo.dispose();
     this.scene.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.isMesh) {

@@ -16,7 +16,7 @@ export interface Sheet {
   id: string;
   code: string | null;
   title: string;
-  drawing: { w: number; h: number } | null;
+  drawing: { w: number; h: number; from?: string } | null;   // from: the machine whose manual the drawing comes from, when it isn't this one's
   model: { size: number; meshMap: Record<string, string> } | null;
   prev: string | null;
   next: string | null;
@@ -48,7 +48,10 @@ export function SheetView({
   const row = rows.find((r) => r.id === rowId) ?? null;
   const balloons = useMemo<Balloon[]>(() => rows.flatMap((r) => r.hotspots.map((h) => ({ ...h, pos: r.pos }))), [rows]);
   const codes = useMemo(() => new Set(rows.map((r) => r.code)), [rows]);
-  const inModel = useMemo(() => new Set(Object.values(sheet.model?.meshMap ?? {})), [sheet.model]);
+  // What the 3D model holds, known once it has loaded: which parts it shows, and a small picture of each.
+  const [found, setFound] = useState<{ codes: Set<string>; thumbs: Record<string, string> } | null>(null);
+  const inModel = useMemo(() => found?.codes ?? new Set(Object.values(sheet.model?.meshMap ?? {})), [sheet.model, found]);
+  const parts = useMemo(() => rows.map((r) => ({ code: r.code, qty: r.qty, names: [r.name_en, r.name_it, r.maker_pn, r.maker] })), [rows]);
   const q = version ? `?v=${encodeURIComponent(version)}` : "";
   const title = [sheet.code, sheet.title].filter(Boolean).join(" - ");
 
@@ -113,6 +116,8 @@ export function SheetView({
                 onPick={(code) => setRowId(code ? (rows.find((r) => r.code === code)?.id ?? null) : null)}
                 lang={lang}
                 knownCodes={codes}
+                parts={parts}
+                onLinked={setFound}
                 lead={lead}
                 label={subtitle}
                 describe={(code) => { const r = rows.find((x) => x.code === code); return r ? partName(lang, r) || null : null; }}
@@ -149,6 +154,7 @@ export function SheetView({
               label={subtitle}
             />
           )}
+          {sheet.drawing?.from && <p className="cv-hint cv-from">{w(lang, "Drawing of the same assembly from the manual of machine {serial}.", { serial: sheet.drawing.from })}</p>}
           {!sheet.drawing && !sheet.model && <p className="cv-msg cv-empty">{w(lang, "No drawing for this parts list yet. The list on the right is complete.")}</p>}
           {sheet.prev && <button type="button" className="mv-side-arrow left" onClick={() => onOpenSheet(sheet.prev!)} aria-label={w(lang, "Previous sheet")} title={w(lang, "Previous sheet")}>{IC.prev}</button>}
           {sheet.next && <button type="button" className="mv-side-arrow right" onClick={() => onOpenSheet(sheet.next!)} aria-label={w(lang, "Next sheet")} title={w(lang, "Next sheet")}>{IC.next}</button>}
@@ -167,6 +173,7 @@ export function SheetView({
           head={{ code: sheet.code, title: sheet.title }}
           onShow3D={(r) => { setTab("model"); setRowId(r.id); }}
           has3D={(code) => inModel.has(code)}
+          thumb={(code) => found?.thumbs[code]}
         />
       </div>
     </div>

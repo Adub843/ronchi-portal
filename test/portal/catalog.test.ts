@@ -129,6 +129,36 @@ describe("parts catalog (staff)", () => {
     expect(got.headers.get("content-security-policy")).toContain("sandbox");
   });
 
+  it("shows the same assembly's drawing and balloons from another machine when a list has none", async () => {
+    const svc = await person("service");
+    const admin = await person("admin");
+    const list = (spots: boolean) => [{ key: "p9", page: 9, title: "Anti-rotation", code: "MB000777", rows: [
+      { pos: "1", code: "MB000778", qty: 1, nameEn: "Flange", ...(spots ? { hotspots: [{ x: 0.5, y: 0.5, w: 0.04, h: 0.04 }] } : {}) },
+      { pos: "2", code: "MB000779", qty: 2, nameEn: "Shim" },
+    ] }];
+    // The first machine's manual had the drawing; the second machine only has the table.
+    const a = await machine(admin);
+    const withDrawing = (await svc.json(`/api/catalog/machines/${a.id}/import`, { body: { fileName: "a.pdf", sheets: list(true) } })).data.sheets[0].id;
+    const b = await machine(admin);
+    const bare = (await svc.json(`/api/catalog/machines/${b.id}/import`, { body: { fileName: "b.pdf", sheets: list(false) } })).data.sheets[0].id;
+    // Nothing to borrow yet.
+    expect((await svc.json(`/api/catalog/sheets/${bare}`)).data.sheet.drawing).toBeNull();
+    expect((await svc.fetch(`/api/catalog/sheets/${bare}/drawing`)).status).toBe(404);
+    const up = await app.request(`${env.ORIGIN}/api/catalog/sheets/${withDrawing}/drawing?w=100&h=80`, {
+      method: "PUT", body: PNG, headers: { cookie: svc.cookie, origin: env.ORIGIN, "x-ronchi": "1", "content-type": "image/png", "cf-connecting-ip": svc.ip },
+    }, env);
+    expect(up.status).toBe(200);
+    const got = (await svc.json(`/api/catalog/sheets/${bare}`)).data;
+    expect(got.sheet.drawing).toEqual({ w: 100, h: 80, from: a.serial });
+    expect(got.rows.find((r: { pos: string }) => r.pos === "1").hotspots).toEqual([{ x: 0.5, y: 0.5, w: 0.04, h: 0.04 }]);
+    expect(got.rows.find((r: { pos: string }) => r.pos === "2").hotspots).toEqual([]);
+    const pic = await svc.fetch(`/api/catalog/sheets/${bare}/drawing`);
+    expect(pic.status).toBe(200);
+    expect(pic.headers.get("content-type")).toBe("image/png");
+    // The machine that owns the drawing is not told it is borrowed.
+    expect((await svc.json(`/api/catalog/sheets/${withDrawing}`)).data.sheet.drawing).toEqual({ w: 100, h: 80 });
+  });
+
   it("publishes to the customer parts site, without customer names, and customers then see it", async () => {
     const svc = await person("service");
     const m = await machine(await person("admin"), { customer: "Acme Bottling", site: "Springfield plant" });
