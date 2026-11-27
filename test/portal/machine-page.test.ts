@@ -36,4 +36,29 @@ describe("the machine page", () => {
     const t = await tech.json(`/api/machines/${id}`);
     expect(t.data.orders).toBeNull();
   });
+
+  it("shows the machine's past service projects from SharePoint, and sending the list twice adds nothing", async () => {
+    const admin = await person("admin");
+    const n = 6000 + Math.floor(Math.random() * 999);
+    const add = await admin.json("/api/machines", { body: { serial: `${n}MB` } });
+    const id = add.data.id ?? add.data.machine?.id;
+    const base = "https://ronchiam.sharepoint.com/sites/SERVICE/Shared%20Documents/Service%20Projects%20Completed/Acme";
+    const rows = [
+      { customer: "Acme", project_no: "23-0139-W1", year: 2023, title: `23-0139-W1 - #${n}`, machines: [String(n)], reports: 2, url: `${base}/${n}-a` },
+      { customer: "Acme", project_no: "21-0205-S1", year: 2021, title: "21-0205-S1 two machines", machines: [`${n}MB`, "9998TP"], reports: 0, url: `${base}/${n}-b` },
+      { customer: "Acme", project_no: "22-0001-S1", year: 2022, title: "another machine", machines: ["9998"], reports: 1, url: `${base}/${n}-c` },
+    ];
+    const first = await admin.json("/api/machines/service-history/import", { body: { rows } });
+    expect(first.status).toBe(200);
+    expect(first.data.added).toBe(3);
+    const again = await admin.json("/api/machines/service-history/import", { body: { rows } });
+    expect(again.data.added).toBe(0);
+    const page = await admin.json(`/api/machines/${id}`);
+    expect(page.data.service.map((s: any) => s.project_no)).toEqual(["23-0139-W1", "21-0205-S1"]);
+    expect(page.data.service[0].reports).toBe(2);
+    const bad = await admin.json("/api/machines/service-history/import", { body: { rows: [{ customer: "Acme", title: "x", url: "https://example.com/x" }] } });
+    expect(bad.status).toBe(400);
+    const tech = await person("tech");
+    expect((await tech.json("/api/machines/service-history/import", { body: { rows } })).status).toBe(403);
+  });
 });
