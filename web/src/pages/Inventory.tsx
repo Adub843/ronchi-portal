@@ -211,17 +211,18 @@ export function InventoryPart({ code, me }: { code: string; me: Me }) {
           {data.holding.length ? (
             <ul className="cp-history">{data.holding.map((o) => <li key={o.id}><Link to={`/parts-orders/${o.id}`} className="mono">{o.number}</Link> {o.customer} <strong>{n(o.qty)}</strong></li>)}</ul>
           ) : <Empty>{i.reserved ? t("{n} held by parts orders.", { n: n(i.reserved) }) : t("No order is holding this part.")}</Empty>}
-          <p className="muted">{t("A part is held when a parts order the customer has confirmed takes it from our stock and has not shipped yet.")}</p>
+          <p className="muted">{t("A part is held when a confirmed parts order takes it from our stock, or it came in for that order and has not shipped yet.")}</p>
         </div>
       </div>
       <div className="panel tbl">
         <h2>{t("Every change")}</h2>
+        <p className="muted" style={{ margin: "0 12px 8px" }}>{t("Stock changes by itself: checking a delivery in under Shipping and receiving puts its parts on the shelf, and marking a shipment shipped takes them off.")}</p>
         {!data.moves.length ? <Empty>{t("No changes yet.")}</Empty> : (
           <table>
             <thead><tr><th>{t("When")}</th><th>{t("What")}</th><th>{t("Shelf")}</th><th className="num">{t("Change")}</th><th>{t("Reason")}</th><th>{t("Who")}</th></tr></thead>
             <tbody>
               {data.moves.map((m) => (
-                <tr key={m.id}><td>{fmtTime(m.at)}</td><td>{t(MOVE_LABELS[m.type as MoveType] ?? m.type)}</td><td>{m.location}</td><td className="num">{m.delta > 0 ? "+" : ""}{n(m.delta)}</td><td>{[m.reason ? t(m.reason) : "", m.note].filter(Boolean).join(" · ") || "–"}</td><td>{m.who ?? "–"}</td></tr>
+                <tr key={m.id}><td>{fmtTime(m.at)}</td><td>{t(MOVE_LABELS[m.type as MoveType] ?? m.type)}</td><td>{m.location}</td><td className="num">{m.delta > 0 ? "+" : ""}{n(m.delta)}</td><td>{m.reason ? t(m.reason) : ""}{m.reason && m.note ? " · " : ""}{m.note && m.source_type === "shipment" && can(me, "shipping.view") ? <Link to={`/shipping/${m.source_id}`} className="mono">{m.note}</Link> : m.note}{!m.reason && !m.note ? "–" : ""}</td><td>{m.who ?? "–"}</td></tr>
               ))}
             </tbody>
           </table>

@@ -41,6 +41,7 @@ function seed(c: Ctx) {
   ];
   moves.push(
     { id: c.newId(), at: ago(6), part_code: "R10-2231", location: "A1-1", delta: -6, type: "issue", reason: "Parts order", note: "P-1045", who: "Meagan" },
+    { id: c.newId(), at: ago(12), part_code: "R10-2231", location: "A1-1", delta: 10, type: "receive", reason: "Delivery checked in", note: "RC-2026-0007", source_type: "shipment", source_id: "demo", who: "Meagan" },
     { id: c.newId(), at: ago(3), part_code: "R22-0045", location: "A1-2", delta: -2, type: "adjust", reason: "Counted", note: null, who: "Meagan" },
   );
 }

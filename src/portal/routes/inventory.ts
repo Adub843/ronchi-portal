@@ -46,10 +46,18 @@ async function tables(db: D1Database, ...names: string[]): Promise<boolean> {
   return r?.n === names.length;
 }
 
-/** Held by confirmed parts orders that take the part from our stock, not yet shipped. */
-const RESERVED = `SELECT l.part_code AS part_code, SUM(MAX(l.qty - l.qty_shipped, 0)) AS qty
+/** Held by confirmed parts orders, not yet shipped: parts they take from our stock, and parts bought
+ *  for them that have come in and are waiting on the shelf to go out. */
+const FOR_LINE = `FROM shipment_lines sl JOIN shipments s ON s.id = sl.shipment_id WHERE sl.source_type = 'parts_order_line' AND sl.source_id = l.id AND s.removed_at IS NULL`;
+/** Shipped: typed on the order, plus what its shipments carried. Came in: checked in on its deliveries and not on quality hold. */
+const SHIPPED = `(l.qty_shipped + COALESCE((SELECT SUM(sl.qty) ${FOR_LINE} AND s.direction = 'out' AND s.status IN ('shipped', 'delivered')), 0))`;
+const CAME_IN = `COALESCE((SELECT SUM(sl.qty_received) ${FOR_LINE} AND s.direction = 'in' AND sl.hold = 0), 0)`;
+const HELD = `CASE WHEN l.supplier LIKE '%stock%' THEN MAX(l.qty - ${SHIPPED}, 0)
+                   WHEN l.drop_ship THEN 0
+                   ELSE MAX(MIN(${CAME_IN}, l.qty) - ${SHIPPED}, 0) END`;
+const RESERVED = `SELECT l.part_code AS part_code, SUM(${HELD}) AS qty
   FROM parts_order_lines l JOIN parts_orders o ON o.id = l.order_id
- WHERE o.removed_at IS NULL AND o.status IN ('ordered', 'sourcing', 'ready') AND l.part_code IS NOT NULL AND l.supplier LIKE '%stock%'`;
+ WHERE o.removed_at IS NULL AND o.status IN ('ordered', 'sourcing', 'ready') AND l.part_code IS NOT NULL`;
 /** Expected on deliveries not yet checked in. */
 const INCOMING = `SELECT l.part_code AS part_code, SUM(MAX(l.qty - l.qty_received, 0)) AS qty
   FROM shipment_lines l JOIN shipments s ON s.id = l.shipment_id
@@ -59,7 +67,7 @@ async function sideTotals(db: D1Database, one?: string): Promise<{ reserved: Map
   const reserved = new Map<string, number>(), incoming = new Map<string, number>();
   const where = one ? " AND l.part_code = ? COLLATE NOCASE" : "";
   const bind = one ? [one] : [];
-  if (await tables(db, "parts_orders", "parts_order_lines")) {
+  if (await tables(db, "parts_orders", "parts_order_lines", "shipments", "shipment_lines")) {
     for (const r of (await db.prepare(`${RESERVED}${where} GROUP BY l.part_code COLLATE NOCASE`).bind(...bind).all<{ part_code: string; qty: number }>()).results) reserved.set(r.part_code.toUpperCase(), r.qty);
   }
   if (await tables(db, "shipments", "shipment_lines")) {
@@ -107,15 +115,15 @@ inventory.get("/part/:code", async (c) => {
   if (!i) fail(404, "Not found.");
   const [levels, moves] = await db.batch([
     db.prepare("SELECT location, qty FROM stock_levels WHERE part_code = ? AND qty > 0 ORDER BY location").bind(pc),
-    db.prepare("SELECT m.id, m.at, m.location, m.delta, m.type, m.reason, m.note, m.source_type, m.source_id, u.name AS who FROM stock_moves m LEFT JOIN users u ON u.id = m.user_id WHERE m.part_code = ? ORDER BY m.at DESC, m.rowid DESC LIMIT 300").bind(pc),
+    db.prepare("SELECT m.id, m.at, m.location, m.delta, m.type, m.reason, m.note, m.source_type, m.source_id, m.source_line, u.name AS who FROM stock_moves m LEFT JOIN users u ON u.id = m.user_id WHERE m.part_code = ? ORDER BY m.at DESC, m.rowid DESC LIMIT 300").bind(pc),
   ]);
   const side = await sideTotals(db, pc);
   // Which orders hold it, for people who may see parts orders.
-  const holding = has(u, "partsorders.view") && (await tables(db, "parts_orders", "parts_order_lines"))
+  const holding = has(u, "partsorders.view") && (await tables(db, "parts_orders", "parts_order_lines", "shipments", "shipment_lines"))
     ? (await db.prepare(
-        `SELECT o.id, 'P-' || o.seq AS number, o.customer, o.status, MAX(l.qty - l.qty_shipped, 0) AS qty
+        `SELECT o.id, 'P-' || o.seq AS number, o.customer, o.status, ${HELD} AS qty
            FROM parts_order_lines l JOIN parts_orders o ON o.id = l.order_id
-          WHERE o.removed_at IS NULL AND o.status IN ('ordered', 'sourcing', 'ready') AND l.part_code = ? COLLATE NOCASE AND l.supplier LIKE '%stock%' AND l.qty > l.qty_shipped
+          WHERE o.removed_at IS NULL AND o.status IN ('ordered', 'sourcing', 'ready') AND l.part_code = ? COLLATE NOCASE AND ${HELD} > 0
           ORDER BY o.seq LIMIT 50`,
       ).bind(pc).all<Row>()).results
     : [];

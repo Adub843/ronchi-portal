@@ -38,7 +38,9 @@ export const MAX_IMPORT = 2000;
 
 export interface StockRow { on_hand: number; reserved: number; reorder_point: number | null; active?: boolean | number }
 export const available = (r: Pick<StockRow, "on_hand" | "reserved">) => Math.round((r.on_hand - r.reserved) * 1000) / 1000;
-export const isOut = (r: StockRow) => r.active !== false && r.active !== 0 && r.on_hand <= 0;
+/** Out: nothing on the shelf of a part we mean to keep (it has a reorder point) or that an order is waiting for.
+ *  A part that only passed through for one customer order and has gone is not "out of stock". */
+export const isOut = (r: StockRow) => r.active !== false && r.active !== 0 && r.on_hand <= 0 && (r.reorder_point != null || r.reserved > 0);
 /** Low: a reorder point is set and what is free to use has fallen to it (and something is still on the shelf). */
 export const isLow = (r: StockRow) => r.active !== false && r.active !== 0 && r.reorder_point != null && available(r) <= r.reorder_point && !isOut(r);
 

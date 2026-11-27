@@ -5,6 +5,7 @@
 export const INVENTORY_DYNAMIC = [
   "Put into stock", "Taken out", "Moved shelf", "Count corrected", "Opening stock",
   "Counted", "Damaged", "Lost", "Found", "Wrong part number", "Used on a job, not recorded", "Other",
+  "Delivery checked in", "Shipped", "Shipment taken back", "On quality hold", "Delivery removed",
   "Parts order", "Field service job", "Warranty", "Sample", "Returned to supplier", "Scrapped",
   "Description", "Usual shelf", "Reorder when at or below", "Reorder quantity", "Cost each", "Notes", "Kept in stock",
   "Inventory", "Pick a reason for the correction.", "Pick a different shelf to move to.", "That part is not in stock.", "Someone else just took that stock. Reload and try again.",
@@ -16,7 +17,7 @@ export const INVENTORY_DYNAMIC = [
 
 const PAIRS: [string, string, string][] = [
   // [English, Spanish, Italian]
-  ["A part is held when a parts order the customer has confirmed takes it from our stock and has not shipped yet.", "Una pieza queda apartada cuando un pedido de repuestos confirmado por el cliente la toma de nuestro inventario y aún no se ha enviado.", "Un ricambio è impegnato quando un ordine ricambi confermato dal cliente lo prende dal nostro magazzino e non è ancora stato spedito."],
+  ["A part is held when a confirmed parts order takes it from our stock, or it came in for that order and has not shipped yet.", "Una pieza queda apartada cuando un pedido de repuestos confirmado la toma de nuestro inventario, o llegó para ese pedido y aún no se ha enviado.", "Un ricambio è impegnato quando un ordine ricambi confermato lo prende dal nostro magazzino, oppure è arrivato per quell'ordine e non è ancora stato spedito."],
   ["Available", "Disponible", "Disponibile"],
   ["Bring in a spreadsheet of what is on the shelves. Each line sets the quantity of one part on one shelf.", "Traiga una hoja de cálculo de lo que hay en los estantes. Cada línea fija la cantidad de una pieza en un estante.", "Importa un foglio di calcolo di ciò che c'è sugli scaffali. Ogni riga imposta la quantità di un ricambio su uno scaffale."],
   ["Change stock", "Cambiar existencias", "Modifica giacenza"],
@@ -102,6 +103,12 @@ const PAIRS: [string, string, string][] = [
   ["Who", "Quién", "Chi"],
   ["No parts match.", "Ninguna pieza coincide.", "Nessun ricambio corrisponde."],
   ["No changes yet.", "Aún no hay cambios.", "Ancora nessuna variazione."],
+  ["Delivery checked in", "Entrega registrada", "Consegna registrata"],
+  ["Shipped", "Enviado", "Spedito"],
+  ["Shipment taken back", "Envío retirado", "Spedizione ritirata"],
+  ["On quality hold", "En retención de calidad", "In blocco qualità"],
+  ["Delivery removed", "Entrega eliminada", "Consegna rimossa"],
+  ["Stock changes by itself: checking a delivery in under Shipping and receiving puts its parts on the shelf, and marking a shipment shipped takes them off.", "Las existencias cambian solas: al registrar una entrega en Envíos y recepción sus piezas van al estante, y al marcar un envío como enviado salen de él.", "La giacenza cambia da sola: registrando una consegna in Spedizioni e ricevimento i ricambi vanno sullo scaffale, e segnando una spedizione come spedita ne escono."],
 ];
 
 export const INVENTORY_ES: Record<string, string> = Object.fromEntries(PAIRS.map(([en, es]) => [en, es]));
