@@ -111,6 +111,11 @@ export const AREAS: Area[] = [
     title: T("Shipping and receiving", "Envíos y recepción", "Spedizioni e ricevimento"),
     blurb: T("Machines, spare parts and change parts going out, and parts from Italy, suppliers and customers coming in.", "Máquinas, repuestos y cambios de formato que salen, y piezas de Italia, proveedores y clientes que entran.", "Macchine, ricambi e cambi formato in uscita, e parti dall'Italia, dai fornitori e dai clienti in entrata."),
   },
+  {
+    id: "inventory", paths: ["/inventory"],
+    title: T("Inventory", "Inventario", "Inventario"),
+    blurb: T("What is on the shelves, where it is, what is held for orders and what is running low.", "Qué hay en los estantes, dónde está, qué está apartado para pedidos y qué se está acabando.", "Cosa c'è sugli scaffali, dove si trova, cosa è impegnato per gli ordini e cosa sta finendo."),
+  },
 ];
 
 export const GUIDES: Guide[] = [
@@ -700,6 +705,49 @@ export const GUIDES: Guide[] = [
       T("Open Machine sales. The boxes at the top show the open value and the weighted value of the deals being sold.", "Abra Ventas de máquinas. Los cuadros de arriba muestran el valor abierto y el valor ponderado de los negocios en venta.", "Apri Vendite macchine. I riquadri in alto mostrano il valore aperto e il valore ponderato delle trattative in corso."),
       T("The weighted value counts each deal by its chance to close. Each stage has a usual chance, and you can type your own on the deal.", "El valor ponderado cuenta cada negocio según su probabilidad de cierre. Cada etapa tiene una probabilidad habitual, y usted puede escribir la suya en el negocio.", "Il valore ponderato conta ogni trattativa secondo la sua probabilità di chiusura. Ogni fase ha una probabilità abituale, e puoi scrivere la tua nella trattativa."),
       T("People without this access see the same deals with no dollar amounts.", "Las personas sin este acceso ven los mismos negocios sin importes en dólares.", "Le persone senza questo accesso vedono le stesse trattative senza importi in dollari."),
+    ],
+  },
+
+  // ---------- Inventory ----------
+  {
+    id: "view-stock", area: "inventory", needs: ["inventory.view"],
+    title: T("Check what is in stock", "Ver qué hay en existencia", "Controllare cosa c'è a magazzino"),
+    summary: T("Find a part, its shelf and how many are free to use.", "Encuentre una pieza, su estante y cuántas están libres para usar.", "Trova un ricambio, il suo scaffale e quanti sono liberi."),
+    steps: [
+      T("Open Warehouse, then Inventory. Search by part number, description or shelf.", "Abra Almacén y luego Inventario. Busque por número de pieza, descripción o estante.", "Apri Magazzino, poi Inventario. Cerca per codice ricambio, descrizione o scaffale."),
+      T("On hand is what is on the shelves. Held is what confirmed parts orders will take. Available is what is left to promise.", "En existencia es lo que hay en los estantes. Apartado es lo que tomarán los pedidos confirmados. Disponible es lo que queda para prometer.", "Giacenza è ciò che c'è sugli scaffali. Impegnato è ciò che prenderanno gli ordini confermati. Disponibile è ciò che resta da promettere."),
+      T("Press Low stock or Out of stock at the top to see what needs ordering.", "Pulse Existencias bajas o Agotado arriba para ver qué hay que pedir.", "Premi Scorta bassa o Esaurito in alto per vedere cosa va ordinato."),
+      T("Open a part to see each shelf, the orders holding it, and every change ever made to its quantity.", "Abra una pieza para ver cada estante, los pedidos que la apartan y todos los cambios hechos a su cantidad.", "Apri un ricambio per vedere ogni scaffale, gli ordini che lo impegnano e tutte le variazioni della quantità."),
+    ],
+  },
+  {
+    id: "move-stock", area: "inventory", needs: ["inventory.view", "inventory.edit"],
+    title: T("Put parts in, take them out, move them", "Ingresar, sacar y mover piezas", "Caricare, prelevare e spostare ricambi"),
+    summary: T("Keep the count right every time a part moves.", "Mantenga el conteo correcto cada vez que una pieza se mueve.", "Tieni il conteggio corretto ogni volta che un ricambio si muove."),
+    steps: [
+      T("To add a part, open Inventory and press Put into stock. Type the part number, the shelf and the quantity.", "Para agregar una pieza, abra Inventario y pulse Ingresar al inventario. Escriba el número de pieza, el estante y la cantidad.", "Per aggiungere un ricambio, apri Inventario e premi Carica a magazzino. Scrivi il codice, lo scaffale e la quantità."),
+      T("To take a part out, open the part, press Change stock, pick Take out, the shelf, the quantity and the reason.", "Para sacar una pieza, abra la pieza, pulse Cambiar existencias, elija Sacar, el estante, la cantidad y el motivo.", "Per prelevare un ricambio, aprilo, premi Modifica giacenza, scegli Preleva, lo scaffale, la quantità e il motivo."),
+      T("Most stock changes by itself. Checking a delivery in under Shipping and receiving puts its parts on the shelf you typed, and marking a shipment shipped takes its parts off. Parts on quality hold are not in stock until the hold is cleared.", "La mayoría de las existencias cambian solas. Al registrar una entrega en Envíos y recepción sus piezas van al estante que escribió, y al marcar un envío como enviado sus piezas salen. Las piezas en retención de calidad no están en existencia hasta que se libera la retención.", "La maggior parte delle giacenze cambia da sola. Registrando una consegna in Spedizioni e ricevimento i ricambi vanno sullo scaffale indicato, e segnando una spedizione come spedita i ricambi escono. I ricambi in blocco qualità non sono a magazzino finché il blocco non viene tolto."),
+      T("To move it, pick Move to another shelf. The portal will not let a shelf go below zero.", "Para moverla, elija Mover a otro estante. El portal no deja que un estante quede bajo cero.", "Per spostarlo, scegli Sposta su un altro scaffale. Il portale non lascia scendere uno scaffale sotto zero."),
+    ],
+  },
+  {
+    id: "correct-stock", area: "inventory", needs: ["inventory.view", "inventory.adjust"],
+    title: T("Correct a count or import a stock list", "Corregir un conteo o importar una lista", "Correggere un conteggio o importare un elenco"),
+    summary: T("Fix a wrong number with a reason, set reorder points, or load a spreadsheet.", "Corrija un número equivocado con un motivo, ponga puntos de pedido o cargue una hoja de cálculo.", "Correggi un numero sbagliato con un motivo, imposta i punti di riordino o carica un foglio di calcolo."),
+    steps: [
+      T("Open the part, press Change stock and pick Correct the count. Type what you counted on that shelf and pick a reason.", "Abra la pieza, pulse Cambiar existencias y elija Corregir el conteo. Escriba lo que contó en ese estante y elija un motivo.", "Apri il ricambio, premi Modifica giacenza e scegli Correggi il conteggio. Scrivi quanto hai contato su quello scaffale e scegli un motivo."),
+      T("Press Edit details to set the usual shelf, the reorder point and the reorder quantity. The part shows as Low stock when what is available falls to the reorder point.", "Pulse Editar datos para poner el estante habitual, el punto de pedido y la cantidad a pedir. La pieza aparece con Existencias bajas cuando lo disponible llega al punto de pedido.", "Premi Modifica dati per impostare lo scaffale abituale, il punto di riordino e la quantità di riordino. Il ricambio risulta Scorta bassa quando il disponibile scende al punto di riordino."),
+      T("To load a whole list, press Import a stock list on the Inventory page and choose a CSV file with Part number and Quantity columns.", "Para cargar una lista completa, pulse Importar una lista de existencias en la página Inventario y elija un archivo CSV con las columnas Part number y Quantity.", "Per caricare un elenco intero, premi Importa un elenco di giacenze nella pagina Inventario e scegli un file CSV con le colonne Part number e Quantity."),
+    ],
+  },
+  {
+    id: "stock-costs", area: "inventory", needs: ["inventory.view", "inventory.prices"],
+    title: T("See what the stock is worth", "Ver cuánto vale el inventario", "Vedere quanto vale il magazzino"),
+    summary: T("Part costs and the value of what is on the shelves.", "Costos de las piezas y el valor de lo que hay en los estantes.", "Costi dei ricambi e valore di ciò che c'è sugli scaffali."),
+    steps: [
+      T("Open Inventory. The Stock value box at the top adds up on hand times cost for every part that has a cost.", "Abra Inventario. El cuadro Valor del inventario de arriba suma existencia por costo de cada pieza que tiene costo.", "Apri Inventario. Il riquadro Valore di magazzino in alto somma giacenza per costo di ogni ricambio che ha un costo."),
+      T("People without this access see the same stock with no dollar amounts.", "Las personas sin este acceso ven las mismas existencias sin importes en dólares.", "Le persone senza questo accesso vedono le stesse giacenze senza importi in dollari."),
     ],
   },
 

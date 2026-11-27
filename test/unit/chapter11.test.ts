@@ -227,4 +227,14 @@ describe("oldest manuals: TAV. pages with only part numbers and names", () => {
     expect(sheets[0]!.drawingPage).toBe(14);
     expect(skipped).toEqual([14, 16]);
   });
+
+  it("reads the two-letter, five-digit part numbers of the oldest machines", () => {
+    const s = readPage({ page: 7, width: 595, height: 842, items: [
+      t("TAV. GA00209 - COMM. 3220LC", 303, 69), t("CODE", 82, 140), t("GRUPPO TELAIO E TRASMISSIONE", 126, 140), t("FRAME AND TRANSMISSION GROUP", 336, 140),
+      t("MC00294", 69, 152), t("CUSCINETTO RADIALE A SFERE", 126, 152), t("RADIAL BALL BEARING", 336, 152),
+      t("PD02218", 69, 165), t("TELAIO", 126, 165), t("FRAME", 336, 165),
+    ] });
+    expect(s).toMatchObject({ code: "GA00209", rev: null, titleEn: "FRAME AND TRANSMISSION GROUP" });
+    expect(s.rows.map((r) => r.code)).toEqual(["MC00294", "PD02218"]);
+  });
 });

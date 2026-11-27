@@ -698,3 +698,10 @@ nav.side .menu-pop{min-width:200px}
 .ms-nextrow input[type=text],.ms-nextrow input:not([type]){flex:1 1 180px;width:auto}
 .ms-nextrow input[type=date]{width:auto}
 @media (max-width:900px){.ms-page{grid-template-columns:1fr}.ms-board{grid-auto-columns:78%}}
+
+/* Inventory */
+.inv-grid{margin:12px 0;align-items:start}
+.inv-facts{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:12px}
+.inv-pills{gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
+.inv-add{margin-bottom:12px}
+.inv-problems{color:var(--accent);margin:0;padding-left:18px}

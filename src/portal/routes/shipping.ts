@@ -26,6 +26,7 @@ import { audit, now } from "../lib/db";
 import { body, fail, has, requirePerm } from "../lib/http";
 import { isEmail } from "../lib/mail";
 import { serveFile } from "../lib/serve-file";
+import { stockForShipment } from "../lib/stock";
 import { loadSettings } from "../lib/settings-store";
 
 export const shipping = new Hono<AppEnv>();
@@ -447,6 +448,7 @@ shipping.post("/", async (c) => {
   await audit(db, { userId: u.id, action: "shipment.create", targetType: "shipment", targetId: id, detail: { number, direction, ...f, lines: lines.length }, ip: c.get("ip") });
   if (direction === "out" && (f.status === "shipped" || f.status === "delivered")) await tellChangePartOrder(c, await loadShipment(db, id), u, "shipped");
   await syncPartsOrdersForShipment(db, id, u.id, c.get("ip"));
+  await stockForShipment(db, id, u.id, { take: true });
   return c.json({ id, number });
 });
 
@@ -520,6 +522,9 @@ shipping.patch("/:id", async (c) => {
   const gone = (st: string) => st === "shipped" || st === "delivered";
   const pulledBack = after.direction === "out" && ((gone(before.status) && !gone(after.status)) || b.lines !== undefined);
   await syncPartsOrdersForShipment(db, id, u.id, c.get("ip"), hadOrders, pulledBack);
+  // The shelves follow: a shipment that left takes its parts out of stock, one taken back returns them.
+  const itemsChanged = !!diff.items;
+  await stockForShipment(db, id, u.id, { putBack: gone(before.status) && (!gone(after.status) || itemsChanged), take: gone(after.status) && (!gone(before.status) || itemsChanged) });
   return c.json({ ok: true, revision: after.revision });
 });
 
@@ -576,6 +581,7 @@ shipping.post("/:id/receive", async (c) => {
   const after = await loadShipment(db, id);
   if (status === "received" || s.kind === "samples") await tellChangePartOrder(c, after, u, "received");
   await syncPartsOrdersForShipment(db, id, u.id, c.get("ip"));
+  await stockForShipment(db, id, u.id); // what was checked in goes on the shelf
   return c.json({ ok: true, revision: after.revision, status });
 });
 
@@ -597,6 +603,7 @@ shipping.post("/:id/lines/:lineId/hold", async (c) => {
   ]);
   if (!r?.meta.changes) fail(409, STALE);
   await audit(db, { userId: u.id, action: b.hold ? "shipment.hold" : "shipment.hold_clear", targetType: "shipment", targetId: s.id, detail: { item: line.part_code ?? line.description, note }, ip: c.get("ip") });
+  await stockForShipment(db, s.id, u.id); // on hold is not in stock; cleared is
   return c.json({ ok: true, revision: s.revision + 1 });
 });
 
@@ -607,5 +614,6 @@ shipping.delete("/:id", async (c) => {
   if (!r.meta.changes) fail(404, "Not found.");
   await audit(c.env.DB, { userId: u.id, action: "shipment.remove", targetType: "shipment", targetId: s.id, detail: { number: s.number }, ip: c.get("ip") });
   await syncPartsOrdersForShipment(c.env.DB, s.id, u.id, c.get("ip"), [], true); // parts it carried no longer count as shipped
+  await stockForShipment(c.env.DB, s.id, u.id, { putBack: true });
   return c.json({ ok: true });
 });

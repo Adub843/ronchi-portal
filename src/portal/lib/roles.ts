@@ -63,6 +63,10 @@ export type Permission =
   | "jobs.schedule"       // schedule jobs, choose the field service engineers, send the job emails
   | "shipping.view"       // see shipments going out and coming in, track them, add photos and papers
   | "shipping.edit"      // make and change shipments, mark them shipped, check deliveries in
+  | "inventory.view"      // see what is in stock, where, and what is reserved
+  | "inventory.edit"      // put stock in, take it out, move it between shelves
+  | "inventory.adjust"    // correct a count, change a part's stock details, import a stock list
+  | "inventory.prices"    // see and set part costs and stock value
   | "workbook.billing";   // see every engineer's billable hours and expenses across jobs, and export them
 
 const ALL: Permission[] = [
@@ -76,9 +80,10 @@ const ALL: Permission[] = [
   "software.view", "software.manage",
   "jobs.view", "jobs.schedule", "workbook.billing",
   "shipping.view", "shipping.edit",
+  "inventory.view", "inventory.edit", "inventory.adjust", "inventory.prices",
 ];
 
-const STAFF_BASE: Permission[] = ["boards.use", "boards.create", "chats.start", "files.send", "boards.export", "machines.view", "catalog.view", "kb.view", "kb.write", "software.view", "jobs.view", "shipping.view", "machinesales.view"];
+const STAFF_BASE: Permission[] = ["boards.use", "boards.create", "chats.start", "files.send", "boards.export", "machines.view", "catalog.view", "kb.view", "kb.write", "software.view", "jobs.view", "shipping.view", "machinesales.view", "inventory.view"];
 
 // Managers (Aaron, 2026-11-24: "paolo, steve, michele, and morad should all be manager level log
 // ins i am the only admin") get everything except managing people and reading the audit log.
@@ -88,11 +93,11 @@ export const PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
   admin: new Set(ALL),
   manager: new Set(MANAGER),
   // Billing (Lola) types the QuickBooks invoice number and needs the prices to bill.
-  billing: new Set([...STAFF_BASE, "quotes.manage", "workbook.billing", "machinesales.prices", "partsorders.view", "partsorders.edit", "partsorders.prices", "partsorders.reports", "partsorders.export"]),
+  billing: new Set([...STAFF_BASE, "inventory.prices", "quotes.manage", "workbook.billing", "machinesales.prices", "partsorders.view", "partsorders.edit", "partsorders.prices", "partsorders.reports", "partsorders.export"]),
   // Scheduling (Meagan) also handles parts: she can take orders and track arrivals, without prices.
-  scheduling: new Set([...STAFF_BASE, "jobs.schedule", "shipping.edit", "partsorders.view", "partsorders.add", "partsorders.edit", "partsorders.export"]),
-  service: new Set([...STAFF_BASE, "machines.add", "machines.edit", "boards.moderate", "catalog.edit", "catalog.publish", "customers.manage", "customers.invite", "quotes.manage", "kb.edit_all", "kb.import", "kb.publish", "jobs.schedule", "shipping.edit"]),
-  sales: new Set([...STAFF_BASE, "customers.manage", "customers.invite", "quotes.manage", "cpsales.view", "cpsales.edit", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import", "orders.export", "shipping.edit",
+  scheduling: new Set([...STAFF_BASE, "inventory.edit", "inventory.adjust", "jobs.schedule", "shipping.edit", "partsorders.view", "partsorders.add", "partsorders.edit", "partsorders.export"]),
+  service: new Set([...STAFF_BASE, "inventory.edit", "machines.add", "machines.edit", "boards.moderate", "catalog.edit", "catalog.publish", "customers.manage", "customers.invite", "quotes.manage", "kb.edit_all", "kb.import", "kb.publish", "jobs.schedule", "shipping.edit"]),
+  sales: new Set([...STAFF_BASE, "inventory.edit", "inventory.prices", "customers.manage", "customers.invite", "quotes.manage", "cpsales.view", "cpsales.edit", "orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import", "orders.export", "shipping.edit",
     "partsorders.view", "partsorders.add", "partsorders.edit", "partsorders.remove", "partsorders.prices", "partsorders.reports", "partsorders.export",
     "machinesales.add", "machinesales.edit", "machinesales.remove", "machinesales.prices"]),
   engineering: new Set([...STAFF_BASE, "machines.add", "machines.edit", "catalog.edit", "catalog.publish", "kb.edit_all", "kb.import", "kb.publish", "software.manage"]),
@@ -182,7 +187,7 @@ export function readChanges(list: string | null | undefined): AccessChanges {
 export const ACCESS_LIVE = "(a.expires_at IS NULL OR a.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))";
 
 /** Seeing, without changing anything: what "View only" on the access screen keeps on. */
-export const VIEW_PERMS: ReadonlySet<Permission> = new Set(["boards.use", "machines.view", "catalog.view", "kb.view", "software.view", "cpsales.view", "orders.view", "partsorders.view", "machinesales.view", "jobs.view", "shipping.view"]);
+export const VIEW_PERMS: ReadonlySet<Permission> = new Set(["boards.use", "machines.view", "catalog.view", "kb.view", "software.view", "cpsales.view", "orders.view", "partsorders.view", "machinesales.view", "jobs.view", "shipping.view", "inventory.view"]);
 
 /** Plain-English names for the access screen, grouped the way the menu is. */
 export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label: string; hint: string }[] }[] = [
@@ -254,6 +259,12 @@ export const PERMISSION_GROUPS: { group: string; perms: { id: Permission; label:
   { group: "Shipping and receiving", perms: [
     { id: "shipping.view", label: "See shipments", hint: "What is going out and coming in, tracking links, and adding photos and papers." },
     { id: "shipping.edit", label: "Ship and receive", hint: "Make and change shipments, mark them shipped or delivered, and check deliveries in." },
+  ] },
+  { group: "Inventory", perms: [
+    { id: "inventory.view", label: "See stock", hint: "What is on the shelves, where, what is reserved and what is low." },
+    { id: "inventory.edit", label: "Move stock", hint: "Put parts into stock, take them out, and move them between shelves." },
+    { id: "inventory.adjust", label: "Correct stock", hint: "Correct a count, change a part's shelf and reorder point, and import a stock list." },
+    { id: "inventory.prices", label: "See stock costs", hint: "See and set what each part costs, and the value of the stock." },
   ] },
   { group: "Admin only", perms: [
     { id: "users.manage", label: "Manage people", hint: "Invites, roles, access and sign-outs. Admins only." },

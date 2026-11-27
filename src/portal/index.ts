@@ -21,6 +21,7 @@ import { changeParts } from "./routes/change-parts";
 import { machineSales } from "./routes/machine-sales";
 import { partsOrders } from "./routes/parts-orders";
 import { files } from "./routes/files";
+import { inventory } from "./routes/inventory";
 import { jobs } from "./routes/jobs";
 import { switches } from "./routes/switches";
 import { kb } from "./routes/kb";
@@ -92,6 +93,7 @@ app.route("/api/switches", switches);
 app.route("/api/links", links);
 app.route("/api/software", software);
 app.route("/api/shipping", shipping);
+app.route("/api/inventory", inventory);
 app.route("/api/workbook", workbook);
 
 app.all("/api/*", () => fail(404, "Not found."));
