@@ -13,6 +13,7 @@ function hashToPath(hash: string): string {
   if (!h) return "/";
   const k = /^kb-([A-Za-z0-9_-]+)$/.exec(h);
   if (k) return `/kb/${k[1]}`;
+  if (/^machine-sales(\/|$)/.test(h)) return `/${h}`; // not machine "sales"
   const m = /^(board|machine|chat|change-part|job|work-order)-([A-Za-z0-9_-]+(?:\/work-order)?)$/.exec(h);
   if (m) return `/${m[1]}s/${m[2]}`;
   return `/${HASH_ALIAS[h] ?? h}`;
@@ -59,6 +60,7 @@ export function parentOf(path: string): string {
   if (/^\/kb\/./.test(path)) return "/kb";
   if (/^\/shipping\/./.test(path)) return "/shipping";
   if (/^\/parts-orders\/./.test(path)) return "/parts-orders";
+  if (/^\/machine-sales\/./.test(path)) return "/machine-sales";
   const m = /^\/(boards|machines|chats|change-parts|jobs|work-orders)\/.+$/.exec(path);
   return m ? `/${m[1]}` : "/";
 }

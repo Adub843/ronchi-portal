@@ -4,6 +4,7 @@
 import { ADMIN_ES, ADMIN_IT } from "./i18n-admin";
 import { SHIPPING_DYNAMIC, SHIPPING_ES, SHIPPING_IT } from "./i18n-shipping";
 import { SOFTWARE_DYNAMIC, SOFTWARE_ES, SOFTWARE_IT } from "./i18n-software";
+import { MACHINE_SALES_DYNAMIC, MACHINE_SALES_ES, MACHINE_SALES_IT } from "./i18n-machine-sales";
 import { PARTS_ORDERS_DYNAMIC, PARTS_ORDERS_ES, PARTS_ORDERS_IT } from "./i18n-parts-orders";
 import { WORKBOOK_DYNAMIC, WORKBOOK_ES, WORKBOOK_IT } from "./i18n-workbook";
 import { ERRORS_ES, ERRORS_IT } from "./i18n-errors";
@@ -2125,6 +2126,10 @@ DYNAMIC.push(...THEMES.map((th) => th.blurb));
 for (const [k, v] of Object.entries(PARTS_ORDERS_ES)) ES[k] ??= v;
 for (const [k, v] of Object.entries(PARTS_ORDERS_IT)) IT[k] ??= v;
 DYNAMIC.push(...PARTS_ORDERS_DYNAMIC);
+// Machine sales (i18n-machine-sales.ts).
+for (const [k, v] of Object.entries(MACHINE_SALES_ES)) ES[k] ??= v;
+for (const [k, v] of Object.entries(MACHINE_SALES_IT)) IT[k] ??= v;
+DYNAMIC.push(...MACHINE_SALES_DYNAMIC);
 // Shipping and receiving keeps its own words in i18n-shipping.ts (fewer clashes in this file).
 for (const [k, v] of Object.entries(SHIPPING_ES)) ES[k] ??= v;
 for (const [k, v] of Object.entries(SHIPPING_IT)) IT[k] ??= v;

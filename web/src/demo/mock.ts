@@ -10,6 +10,7 @@ import { KbFail, kbRoute, resetKb } from "./kb-mock";
 import { demoJobs, JobsFail, jobsRoute, resetJobs, resetWorkbook, workbookRoute } from "./jobs-mock";
 import { resetShipping, ShippingFail, shippingRoute } from "./shipping-mock";
 import { resetSoftware, SoftwareFail, softwareRoute } from "./software-mock";
+import { MachineSalesFail, machineSalesRoute, resetMachineSales } from "./machine-sales-mock";
 import { demoPartsOrder, PartsOrdersFail, partsOrdersFor, partsOrdersRoute, resetPartsOrders } from "./parts-orders-mock";
 type Role = keyof typeof ROLES;
 
@@ -454,6 +455,17 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
     return { ok: true };
   }
   // --- parts catalog (the preview has no manuals or customer parts site, so it starts empty) ---
+  if (seg[0] === "machine-sales") {
+    try {
+      return machineSalesRoute(method, seg, body, {
+        me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id,
+        machines: (customer) => db.machines.filter((m) => (m.customer ?? "").toLowerCase() === customer.toLowerCase()).map((m) => ({ id: m.id, serial: m.serial, model: m.model, site: m.site })),
+      });
+    } catch (e) {
+      if (e instanceof MachineSalesFail) throw new Fail(e.status, e.message);
+      throw e;
+    }
+  }
   if (seg[0] === "parts-orders") {
     if (q.get("machine") && method === "GET" && seg.length === 1) return { orders: [] };
     try {
@@ -851,6 +863,7 @@ export function resetDemo() {
   resetJobs();
   resetWorkbook();
   resetPartsOrders();
+  resetMachineSales();
   resetShipping();
   resetSoftware();
   save();

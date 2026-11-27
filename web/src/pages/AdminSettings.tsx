@@ -17,7 +17,7 @@ const roleName = (r: string) =>
 // A section added later (lib/settings.ts SECTIONS) shows with the label the server sends until it gets a line here.
 const SECTION_NAMES: Partial<Record<string, () => string>> = {
   chats: () => t("Chats and boards"), jobs: () => t("Jobs (field service scheduling)"), machines: () => t("Machines"), catalog: () => t("Parts catalog"),
-  customers: () => t("Customers and quote requests"), cpSales: () => t("Change-part sales"), changeParts: () => t("Change parts"), partsOrders: () => t("Parts orders"), knowledge: () => t("Knowledge base"), software: () => t("Software downloads"), shipping: () => t("Shipping and receiving"),
+  customers: () => t("Customers and quote requests"), cpSales: () => t("Change-part sales"), changeParts: () => t("Change parts"), partsOrders: () => t("Parts orders"), machineSales: () => t("Machine sales"), knowledge: () => t("Knowledge base"), software: () => t("Software downloads"), shipping: () => t("Shipping and receiving"),
 };
 const sectionName = (s: string, label?: string) => SECTION_NAMES[s]?.() ?? label ?? s;
 const LOCKED = () => [
