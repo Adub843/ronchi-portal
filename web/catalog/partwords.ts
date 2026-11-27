@@ -32,7 +32,7 @@ export const PART_WORDS: Record<string, string[]> = {
   carrello: ["carriage", "trolley"], carter: ["guard", "cover", "casing"], cassetta: ["box"], cassette: ["box"],
   catena: ["chain"], catene: ["chain"], cavi: ["cable"], cavo: ["cable"],
   centratore: ["centering device", "centring device"], centratori: ["centering device", "centring device"],
-  cerniera: ["hinge"], cerniere: ["hinge"], chiavetta: ["key"], chiavette: ["key"], chiocciola: ["lead nut"],
+  cerniera: ["hinge"], cerniere: ["hinge"], chiavetta: ["key", "feather key", "tang", "tongue"], chiavette: ["key", "feather key", "tang", "tongue"], chiocciola: ["lead nut"],
   chiocciole: ["lead nut"], chiusura: ["closing device", "latch"], chiusure: ["closing device", "latch"],
   cilindri: ["cylinder"], cilindro: ["cylinder"], cinghia: ["belt"], cinghie: ["belt"],
   coclea: ["scroll", "feed screw", "feedscrew", "worm", "timing screw"],
@@ -81,8 +81,8 @@ export const PART_WORDS: Record<string, string[]> = {
   inserti: ["insert"], inserto: ["insert"], interruttore: ["switch"], interruttori: ["switch"], lama: ["blade"],
   lame: ["blade"], lamiera: ["plate", "sheet", "sheet metal"], lamiere: ["plate", "sheet", "sheet metal"],
   lampada: ["lamp", "light"], lampade: ["lamp", "light"], lardone: ["gib"], lardoni: ["gib"], leva: ["lever"],
-  leve: ["lever"], linguetta: ["key", "feather key"], linguette: ["key", "feather key"], lubrificatore: ["lubricator"],
-  lubrificatori: ["lubricator"], madrevite: ["lead nut"], madreviti: ["lead nut"], magnete: ["magnet"],
+  leve: ["lever"], linguetta: ["key", "feather key", "tang", "tongue"], linguette: ["key", "feather key", "tang", "tongue"], lubrificatore: ["lubricator"],
+  lubrificatori: ["lubricator"], madrevite: ["lead nut", "nut screw"], madreviti: ["lead nut", "nut screw"], magnete: ["magnet"],
   magneti: ["magnet"], mandrini: ["chuck", "spindle", "mandrel"], mandrino: ["chuck", "spindle", "mandrel"],
   manicotti: ["sleeve", "coupling", "hose"], manicotto: ["sleeve", "coupling", "hose"], maniglia: ["handle"],
   maniglie: ["handle"], manometri: ["pressure gauge", "gauge", "manometer"],
@@ -184,4 +184,6 @@ export const PART_WORDS: Record<string, string[]> = {
   // Short forms seen in Italy's files.
   or: ["o ring", "oring"], uor: ["o ring", "oring"], guar: ["seal", "gasket"], rond: ["washer"], bocc: ["bush", "bushing"],
   dist: ["spacer"], racc: ["fitting", "coupling fitting"],
+  // From the PC check of every 3D list.
+  indicatore: ["indicator"], sgancio: ["quick release"], paracolpo: ["bumper"], tubolare: ["tubular"], km: ["ring nut"],
 };

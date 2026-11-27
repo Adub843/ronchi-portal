@@ -214,3 +214,74 @@ describe("fasteners named by their standard", () => {
     expect(autoLink(many("a", "VITE_UNI5931_M6x16", 2), row).size).toBe(0);
   });
 });
+
+describe("standard hardware (from the PC check of every 3D list)", () => {
+  it("never links a screw to a row of another standard, and prefers the row with the same standard", () => {
+    const u: Unit[] = [
+      { id: "a", names: ["VITE_UNI5931_M6x25"], sig: "a|1" },
+      { id: "b", names: ["VITE_UNI_5933_M6x16"], sig: "b|1" },
+      { id: "c", names: ["VITE_UNI_EN_ISO_4762TF_M8x125x20"], sig: "c|1" },
+    ];
+    const r: PartRow[] = [
+      { code: "X5739", qty: 1, names: ["SCREW TE UNI 5739", null] },
+      { code: "X5933", qty: 1, names: ["SCREW TSPEI UNI 5933", null] },
+      { code: "X5931", qty: 2, names: ["SCREW TCEI UNI 5931", null] },
+    ];
+    const got = autoLink(u, r);
+    expect(got.get("a")?.code).toBe("X5931");
+    expect(got.get("b")?.code).toBe("X5933");
+    expect(got.get("c")?.code).toBe("X5931");   // UNI EN ISO 4762 is the same screw as UNI 5931
+  });
+  it("leaves a screw unlinked when the only screw rows are of another standard", () => {
+    const got = autoLink([{ id: "a", names: ["VITE_UNI5931_M6x25"], sig: "a|1" }], [{ code: "X5739", qty: 1, names: ["SCREW TE UNI 5739", null] }]);
+    expect(got.has("a")).toBe(false);
+  });
+});
+
+describe("rules from the PC check of every 3D list", () => {
+  const link = (names: string[], rows: PartRow[]) => autoLink([{ id: "a", names, sig: "a|1" }], rows).get("a")?.code ?? null;
+  it("never guesses a piece onto a row of another kind", () => {
+    expect(link(["sgancio_x32"], [{ code: "S", qty: 1, names: ["SCREW", null] }])).toBeNull();
+    expect(link(["dado_m20"], [{ code: "MV", qty: 1, names: ["NUT SCREW [MADREVITE]", null] }, { code: "N", qty: 1, names: ["NUT", null] }])).toBe("N");
+    expect(link(["ghiera_km6"], [{ code: "N", qty: 1, names: ["NUT", null] }, { code: "RN", qty: 1, names: ["RING NUT", null] }])).toBe("RN");
+    expect(link(["dado_m8"], [{ code: "RN", qty: 1, names: ["RING NUT", null] }, { code: "N", qty: 1, names: ["NUT", null] }])).toBe("N");
+    expect(link(["flangia"], [{ code: "B", qty: 1, names: ["BEARING", null] }])).toBeNull();
+  });
+  it("puts each screw on the row of its head type", () => {
+    const rows: PartRow[] = [
+      { code: "CS", qty: 1, names: ["COUNTERSUNK HEX HEAD SCREW", null] },
+      { code: "RH", qty: 1, names: ["ROUND HEAD SCREW", null] },
+      { code: "S", qty: 1, names: ["SCREW", null] },
+    ];
+    const got = autoLink([
+      { id: "tspei", names: ["VITE_UNI_5933_M6x16"], sig: "1|1" },
+      { id: "tcei", names: ["VITE_UNI_EN_ISO_4762_M6x20"], sig: "2|1" },
+      { id: "tbei", names: ["VITE_ISO_7380_M5x10"], sig: "3|1" },
+    ], rows);
+    expect(got.get("tspei")?.code).toBe("CS");
+    expect(got.get("tcei")?.code).toBe("S");
+    expect(got.get("tbei")?.code).toBe("RH");
+  });
+  it("reads O-rings, keys, bearings and sizes in the piece name", () => {
+    const rows: PartRow[] = [
+      { code: "OR1", qty: 1, names: ["O-RING 4337", null] }, { code: "OR2", qty: 1, names: ["O-RING 3131", null] },
+      { code: "K", qty: 1, names: ["TANG 8x7x40", null] }, { code: "B1", qty: 1, names: ["BEARING SKF 6011", null] },
+    ];
+    const got = autoLink([
+      { id: "o", names: ["or_4337"], sig: "o|1" }, { id: "o2", names: ["OR-3131"], sig: "o2|1" },
+      { id: "k", names: ["linguetta 8x7x40"], sig: "k|1" }, { id: "b", names: ["SKF_6011"], sig: "b|1" },
+    ], rows);
+    expect(got.get("o")?.code).toBe("OR1");
+    expect(got.get("o2")?.code).toBe("OR2");
+    expect(got.get("k")?.code).toBe("K");
+    expect(got.get("b")?.code).toBe("B1");
+  });
+});
+
+describe("part numbers with the CAD file type glued on", () => {
+  it("reads CD058040PRT and CD056980ipt", () => {
+    expect(listCodeOf("CD058040PRT", ["CD058040", "CD056980"])).toBe("CD058040");
+    expect(listCodeOf("CD056980ipt", ["CD058040", "CD056980"])).toBe("CD056980");
+    expect(listCodeOf("CD058040PRTX", ["CD058040"])).toBeNull();
+  });
+});

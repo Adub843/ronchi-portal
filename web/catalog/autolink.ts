@@ -95,12 +95,19 @@ const STD: Record<string, string> = {
   "7473": "7473", "7474": "7473", "10511": "7473", "7040": "7473", "985": "7473", "982": "7473",   // self-locking nut
 };
 const STD_KIND: Record<string, string> = { "5931": "screw", "5739": "screw", "5933": "screw", "7380": "screw", "1207": "screw", "5923": "screw", "6592": "washer", "6593": "washer", "1751": "washer", "5588": "nut", "5721": "nut", "7473": "nut" };
+// Lists also name the standard in words: a COUNTERSUNK screw is a UNI 5933, a ROUND HEAD one an ISO 7380.
+const HEADS: [RegExp, string][] = [
+  [/(?:^| )(?:countersunk|tspei|tsei|svasat[ae])(?: |$)/, "5933"], [/(?:^| )(?:round head|button head|tbei|bombat[ae])(?: |$)/, "7380"],
+  [/(?:^| )tcei(?: |$)/, "5931"], [/(?:^| )stei(?: |$)/, "5923"], [/(?:^| )grower(?: |$)/, "1751"], [/(?:^| )self locking nut(?: |$)/, "7473"],
+];
 const STD_AT = /(?:^| )(?:uni|iso|din|u) ?(?:en )?(?:iso )?(\d{3,5})/;
 const STD_YEAR = new RegExp(`${STD_AT.source}(?: \\d\\d(?= |$))?`);   // "UNI 6592-69": the 69 is the year
 /** The standard a cleaned name cites, as the one name its ISO, DIN and UNI numbers share. */
 function standard(text: string): string | null {
   const m = STD_AT.exec(text);
-  return m ? STD[m[1]!] ?? `#${m[1]}` : null;
+  if (m) return STD[m[1]!] ?? `#${m[1]}`;
+  for (const [re, std] of HEADS) if (re.test(text)) return std;
+  return null;
 }
 
 /** How well a piece's name says it is this row's part: 4 its full name is in the row's, 3 its name less a
