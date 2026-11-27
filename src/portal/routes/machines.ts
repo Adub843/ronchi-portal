@@ -57,7 +57,15 @@ machines.get("/:id", async (c) => {
   const service = has(u, "jobs.view")
     ? (await db.prepare("SELECT id, customer, project_no, year, title, reports, sharepoint_url FROM service_history WHERE instr(machines, ?) > 0 ORDER BY year IS NULL, year DESC, project_no DESC LIMIT 200").bind(` ${machineKey(serial)} `).all()).results
     : null;
-  return c.json({ machine: m, boards: boards.results, orders, jobs, notes, catalog, partsOrders, service });
+  // This machine's own software backups (a software package that carries its number), for people who may download software.
+  const software = has(u, "software.view")
+    ? (await db.prepare(
+        `SELECT p.id, p.name, p.description, COUNT(f.id) AS files, COALESCE(SUM(f.size), 0) AS size FROM software_packages p
+           LEFT JOIN software_files f ON f.package_id = p.id AND f.deleted_at IS NULL AND f.ready_at IS NOT NULL
+          WHERE p.machine = ? AND p.archived_at IS NULL GROUP BY p.id`,
+      ).bind(serial.toUpperCase()).all()).results
+    : null;
+  return c.json({ machine: m, boards: boards.results, orders, jobs, notes, catalog, partsOrders, service, software });
 });
 
 /** A machine number without its type letters: 4005MB and #4005 are the same machine. */

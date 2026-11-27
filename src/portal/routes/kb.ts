@@ -5,7 +5,7 @@ import { Hono, type Context } from "hono";
 import { randomId } from "../../shared/crypto";
 import {
   cleanContent, CONFIRMABLE, contentText, FIRST_TEAM_NUMBER, guessCategory, HELP_KIND, isKbKind, isMachineNumber, machineTypesFor, KB_CATEGORIES, KB_CODE, KB_KINDS,
-  KIND_FROM_CODE, hideCustomerNames, scanForCustomerData, toFtsQuery, type KbContent, type KbKind, type PrivateTerms,
+  KIND_FROM_CODE, hideCustomerNames, scanForCustomerData, scanForMoney, toFtsQuery, type KbContent, type KbKind, type PrivateTerms,
 } from "../../shared/kb";
 import type { AppEnv, SessionUser } from "../env";
 import { audit, now } from "../lib/db";
@@ -164,6 +164,12 @@ async function nextCode(db: D1Database, kind: KbKind): Promise<string> {
   return `${prefix}-${String(n).padStart(3, "0")}`;
 }
 
+/** Refuse text with dollar amounts or quote numbers: every staff member can read the knowledge base. */
+function noMoney(text: Record<string, string | null | undefined>) {
+  const hits = scanForMoney(text);
+  if (hits.length) fail(400, `The knowledge base can't show dollar amounts or quotes. Take out: ${hits.slice(0, 5).map((h) => h.found).join(", ")}`);
+}
+
 kb.post("/", async (c) => {
   const user = requirePerm(c, "kb.write");
   const b = await body(c);
@@ -171,6 +177,7 @@ kb.post("/", async (c) => {
   if (!("title" in b)) fail(400, "Give it a title.");
   const f = fields(b);
   const content = f.contentObj ?? {};
+  noMoney({ title: f.title, summary: f.summary, issue: f.issue, fix: f.fix, body: contentText(content) });
   const id = randomId();
   const at = now();
   for (let attempt = 0; ; attempt++) {
@@ -197,6 +204,7 @@ kb.patch("/:id", async (c) => {
   const f = fields(await body(c));
   const content = f.contentObj ?? (JSON.parse(a.content || "{}") as KbContent);
   const next = { ...a, ...f };
+  noMoney({ title: next.title, summary: next.summary, issue: next.issue, fix: next.fix, body: contentText(content) });
   // A published article that is switched to staff only comes off the help center first.
   if (a.published_at && next.audience === "internal") {
     await helpCall(c.env, a.code);
@@ -300,6 +308,7 @@ kb.post("/import", async (c) => {
   const b = await body(c);
   const docs = Array.isArray(b.documents) ? b.documents.slice(0, 1000) : fail(400, "Choose the knowledge base JSON file.");
   let added = 0, updated = 0, skipped = 0;
+  const blocked: { code: string; found: string[] }[] = [];
   const at = now();
   const stmts: D1PreparedStatement[] = [];
   const rows = (await c.env.DB.prepare("SELECT upper(code) AS code, published_at FROM kb_articles").all<{ code: string; published_at: string | null }>()).results;
@@ -317,6 +326,9 @@ kb.post("/import", async (c) => {
     const metaCat = s(raw.meta?.Category, 40);
     const category = (KB_CATEGORIES as readonly string[]).includes(metaCat) ? metaCat : guessCategory(title, summary, machine, s(raw.meta?.Area, 200));
     const audience = raw.audience === "C" || raw.audience === "customer" ? "customer" : "internal";
+    // A document with dollar amounts or quote numbers is left out, and the answer says which and why.
+    const money = scanForMoney({ title, summary, issue: s(raw.issue, 8000), fix: s(raw.fix, 8000), body: contentText(content) });
+    if (money.length) { blocked.push({ code, found: money.slice(0, 5).map((h) => h.found) }); continue; }
     const values = [kind, title, summary, machine, category, s(raw.issue, 8000), s(raw.fix, 8000), JSON.stringify(content), contentText(content), audience] as const;
     if (existing.has(code)) {
       // A published document that is now staff only comes off the help center first.
@@ -339,8 +351,8 @@ kb.post("/import", async (c) => {
     }
   }
   for (let i = 0; i < stmts.length; i += 50) await c.env.DB.batch(stmts.slice(i, i + 50));
-  await audit(c.env.DB, { userId: user.id, action: "kb.import", detail: { added, updated, skipped }, ip: c.get("ip") });
-  return c.json({ added, updated, skipped });
+  await audit(c.env.DB, { userId: user.id, action: "kb.import", detail: { added, updated, skipped, blocked: blocked.map((x) => x.code) }, ip: c.get("ip") });
+  return c.json({ added, updated, skipped, blocked });
 });
 
 /** Add a staff-only quick note from another part of the portal (the workbook's Submit adds one per

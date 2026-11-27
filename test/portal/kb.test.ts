@@ -77,7 +77,7 @@ describe("knowledge base", () => {
 
   it("filters by document type, machine and category, and counts what each filter would show", async () => {
     const admin = await person("admin");
-    expect((await admin.json("/api/kb/import", { body: { documents: [SPEC, { ...SPEC, code: "RA-HOW-003", type: "HOW", title: "Set the filler recipe", machine: "Filler", meta: {}, issue: "", fix: "", audience: "I" }] } })).data).toEqual({ added: 2, updated: 0, skipped: 0 });
+    expect((await admin.json("/api/kb/import", { body: { documents: [SPEC, { ...SPEC, code: "RA-HOW-003", type: "HOW", title: "Set the filler recipe", machine: "Filler", meta: {}, issue: "", fix: "", audience: "I" }] } })).data).toEqual({ added: 2, updated: 0, skipped: 0, blocked: [] });
     const r = await admin.json("/api/kb?kind=known_issue");
     expect(r.data.results.map((x: any) => x.code)).toContain("RA-KI-001");
     expect(r.data.results.every((x: any) => x.kind === "known_issue")).toBe(true);
@@ -87,7 +87,7 @@ describe("knowledge base", () => {
     expect(cat.data.results.map((x: any) => x.code)).toContain("RA-KI-001");
     expect(cat.data.results.every((x: any) => x.category === "Electrical" && x.machine_type === "Capper")).toBe(true);
     // Importing again updates instead of making a copy.
-    expect((await admin.json("/api/kb/import", { body: { documents: [SPEC] } })).data).toEqual({ added: 0, updated: 1, skipped: 0 });
+    expect((await admin.json("/api/kb/import", { body: { documents: [SPEC] } })).data).toEqual({ added: 0, updated: 1, skipped: 0, blocked: [] });
   });
 
   it("only editors import, and people change only their own articles", async () => {
@@ -176,5 +176,25 @@ describe("knowledge base", () => {
     expect((await admin.json(`/api/kb/${out.data.id}`, { method: "DELETE" })).status).toBe(200);
     expect((await admin.json("/api/kb?q=scroll%20joint%20grease")).data.results.map((r: any) => r.code)).not.toContain(out.data.code);
     expect(await helpPage(`/a/${out.data.code}`)).toContain("Article not found");
+  });
+
+  it("dollar amounts and quote numbers never get into the knowledge base: import leaves the document out, saving is refused", async () => {
+    const admin = await person("admin");
+    const res = await admin.json("/api/kb/import", { body: { documents: [
+      { ...SPEC, code: "RA-REF-901", type: "REF", title: "Service rates", summary: "Field service is $185 per hour." },
+      { ...SPEC, code: "RA-REF-902", type: "REF", title: "Belt tension", summary: "Belt makers quote working load at 1% stretch." },
+      { ...SPEC, code: "RA-REF-903", type: "REF", title: "Old order", fix: "See quote no. KS015 and 1,200 USD for the kit." },
+    ] } });
+    expect(res.status).toBe(200);
+    expect(res.data.added).toBe(1);
+    expect(res.data.blocked.map((b: any) => b.code)).toEqual(["RA-REF-901", "RA-REF-903"]);
+    expect(res.data.blocked[0].found).toEqual(["$185"]);
+    const add = await admin.json("/api/kb", { body: { kind: "quick_note", title: "Motor swap", machine_type: "Capper", issue: "Motor failed", fix: "New motor cost €950" } });
+    expect(add.status).toBe(400);
+    expect(add.data.error).toContain("dollar amounts or quotes");
+    const ok = await admin.json("/api/kb", { body: { kind: "quick_note", title: "Motor swap", machine_type: "Capper", issue: "Motor failed", fix: "Fitted a new motor" } });
+    expect(ok.status).toBe(200);
+    const edit = await admin.json(`/api/kb/${ok.data.id}`, { method: "PATCH", body: { fix: "Invoice 27622 covers it" } });
+    expect(edit.status).toBe(400);
   });
 });

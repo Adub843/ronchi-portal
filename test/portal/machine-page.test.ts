@@ -61,4 +61,22 @@ describe("the machine page", () => {
     const tech = await person("tech");
     expect((await tech.json("/api/machines/service-history/import", { body: { rows } })).status).toBe(403);
   });
+
+  it("shows the machine's own software backups, and keeps them off the general Software shelf", async () => {
+    const admin = await person("admin");
+    const serial = `${7000 + Math.floor(Math.random() * 999)}MB`;
+    const add = await admin.json("/api/machines", { body: { serial } });
+    const id = add.data.id ?? add.data.machine?.id;
+    const pkg = await admin.json("/api/software", { body: { name: `${serial} software backups`, machine: serial.toLowerCase() } });
+    expect(pkg.status).toBe(200);
+    const again = await admin.json("/api/software", { body: { name: "second try", machine: serial } });
+    expect(again.data).toEqual({ id: pkg.data.id, existed: true });
+    const link = await admin.json(`/api/software/${pkg.data.id}/links`, { body: { links: [{ url: "https://ronchiam.sharepoint.com/sites/MACHINE_MANUALS/Shared%20Documents/4200%20to%204299/X/SOFTWARE/plc.ACD", name: "plc.ACD" }] } });
+    expect(link.status).toBe(200);
+    const page = await admin.json(`/api/machines/${id}`);
+    expect(page.data.software.map((p: any) => [p.name, p.files])).toEqual([[`${serial} software backups`, 1]]);
+    const shelf = await admin.json("/api/software");
+    expect(shelf.data.packages.some((p: any) => p.id === pkg.data.id)).toBe(false);
+    expect((await admin.json("/api/software", { body: { name: "x", machine: "not a machine" } })).status).toBe(400);
+  });
 });

@@ -7,6 +7,7 @@ import { navigate } from "../router";
 import { StatusPill } from "./ChangeParts";
 import { LinkedShipments } from "./Shipping";
 import { JobStatusPill } from "./Jobs";
+import { SoftwarePicker } from "./Software";
 
 export function Machines({ me }: { me: Me }) {
   const [q, setQ] = useState("");
@@ -74,6 +75,7 @@ export function Machines({ me }: { me: Me }) {
 export function MachinePage({ id, me }: { id: string; me: Me }) {
   const { data, error, reload } = useLoad(() => api(`/machines/${encodeURIComponent(id)}`), [id], { live: true });
   const [edit, setEdit] = useState<any>(null);
+  const [software, setSoftware] = useState<any>(null);
   if (error) return <ErrorNote error={error} />;
   if (!data) return null;
   const m = data.machine;
@@ -139,6 +141,19 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
                   </table>
                 </div>
               ) : <Empty>{t("No jobs for this machine yet.")}</Empty>}
+            </div>
+          )}
+          {data.software && data.software.length > 0 && (
+            <div className="panel" style={{ gridColumn: "1 / -1" }}>
+              <h2>{t("Software backups")}</h2>
+              <p className="muted">{t("This machine's own program and HMI backups. Open one, tick what you need and download.")}</p>
+              {data.software.map((p: any) => (
+                <p key={p.id}>
+                  <button className="btn" type="button" onClick={() => setSoftware({ id: p.id, name: p.name, description: p.description ?? "", legacy: false, files: p.files, size: p.size })}>{p.name}</button>
+                  {" "}<span className="muted">{t("{n} files", { n: p.files })}</span>
+                </p>
+              ))}
+              {software && <SoftwarePicker pkg={software} onClose={() => setSoftware(null)} />}
             </div>
           )}
           {data.service && data.service.length > 0 && (

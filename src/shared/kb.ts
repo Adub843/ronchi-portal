@@ -198,6 +198,28 @@ const EMAIL = /[^\s@<>()]{1,64}@[^\s@<>()]{1,190}\.[a-z]{2,24}/gi;
 const PHONE = /(\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}\b/g;
 const SECRET = /\b(password|passwd|pwd|passcode|pin code)\s*(:|=|\bis\b)\s*\S+/gi;
 
+// Aaron, 2026-11-27: the knowledge base never shows dollar amounts or quotes to customers or field
+// service engineers. Every staff member can read it, so money is refused on import, on save and on publish.
+const MONEY = /[$\u20AC\u00A3]\s?\d[\d,.]*|\b\d[\d,.]*\s?(?:USD|EUR|dollars?|euros?)\b|\b(?:USD|EUR)\s?\d[\d,.]*/gi;
+const QUOTE_REF = /\b(?:quot(?:e|ation)|estimate|invoice)\s*(?:no\.?|number|n\u00B0)?\s*[:#]?\s*[A-Z]{0,4}[-_]?\d{3,}[\w-]*/gi;
+
+/** Dollar amounts and quote, estimate or invoice numbers in an article's text. Any hit stops the save. */
+export function scanForMoney(fields: Record<string, string | null | undefined>): ScanHit[] {
+  const hits: ScanHit[] = [];
+  const seen = new Set<string>();
+  for (const [field, text] of Object.entries(fields)) {
+    if (!text) continue;
+    for (const [what, re] of [["Dollar amount", MONEY], ["Quote", QUOTE_REF]] as const) {
+      for (const m of text.matchAll(re)) {
+        const found = m[0].trim();
+        const key = `${found.toLowerCase()}|${field}`;
+        if (!seen.has(key)) { seen.add(key); hits.push({ what, found, field }); }
+      }
+    }
+  }
+  return hits;
+}
+
 const WHAT: Record<PrivacyFinding["kind"], string> = { customer: "Customer or site", site: "Customer or site", machine_number: "Machine number" };
 
 /**
@@ -225,6 +247,7 @@ export function scanForCustomerData(fields: Record<string, string>, terms: Priva
     for (const m of text.matchAll(SECRET)) add("Password", m[0].split(/\s/)[0]!, field);
     for (const f of found) if (f.kind !== "machine_number") add(WHAT[f.kind], f.match, field);
   }
+  for (const h of scanForMoney(fields)) add(h.what, h.found, h.field);
   return hits;
 }
 

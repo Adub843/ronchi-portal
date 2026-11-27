@@ -15,6 +15,7 @@
 import { Hono } from "hono";
 import { randomId } from "../../shared/crypto";
 import { cleanFolder, MAX_SOFTWARE_BYTES, PART_BYTES, sharePointLink, sharePointTarget, softwareFileName } from "../../shared/software";
+import { MACHINE_NUMBER } from "../../shared/machine-number";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
 import { body, fail, mustStr, requirePerm, str } from "../lib/http";
@@ -53,7 +54,7 @@ software.get("/", async (c) => {
     `SELECT p.*, COUNT(f.id) AS files, COALESCE(SUM(f.size), 0) AS size
        FROM software_packages p
        LEFT JOIN software_files f ON f.package_id = p.id AND f.deleted_at IS NULL AND f.ready_at IS NOT NULL
-      WHERE p.archived_at IS NULL
+      WHERE p.archived_at IS NULL AND p.machine IS NULL
       GROUP BY p.id ORDER BY p.legacy, p.position, p.name`,
   ).all<PackageRow>();
   return c.json({ packages: results.map(shapePackage), sharepoint: graphConfigured(c.env) });
@@ -140,8 +141,15 @@ software.post("/", async (c) => {
   const id = randomId();
   const at = now();
   const pos = await c.env.DB.prepare("SELECT COALESCE(MAX(position), 0) + 1 AS n FROM software_packages").first<{ n: number }>();
-  await c.env.DB.prepare("INSERT INTO software_packages (id, name, description, legacy, position, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)")
-    .bind(id, mustStr(b.name, 120, "A name"), str(b.description, 500), b.legacy === true ? 1 : 0, pos?.n ?? 1, u.id, at, at).run();
+  // A machine's own software backups: the package carries the machine number and shows on that machine's page.
+  const machine = str(b.machine, 20)?.toUpperCase() ?? null;
+  if (machine && !MACHINE_NUMBER.test(machine)) fail(400, "That is not a machine number.");
+  if (machine) {
+    const have = await c.env.DB.prepare("SELECT id FROM software_packages WHERE machine = ? AND archived_at IS NULL").bind(machine).first<{ id: string }>();
+    if (have) return c.json({ id: have.id, existed: true });
+  }
+  await c.env.DB.prepare("INSERT INTO software_packages (id, name, description, legacy, position, created_by, created_at, updated_at, machine) VALUES (?,?,?,?,?,?,?,?,?)")
+    .bind(id, mustStr(b.name, 120, "A name"), str(b.description, 500), b.legacy === true ? 1 : 0, pos?.n ?? 1, u.id, at, at, machine).run();
   await audit(c.env.DB, { userId: u.id, action: "software.package.create", targetType: "software_package", targetId: id, ip: c.get("ip") });
   return c.json({ id });
 });

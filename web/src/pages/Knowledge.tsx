@@ -42,6 +42,7 @@ export function KnowledgeBase({ me }: { me: Me }) {
       const json = JSON.parse(await f.text());
       const r = await api("/kb/import", { body: { documents: Array.isArray(json) ? json : json.documents } });
       toast(t("{a} added, {u} updated, {s} skipped", { a: r.added, u: r.updated, s: r.skipped }));
+      if (r.blocked?.length) toast(t("{n} left out because they show dollar amounts or quotes: {codes}", { n: r.blocked.length, codes: r.blocked.map((b: any) => b.code).join(", ") }));
       reload();
     } catch (e) {
       toast(e instanceof SyntaxError ? t("That file isn't a knowledge base JSON file.") : (e as Error).message);
