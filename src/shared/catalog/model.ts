@@ -52,10 +52,11 @@ export interface ParsedSheet {
  * Ronchi part codes: two or three letters and six digits (with an optional _1.._999 variant), or
  * ten-digit kit numbers, optionally behind an RA machine prefix (RA1018_GS102289). Also the bought-in
  * codes the Mario parts lists use: electrical ELE00885 and EL4197 (with a _1.._99 variant), valves
- * PV-RON-WD123456, seal and bearing kits SKL-SCS-123456, MC1234_1 and ADB1234.
+ * PV-RON-WD123456, seal and bearing kits SKL-SCS-123456, MC1234_1 and ADB1234. The oldest manuals
+ * (machines to about 3250) use two letters and five digits: GA00209, MC00294, PD02218.
  */
 export const PART_CODE =
-  /^(?:(?:RA\d{0,4}[A-Z]{0,3}_)?(?:[A-Z]{2,3}\d{6}(?:_\d{1,3})?|\d{10})|ELE?\d{4,5}(?:_\d{1,2})?|PV-RON-[A-Z]{2}\d{5,6}(?:_\d{1,2})?|SK[LS]-SCS-\d{6}|MC\d{4}(?:_\d{1,2})?|ADB\d{4})$/;
+  /^(?:(?:RA\d{0,4}[A-Z]{0,3}_)?(?:[A-Z]{2,3}\d{6}(?:_\d{1,3})?|\d{10})|ELE?\d{4,5}(?:_\d{1,2})?|PV-RON-[A-Z]{2}\d{5,6}(?:_\d{1,2})?|SK[LS]-SCS-\d{6}|MC\d{4}(?:_\d{1,2})?|ADB\d{4}|[A-Z]{2}\d{5})$/;
 
 export function isPartCode(s: string): boolean {
   return PART_CODE.test(s.trim().toUpperCase());

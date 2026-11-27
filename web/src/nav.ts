@@ -28,6 +28,7 @@ export const NAV: NavItem[] = [
   // (Billing) get their own menu line instead.
   { to: "/quotes", label: "Quote requests", group: "Sales", perm: "quotes.manage", unless: "customers.manage" },
   { to: "/shipping", label: "Shipping and receiving", group: "Warehouse", perm: "shipping.view" },
+  { to: "/inventory", label: "Inventory", group: "Warehouse", perm: "inventory.view" },
   { to: "/people", label: "People", group: "Admin", perm: "users.manage" },
   // On phones Portal training and Settings live in the account menu (top right), so the tab bar keeps room for the rest.
   { to: "/learn", label: "Portal training", group: "Service", phone: false },
