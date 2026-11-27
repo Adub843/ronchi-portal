@@ -689,6 +689,17 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
+    id: "quote-machine-deal", area: "machine-sales", needs: ["machinesales.view", "machinesales.edit", "machinesales.prices"],
+    title: T("Build and send a machine quote", "Preparar y enviar una cotización de máquina", "Preparare e inviare un'offerta macchina"),
+    summary: T("Price a deal line by line, keep every revision, and print the quote.", "Ponga precio a un negocio línea por línea, conserve cada revisión e imprima la cotización.", "Dai un prezzo alla trattativa riga per riga, conserva ogni revisione e stampa l'offerta."),
+    steps: [
+      T("Open the deal and press New quote under Quotes. Add a line for each thing offered, say where it is built, and tick Option for extras the customer may add.", "Abra el negocio y pulse Nueva cotización en Cotizaciones. Agregue una línea por cada cosa ofrecida, indique dónde se fabrica y marque Opción para los extras que el cliente puede agregar.", "Apri la trattativa e premi Nuova offerta sotto Offerte. Aggiungi una riga per ogni cosa offerta, indica dove viene costruita e spunta Opzione per gli extra che il cliente può aggiungere."),
+      T("Fill in the terms, press Save, then Print or save as PDF to get the quote to send.", "Complete las condiciones, pulse Guardar y luego Imprimir o guardar como PDF para obtener la cotización a enviar.", "Compila le condizioni, premi Salva, poi Stampa o salva come PDF per ottenere l'offerta da inviare."),
+      T("Once it has gone to the customer, press Mark as sent. The deal's value becomes the quote's total and the deal moves to the quote stage.", "Cuando haya salido al cliente, pulse Marcar como enviada. El valor del negocio pasa a ser el total de la cotización y el negocio avanza a la etapa de cotización.", "Quando è partita per il cliente, premi Segna come inviata. Il valore della trattativa diventa il totale dell'offerta e la trattativa passa alla fase di offerta."),
+      T("A sent quote is never changed. Press New revision to copy it, change the copy and send that. The one before shows as Replaced.", "Una cotización enviada nunca se cambia. Pulse Nueva revisión para copiarla, cambie la copia y envíela. La anterior aparece como Reemplazada.", "Un'offerta inviata non si modifica mai. Premi Nuova revisione per copiarla, modifica la copia e invia quella. La precedente risulta Sostituita."),
+    ],
+  },
+  {
     id: "remove-machine-deal", area: "machine-sales", needs: ["machinesales.view", "machinesales.remove"],
     title: T("Remove a machine deal", "Quitar un negocio de máquina", "Rimuovere una trattativa macchina"),
     summary: T("Take a deal added by mistake off the list.", "Quite de la lista un negocio agregado por error.", "Togli dall'elenco una trattativa aggiunta per errore."),

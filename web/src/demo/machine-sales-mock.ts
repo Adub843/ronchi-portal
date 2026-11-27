@@ -1,6 +1,7 @@
 // DEMO ONLY. Machine sales in the preview, with made-up customers, machines and values.
 // Follows routes/machine-sales.ts closely (same shared rules), without a server.
-import { DEAL_FIELDS, MONEY_FIELDS, NUMBER_FIELDS, SOLD, isOpen, isStage, stageNeeds, type Stage } from "../../../src/shared/machine-sales";
+import { DEAL_FIELDS, LINE, MONEY_FIELDS, NUMBER_FIELDS, SELLING, SOLD, isOpen, isStage, stageNeeds, type Stage } from "../../../src/shared/machine-sales";
+import { QUOTE_FIELDS, nextStatuses, quoteNumber, quoteTotals, readQuoteLines, type QuoteLine } from "../../../src/shared/machine-quotes";
 
 export class MachineSalesFail extends Error {
   constructor(public status: number, message: string) {
@@ -15,6 +16,7 @@ type Row = Record<string, any>;
 let deals: Row[] | null = null;
 let notes: Row[] = [];
 let history: Row[] = [];
+let quotes: Row[] = [];
 const nowIso = () => new Date().toISOString();
 const day = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 const ym = (n: number) => { const d = new Date(); d.setMonth(d.getMonth() + n); return d.toISOString().slice(0, 7); };
@@ -44,6 +46,17 @@ function seed(c: Ctx) {
     { ...d("paid", 120, { customer: "Example Foods Inc.", site: "Atlanta, GA", title: "Capper, 8 heads", value: 510000, owner: "Andrew Yang", customer_po: "EF-80112", funded: 1, machine: "4222TP" }), closed_at: ago(120) },
   ];
   const firm = deals.find((x) => x.stage === "firm_quote")!;
+  const firmLines: QuoteLine[] = [
+    { description: "EXACTA monoblock filler capper, 16 heads", detail: "For 500 ml and 1 L round bottles at 160 a minute. Change parts for both formats included.", origin: "italy", qty: 1, unit_price: 905000, optional: false },
+    { description: "Infeed and discharge conveyors", detail: null, origin: "us", qty: 1, unit_price: 48000, optional: false },
+    { description: "Installation, start-up and operator training", detail: "Two field service engineers, two weeks on site.", origin: "us", qty: 1, unit_price: 42000, optional: false },
+    { description: "Change parts for a third format", detail: null, origin: "italy", qty: 1, unit_price: 26500, optional: true },
+  ];
+  const terms = { valid_until: day(30), lead_time: "26 weeks from order and approved samples", payment_terms: "Example terms: a deposit with the order, the balance before shipment", delivery_terms: "Delivered to the customer's dock", warranty: "12 months from start-up", notes: null, discount_pct: 1.5 };
+  quotes = [
+    { id: c.newId(), deal: firm.id, rev: 2, kind: "firm", status: "sent", ...terms, lines: firmLines, sent_at: ago(4), decided_at: null, revision: 3, updated_at: ago(4) },
+    { id: c.newId(), deal: firm.id, rev: 1, kind: "budget", status: "superseded", ...terms, discount_pct: null, lines: firmLines.slice(0, 1), sent_at: ago(40), decided_at: null, revision: 3, updated_at: ago(4) },
+  ];
   notes = [
     { id: c.newId(), deal: firm.id, kind: "call", body: "Dana says purchasing wants net 30 on the last 5%. Revision B goes to them Monday.", at: ago(2), who: "Andrew Yang" },
     { id: c.newId(), deal: firm.id, kind: "visit", body: "Walked line 2 with maintenance. Floor space is fine, air supply needs a second drop.", at: ago(16), who: "Andrew Yang" },
@@ -57,10 +70,16 @@ const shape = (d: Row, prices: boolean) => {
   return out;
 };
 
+const shapeQuote = (q: Row, d: Row, prices: boolean): Row => {
+  const base = { id: q.id, rev: q.rev, number: quoteNumber(num(d.seq), q.rev), kind: q.kind, status: q.status, valid_until: q.valid_until, sent_at: q.sent_at, decided_at: q.decided_at, updated_at: q.updated_at };
+  return prices ? { ...base, lead_time: q.lead_time, payment_terms: q.payment_terms, delivery_terms: q.delivery_terms, warranty: q.warranty, notes: q.notes, discount_pct: q.discount_pct, lines: q.lines, totals: quoteTotals(q.lines, q.discount_pct), revision: q.revision } : base;
+};
+
 export function resetMachineSales() {
   deals = null;
   notes = [];
   history = [];
+  quotes = [];
 }
 
 export function machineSalesRoute(method: string, seg: string[], body: any, c: Ctx): any {
@@ -102,6 +121,69 @@ export function machineSalesRoute(method: string, seg: string[], body: any, c: C
   }
   const d = live.find((x) => x.id === seg[1]);
   if (!d) return fail(404, "Not found.");
+  if (seg[2] === "quotes") {
+    const writer = () => { need("machinesales.edit"); need("machinesales.prices"); };
+    const stale = () => fail(409, "Someone else changed this quote while you were editing. Reload to see their changes.");
+    const qn = (q: Row) => quoteNumber(num(d.seq), q.rev);
+    const log = (q: Row, status: string, changes?: Row) => history.unshift({ deal: d.id, at: nowIso(), action: "machine_deal.quote", who: c.me.name, quote: qn(q), status, changes: changes ?? null });
+    if (!seg[3] && method === "POST") {
+      writer();
+      const from = body?.copy_from ? quotes.find((x) => x.id === body.copy_from && x.deal === d.id) : null;
+      const q: Row = { id: c.newId(), deal: d.id, rev: Math.max(0, ...quotes.filter((x) => x.deal === d.id).map((x) => x.rev)) + 1, kind: body?.kind ?? from?.kind ?? (["lead", "qualified", "specs", "budget_quote"].includes(d.stage) ? "budget" : "firm"), status: "draft", valid_until: from?.valid_until ?? null, lead_time: from?.lead_time ?? null, payment_terms: from?.payment_terms ?? null, delivery_terms: from?.delivery_terms ?? null, warranty: from?.warranty ?? null, notes: from?.notes ?? null, discount_pct: from?.discount_pct ?? null, lines: from ? from.lines.map((l: QuoteLine) => ({ ...l })) : [], sent_at: null, decided_at: null, revision: 1, updated_at: nowIso() };
+      quotes.unshift(q);
+      log(q, "draft");
+      return { id: q.id, number: qn(q) };
+    }
+    const q = quotes.find((x) => x.id === seg[3] && x.deal === d.id && !x.removed);
+    if (!q) return fail(404, "Not found.");
+    if (!seg[4] && method === "GET") { need("machinesales.prices"); return { deal: shape(d, true), quote: shapeQuote(q, d, true) }; }
+    writer();
+    if (!seg[4] && method === "PATCH") {
+      if (q.status !== "draft") fail(400, "This quote was already sent. Make a new revision to change it.");
+      if (body.revision !== q.revision) stale();
+      for (const f of QUOTE_FIELDS) if (f in body) q[f] = body[f] === "" || body[f] == null ? null : f === "discount_pct" ? Number(body[f]) : body[f];
+      if (body.lines !== undefined) {
+        const r = readQuoteLines(body.lines);
+        if (r.problem !== undefined) return fail(400, r.problem);
+        q.lines = r.lines;
+      }
+      q.revision++;
+      q.updated_at = nowIso();
+      return { ok: true, revision: q.revision };
+    }
+    if (!seg[4] && method === "DELETE") {
+      if (q.status !== "draft") fail(400, "A quote that was sent stays in the record.");
+      q.removed = true;
+      log(q, "removed");
+      return { ok: true };
+    }
+    if (seg[4] === "status" && method === "POST") {
+      if (!nextStatuses(q.status).includes(body.status)) fail(400, "That isn't the next step for this quote.");
+      if (body.revision !== q.revision) stale();
+      const t = nowIso();
+      if (body.status === "sent" && q.status === "draft") {
+        const totals = quoteTotals(q.lines, q.discount_pct);
+        if (!q.lines.length) fail(400, "Add at least one line before sending the quote.");
+        if (!totals.priced) fail(400, "Every line that isn't an option needs a price before the quote is sent.");
+        for (const o of quotes) if (o.deal === d.id && o.id !== q.id && o.status === "sent") { o.status = "superseded"; o.revision++; }
+        const stage: Stage = q.kind === "budget" ? "budget_quote" : "firm_quote";
+        const forward = SELLING.has(d.stage) && LINE.indexOf(stage) > LINE.indexOf(d.stage);
+        log(q, "sent", { value: [null, "changed"], ...(forward ? { stage: [d.stage, stage] } : {}) });
+        d.value = totals.total;
+        if (forward) { d.stage = stage; d.stage_at = t; }
+        d.revision++;
+        q.sent_at = t;
+      } else {
+        q.decided_at = body.status === "sent" ? null : t;
+        log(q, body.status);
+      }
+      q.status = body.status;
+      q.revision++;
+      q.updated_at = d.updated_at = t;
+      return { ok: true };
+    }
+    return fail(404, "Not found.");
+  }
   if (seg[2] === "notes" && method === "POST") {
     need("machinesales.edit");
     if (!String(body.body ?? "").trim()) fail(400, "Write what happened.");
@@ -115,6 +197,7 @@ export function machineSalesRoute(method: string, seg: string[], body: any, c: C
       notes: notes.filter((n) => n.deal === d.id),
       history: history.filter((h) => h.deal === d.id),
       machines: c.perms.has("machines.view") ? c.machines(d.customer) : [],
+      quotes: quotes.filter((x) => x.deal === d.id && !x.removed).sort((a, b) => b.rev - a.rev).map((x) => shapeQuote(x, d, prices)),
     };
   }
   if (method === "DELETE") {

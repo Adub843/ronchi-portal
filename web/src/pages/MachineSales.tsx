@@ -6,7 +6,9 @@ import {
   BOARD, DEAL_LABELS, FLAG_LABELS, LEAD_SOURCES, LINE, NOTE_KINDS, NOTE_LABELS, ORDERS, QUOTED, SELLING, STAGE_DAYS, STAGE_LABELS, STAGES,
   chanceOf, daysSince, flags, isOpen, stageNeeds, weighted, type DealField, type FlagId, type Stage,
 } from "../../../src/shared/machine-sales";
+import { QUOTE_KIND_LABELS, type QuoteKind } from "../../../src/shared/machine-quotes";
 import { api, can, fmtTime, type Me } from "../api";
+import { QuoteStatusPill } from "./MachineQuote";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad } from "../components/ui";
 import { loc, t } from "../i18n";
 import { navigate } from "../router";
@@ -32,6 +34,9 @@ function month(ym: string | null | undefined): string {
 const sum = (ds: Row[], f: (d: Row) => number) => ds.reduce((s, d) => s + f(d), 0);
 /** Soonest next step first; deals with no next step last. */
 const byNext = (a: Row, b: Row) => (a.next_step_date ?? "9999").localeCompare(b.next_step_date ?? "9999") || a.customer.localeCompare(b.customer);
+
+/** What happened to a quote, as the deal's timeline words it. */
+const QUOTE_EVENTS: Record<string, string> = { draft: "Draft started", sent: "Sent to the customer", accepted: "Customer accepted", declined: "Customer declined", removed: "Draft removed" };
 
 function Flags({ deal }: { deal: Row }) {
   const fs = flags(deal as never, today());
@@ -162,7 +167,7 @@ function Card({ deal: d, prices }: { deal: Row; prices: boolean }) {
 // ---------- One deal ----------
 
 export function MachineDealPage({ id, me }: { id: string; me: Me }) {
-  const { data, error, reload } = useLoad<{ deal: Row; notes: Row[]; history: Row[]; machines: Row[] }>(() => api(`/machine-sales/${enc(id)}`), [id]);
+  const { data, error, reload } = useLoad<{ deal: Row; notes: Row[]; history: Row[]; machines: Row[]; quotes?: Row[] }>(() => api(`/machine-sales/${enc(id)}`), [id]);
   const [editing, setEditing] = useState(false);
   const [move, setMove] = useState<Stage | null>(null);
   const [need, setNeed] = useState("");
@@ -232,12 +237,25 @@ export function MachineDealPage({ id, me }: { id: string; me: Me }) {
     }
   }
 
+  async function newQuote(copy?: string) {
+    setBusy(true);
+    try {
+      const r = await api<{ id: string }>(`/machine-sales/${enc(id)}/quotes`, { body: copy ? { copy_from: copy } : {} });
+      navigate(`/machine-sales/${id}/quotes/${r.id}`);
+    } catch (x) {
+      toast((x as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const quotes = data.quotes ?? [];
+
   if (editing) return <DealEdit me={me} deal={d} onDone={(saved) => { setEditing(false); if (saved) { reload(); toast(t("Saved")); } }} />;
 
   const needField = move ? stageNeeds(move) : null;
   const timeline = [
     ...data.notes.map((n) => ({ at: n.at as string, who: n.who as string | null, kind: n.kind as string, body: n.body as string, changes: null as Row | null })),
-    ...data.history.filter((h) => h.action !== "machine_deal.note").map((h) => ({ at: h.at as string, who: h.who as string | null, kind: h.action === "machine_deal.create" ? "created" : "changed", body: "", changes: h.changes as Row | null })),
+    ...data.history.filter((h) => h.action !== "machine_deal.note").map((h) => ({ at: h.at as string, who: h.who as string | null, kind: h.action === "machine_deal.create" ? "created" : h.action === "machine_deal.quote" ? "quote" : "changed", body: h.action === "machine_deal.quote" ? `${h.quote ?? ""}: ${t(QUOTE_EVENTS[h.status as string] ?? "Changed")}` : "", changes: h.changes as Row | null })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   const fact = (label: string, value: React.ReactNode) => <div className="ms-fact"><dt>{label}</dt><dd>{value || "–"}</dd></div>;
   const histLabel = (k: string) => k === "stage" ? t("Stage") : k in DEAL_LABELS ? L(k as DealField) : k;
@@ -333,7 +351,7 @@ export function MachineDealPage({ id, me }: { id: string; me: Me }) {
               {timeline.map((h, i) => (
                 <li key={`${h.at}-${i}`}>
                   <span className="muted">{fmtTime(h.at)} · {h.who ?? "–"}</span>{" "}
-                  {h.kind in NOTE_LABELS ? <><span className="pill p-info">{t(NOTE_LABELS[h.kind as keyof typeof NOTE_LABELS])}</span><div className="ms-notes">{h.body}</div></> : <strong>{h.kind === "created" ? t("Deal added") : t("Changed")}</strong>}
+                  {h.kind in NOTE_LABELS ? <><span className="pill p-info">{t(NOTE_LABELS[h.kind as keyof typeof NOTE_LABELS])}</span><div className="ms-notes">{h.body}</div></> : <strong>{h.kind === "created" ? t("Deal added") : h.kind === "quote" ? `${t("Quote")} ${h.body}` : t("Changed")}</strong>}
                   {h.changes && <ul>{Object.entries(h.changes).map(([k, v]) => <li key={k}>{histLabel(k)}: {histValue(k, (v as unknown[])[0])} → {histValue(k, (v as unknown[])[1])}</li>)}</ul>}
                 </li>
               ))}
@@ -342,6 +360,21 @@ export function MachineDealPage({ id, me }: { id: string; me: Me }) {
         </div>
 
         <div className="stack">
+          <div className="panel">
+            <h2>{t("Quotes")}</h2>
+            {!quotes.length && <Empty>{t("No quote yet.")}</Empty>}
+            <ul className="cp-history ms-quotes">
+              {quotes.map((q) => (
+                <li key={q.id}>
+                  {prices ? <Link to={`/machine-sales/${id}/quotes/${q.id}`} className="mono">{q.number}</Link> : <span className="mono">{q.number}</span>}{" "}
+                  <QuoteStatusPill status={q.status} />
+                  <div className="muted">{t(QUOTE_KIND_LABELS[q.kind as QuoteKind] ?? q.kind)}{q.totals ? ` · ${money(q.totals.total)}` : ""}{q.sent_at ? ` · ${day(q.sent_at)}` : ""}</div>
+                </li>
+              ))}
+            </ul>
+            {edit && prices && <p><button type="button" className="btn" disabled={busy} onClick={() => void newQuote(quotes[0]?.id)}>{quotes.length ? t("New revision") : t("New quote")}</button></p>}
+            {!prices && !!quotes.length && <p className="muted">{t("Quotes open for people who may see deal values.")}</p>}
+          </div>
           <div className="panel">
             <h2>{t("Contact")}</h2>
             {d.contact || d.contact_email || d.contact_phone ? (
