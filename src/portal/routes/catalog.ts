@@ -46,6 +46,20 @@ export async function sheetById(db: Db, id: string) {
   return s;
 }
 
+/**
+ * For a parts list with no drawing of its own: the same assembly's drawing from another machine's
+ * manual. Ronchi reuses assemblies across machines, so the drawing and its balloon numbers are the
+ * same. The same revision is preferred, then the newest.
+ */
+async function drawingDonor(db: Db, s: Pick<SheetRec, "id" | "code" | "rev" | "image_w">) {
+  if (s.image_w || !s.code) return null;
+  return db.prepare(
+    `SELECT c.id, c.image_w, c.image_h, m.serial FROM catalog_sheets c JOIN machines m ON m.id = c.machine_id
+      WHERE c.code = ? AND c.image_w IS NOT NULL AND c.id <> ?
+      ORDER BY (c.rev IS ?) DESC, c.updated_at DESC LIMIT 1`,
+  ).bind(s.code, s.id, s.rev ?? null).first<{ id: string; image_w: number; image_h: number; serial: string }>();
+}
+
 /** Run statements in batches. D1 runs each batch as one transaction. */
 async function runAll(db: Db, stmts: D1PreparedStatement[]) {
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
@@ -259,6 +273,13 @@ catalog.get("/sheets/:id", async (c) => {
             (SELECT COUNT(*) FROM catalog_notes n WHERE n.code = r.code AND n.deleted_at IS NULL) AS notes
        FROM catalog_rows r LEFT JOIN catalog_parts p ON p.code = r.code WHERE r.sheet_id = ? ORDER BY r.sort`,
   ).bind(s.machine_id, s.id).all();
+  // No drawing here: borrow the same assembly's drawing, and its balloon spots for the rows that match.
+  const donor = await drawingDonor(db, s);
+  const spots = new Map<string, string>();
+  if (donor) {
+    const { results } = await db.prepare("SELECT pos, code, hotspots FROM catalog_rows WHERE sheet_id = ? AND hotspots IS NOT NULL").bind(donor.id).all<{ pos: string; code: string; hotspots: string }>();
+    for (const r of results) spots.set(`${r.pos}\n${r.code}`, r.hotspots);
+  }
   const ids = (await db.prepare("SELECT id FROM catalog_sheets WHERE machine_id = ? ORDER BY sort").bind(s.machine_id).all<{ id: string }>()).results.map((r) => r.id);
   const at = ids.indexOf(s.id);
   const path: { id: string; title: string; code: string | null }[] = [];
@@ -274,13 +295,17 @@ catalog.get("/sheets/:id", async (c) => {
     sheet: {
       id: s.id, serial: m.serial, section: s.section, group: s.grp, code: s.code, rev: s.rev, title: s.title, titleIt: s.title_it,
       source: s.source, page: s.page,
-      drawing: s.image_w ? { w: s.image_w, h: s.image_h } : null,
+      drawing: s.image_w ? { w: s.image_w, h: s.image_h } : donor ? { w: donor.image_w, h: donor.image_h, from: donor.serial } : null,
       model: s.model_size ? { size: s.model_size, meshMap: s.mesh_map ? JSON.parse(s.mesh_map) : {} } : null,
       prev: at > 0 ? ids[at - 1] : null,
       next: at >= 0 && at < ids.length - 1 ? ids[at + 1] : null,
       path,
     },
-    rows: rows.map((r: any) => ({ ...r, hotspots: r.hotspots ? JSON.parse(r.hotspots) : [], wear: !!r.wear })),
+    rows: rows.map((r: any) => {
+      const own = r.hotspots ? JSON.parse(r.hotspots) : [];
+      const lent = !own.length ? spots.get(`${r.pos}\n${r.code}`) : undefined;
+      return { ...r, hotspots: lent ? JSON.parse(lent) : own, wear: !!r.wear };
+    }),
     canEdit: has(u, "catalog.edit"),
   });
 });
@@ -436,7 +461,8 @@ catalog.get("/sheets/:id/:file{drawing|model}", async (c) => {
   requirePerm(c, "catalog.view");
   const s = await sheetById(c.env.DB, c.req.param("id"));
   const file = c.req.param("file");
-  const obj = await c.env.FILES.get(file === "model" ? modelKey(s) : fileKey(s.id, file));
+  const donor = file === "drawing" ? await drawingDonor(c.env.DB, s) : null;
+  const obj = await c.env.FILES.get(file === "model" ? modelKey(s) : fileKey(donor?.id ?? s.id, file));
   if (!obj) fail(404, "Not found.");
   return new Response(obj.body, {
     headers: {
