@@ -161,6 +161,16 @@ describe("software kept on SharePoint (Aaron, 2026-11-25: \"we dont have to stor
     expect((await admin.json(`/api/software/${id}/links`, { body: { links: [{ url: `${SP}/a.exe`, folder: "../x" }] } })).status).toBe(400);
   });
 
+  it("a link the package already lists is skipped, so sending a list twice adds nothing", async () => {
+    const admin = await person("admin");
+    const id = (await admin.json("/api/software", { body: { name: "Sent twice" } })).data.id;
+    const links = [{ url: `${SP}/vm/disk.vmdk`, folder: "vm" }, { url: `${SP}/vm/disk.vmdk`, folder: "vm" }, { url: `${SP}/vm/version`, open: true, folder: "vm" }];
+    expect((await admin.json(`/api/software/${id}/links`, { body: { links } })).data).toEqual({ added: 2, skipped: 1 });
+    expect((await admin.json(`/api/software/${id}/links`, { body: { links: [...links, { url: `${SP}/vm/new.iso`, folder: "vm" }] } })).data).toEqual({ added: 1, skipped: 3 });
+    expect((await admin.json(`/api/software/${id}/links`, { body: { links } })).data).toEqual({ added: 0, skipped: 3 });
+    expect((await admin.json(`/api/software/${id}`)).data.files.map((f: any) => f.name)).toEqual(["disk.vmdk", "new.iso", "version"]);
+  });
+
   it("only Ronchi SharePoint file links, only for people who manage software", async () => {
     const admin = await person("admin");
     const tech = await person("tech");
