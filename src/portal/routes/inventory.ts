@@ -8,7 +8,7 @@
 // .prices and never into the audit log.
 import { Hono } from "hono";
 import { randomId } from "../../shared/crypto";
-import { MAX_IMPORT, available, isLow, isOut } from "../../shared/inventory";
+import { MAX_COUNT_LINES, MAX_IMPORT, available, isLow, isOut, toOrder } from "../../shared/inventory";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
 import { body, fail, has, requirePerm } from "../lib/http";
@@ -82,6 +82,7 @@ function shape(i: Row, side: { reserved: Map<string, number>; incoming: Map<stri
   row.available = available(row as never);
   row.low = isLow(row as never);
   row.out = isOut(row as never);
+  row.to_order = toOrder(row as never);
   if (prices) row.value = row.unit_cost == null ? null : Math.round(row.on_hand * row.unit_cost * 100) / 100;
   else delete row.unit_cost;
   return row;
@@ -269,4 +270,61 @@ inventory.post("/import", async (c) => {
   for (let i = 0; i < stmts.length; i += 80) await db.batch(stmts.slice(i, i + 80));
   await audit(db, { userId: u.id, action: "stock.import", targetType: "stock_item", detail: { lines: rows.length, changed }, ip: c.get("ip") });
   return c.json({ ok: true, lines: rows.length, changed });
+});
+
+/**
+ * Stock count, one shelf at a time. GET lists what the portal has on the shelf (and the parts that
+ * usually live there); POST takes what was counted and corrects each part that differs, as "Counted".
+ * A part left out of the count is not touched.
+ */
+inventory.get("/count", async (c) => {
+  requirePerm(c, "inventory.adjust");
+  const location = shelf(c.req.query("shelf"));
+  const { results } = await c.env.DB.prepare(
+    `SELECT i.part_code, i.description, COALESCE(l.qty, 0) AS qty
+       FROM stock_items i LEFT JOIN stock_levels l ON l.part_code = i.part_code AND l.location = ?1 COLLATE NOCASE
+      WHERE l.qty > 0 OR (i.active = 1 AND i.bin = ?1 COLLATE NOCASE)
+      ORDER BY i.part_code LIMIT ${MAX_COUNT_LINES}`,
+  ).bind(location).all<Row>();
+  return c.json({ shelf: location, lines: results });
+});
+
+inventory.post("/count", async (c) => {
+  const u = requirePerm(c, "inventory.adjust");
+  const b = await body(c);
+  const db = c.env.DB;
+  const typed = shelf(b.location);
+  if (!Array.isArray(b.lines) || !b.lines.length) fail(400, "Type what you counted for at least one part.");
+  if (b.lines.length > MAX_COUNT_LINES) fail(400, `A count can have up to ${MAX_COUNT_LINES} parts. Count the shelf in two halves.`);
+  const note = text(b.note, 500, "Note");
+  const seen = new Set<string>();
+  const lines = (b.lines as Row[]).map((r) => {
+    if (!r || typeof r !== "object") fail(400, "A line is empty.");
+    const pc = code(r.part_code);
+    if (seen.has(pc)) fail(400, `${pc} is in the count twice.`);
+    seen.add(pc);
+    return { pc, qty: num(r.qty, `Counted quantity of ${pc}`) ?? fail(400, `Counted quantity of ${pc} is required.`), description: text(r.description, 300, "Description") };
+  });
+  // Shelf names are matched without regard to capitals, and the spelling already in use is kept.
+  const { results: have } = await db.prepare("SELECT part_code, location, qty FROM stock_levels WHERE location = ? COLLATE NOCASE").bind(typed).all<{ part_code: string; location: string; qty: number }>();
+  const location = have[0]?.location ?? typed;
+  const onShelf = new Map(have.map((l) => [l.part_code.toUpperCase(), l.qty]));
+  const at = now();
+  const stmts: D1PreparedStatement[] = [];
+  const differences: { part_code: string; from: number; to: number }[] = [];
+  for (const l of lines) {
+    const from = onShelf.get(l.pc) ?? 0;
+    const delta = Math.round((l.qty - from) * 1000) / 1000;
+    if (delta === 0) continue;
+    stmts.push(ensureItem(db, l.pc, l.description, location, u.id, at), ...post(db, { part_code: l.pc, location, delta, type: "adjust", reason: "Counted", note, user: u.id, at }));
+    differences.push({ part_code: l.pc, from, to: l.qty });
+  }
+  try {
+    for (let i = 0; i < stmts.length; i += 90) await db.batch(stmts.slice(i, i + 90)); // 3 statements per part, kept together
+  } catch (e) {
+    if (belowZero(e)) fail(409, "Someone else just took that stock. Reload and try again.");
+    throw e;
+  }
+  await audit(db, { userId: u.id, action: "stock.count", targetType: "stock_item", detail: { location, counted: lines.length, changed: differences.length }, ip: c.get("ip") });
+  return c.json({ ok: true, counted: lines.length, changed: differences.length, differences });
 });

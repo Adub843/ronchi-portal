@@ -752,4 +752,12 @@ nav.side .menu-pop{min-width:200px}
 .inv-facts{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:12px}
 .inv-pills{gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
 .inv-add{margin-bottom:12px}
+.inv-note{margin:0 12px 8px}
+.inv-count input{width:84px;text-align:right}
+.inv-scroll{overflow-x:auto;max-width:100%;min-width:0}
+@media (max-width:720px){.inv-count th,.inv-count td{padding-left:6px;padding-right:6px;white-space:normal}.inv-count input{width:68px}}
+.inv-count .inv-differs td{background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.inv-found{gap:8px;flex-wrap:wrap}
+.inv-found input{flex:1;min-width:180px}
+.inv-shelf-picks{gap:6px;flex-wrap:wrap}
 .inv-problems{color:var(--accent);margin:0;padding-left:18px}

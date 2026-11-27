@@ -784,6 +784,28 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
+    id: "reorder-list", area: "inventory", needs: ["inventory.view"],
+    title: T("See what to order", "Ver qué hay que pedir", "Vedere cosa ordinare"),
+    summary: T("One list of the parts to buy now, with how many of each.", "Una sola lista de las piezas que hay que comprar ahora, con cuántas de cada una.", "Un solo elenco dei ricambi da comprare ora, con quanti per ciascuno."),
+    steps: [
+      T("Open Warehouse, then Inventory, and press To order at the top.", "Abra Almacén, luego Inventario, y pulse A pedir arriba.", "Apri Magazzino, poi Inventario, e premi Da ordinare in alto."),
+      T("A part is on the list when what is free to use, with what is already on the way, has fallen to its reorder point, or when an order is waiting for more than there is.", "Una pieza está en la lista cuando lo libre para usar, con lo que ya viene en camino, bajó a su punto de pedido, o cuando un pedido espera más de lo que hay.", "Un ricambio è nell'elenco quando il disponibile, con ciò che è già in arrivo, è sceso al punto di riordino, o quando un ordine ne aspetta più di quanti ce ne sono."),
+      T("To order is the part's reorder quantity, or enough to get back above the reorder point when that is more.", "A pedir es la cantidad a pedir de la pieza, o lo suficiente para volver a quedar sobre el punto de pedido cuando eso es más.", "Da ordinare è la quantità di riordino del ricambio, oppure quanto basta per tornare sopra il punto di riordino quando è di più."),
+      T("Press Export CSV to save the list as a spreadsheet for the supplier order.", "Pulse Exportar CSV para guardar la lista como hoja de cálculo para el pedido al proveedor.", "Premi Esporta CSV per salvare l'elenco come foglio di calcolo per l'ordine al fornitore."),
+    ],
+  },
+  {
+    id: "count-shelf", area: "inventory", needs: ["inventory.view", "inventory.adjust"],
+    title: T("Count a shelf", "Contar un estante", "Contare uno scaffale"),
+    summary: T("Check one shelf against the portal and correct what differs in one go.", "Compare un estante con el portal y corrija de una vez lo que difiere.", "Confronta uno scaffale con il portale e correggi in una volta ciò che non corrisponde."),
+    steps: [
+      T("Open Inventory and press Count a shelf. Pick the shelf you are standing at.", "Abra Inventario y pulse Contar un estante. Elija el estante donde está.", "Apri Inventario e premi Conta uno scaffale. Scegli lo scaffale davanti a te."),
+      T("Type the number you counted beside each part. Leave a part empty if you did not count it, and type 0 if it is not there.", "Escriba el número que contó junto a cada pieza. Deje una pieza vacía si no la contó y escriba 0 si no está.", "Scrivi il numero contato accanto a ogni ricambio. Lascia vuoto un ricambio che non hai contato e scrivi 0 se non c'è."),
+      T("If you find a part the portal does not list on this shelf, type its part number at the bottom and press Add to the count.", "Si encuentra una pieza que el portal no tiene en este estante, escriba su número abajo y pulse Agregar al conteo.", "Se trovi un ricambio che il portale non ha su questo scaffale, scrivi il codice in basso e premi Aggiungi al conteggio."),
+      T("Press Save the count. Every part that differs is corrected with the reason Counted, and the page shows what changed.", "Pulse Guardar el conteo. Cada pieza que difiere se corrige con el motivo Contado, y la página muestra qué cambió.", "Premi Salva il conteggio. Ogni ricambio che non corrisponde viene corretto con il motivo Contato, e la pagina mostra cosa è cambiato."),
+    ],
+  },
+  {
     id: "stock-costs", area: "inventory", needs: ["inventory.view", "inventory.prices"],
     title: T("See what the stock is worth", "Ver cuánto vale el inventario", "Vedere quanto vale il magazzino"),
     summary: T("Part costs and the value of what is on the shelves.", "Costos de las piezas y el valor de lo que hay en los estantes.", "Costi dei ricambi e valore di ciò che c'è sugli scaffali."),

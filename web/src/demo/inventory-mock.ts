@@ -1,6 +1,6 @@
 // DEMO ONLY. Inventory in the preview, with made-up parts, shelves and costs.
 // Follows routes/inventory.ts closely (same shared rules), without a server.
-import { available, isLow, isOut } from "../../../src/shared/inventory";
+import { available, isLow, isOut, toOrder } from "../../../src/shared/inventory";
 
 export class InventoryFail extends Error {
   constructor(public status: number, message: string) {
@@ -9,7 +9,7 @@ export class InventoryFail extends Error {
 }
 const fail = (s: number, m: string): never => { throw new InventoryFail(s, m); };
 
-interface Ctx { me: { id: string; name: string }; perms: Set<string>; newId: () => string }
+interface Ctx { shelf?: string; me: { id: string; name: string }; perms: Set<string>; newId: () => string }
 type Row = Record<string, any>;
 
 let items: Row[] | null = null;
@@ -52,6 +52,7 @@ function shape(i: Row, prices: boolean): Row {
   row.available = available(row as never);
   row.low = isLow(row as never);
   row.out = isOut(row as never);
+  row.to_order = toOrder(row as never);
   if (prices) row.value = row.unit_cost == null ? null : Math.round(on_hand * row.unit_cost * 100) / 100;
   else delete row.unit_cost;
   return row;
@@ -108,6 +109,32 @@ export function inventoryRoute(method: string, seg: string[], body: any, c: Ctx)
       } else { l.qty -= qty; log(pc, loc, -qty, type, body.reason, body.note); }
     }
     return { ok: true };
+  }
+  if (seg[1] === "count" && method === "GET") {
+    need("inventory.adjust");
+    const shelf = (c.shelf ?? "").trim().toLowerCase();
+    return {
+      shelf,
+      lines: all.map((i) => ({ part_code: i.part_code, description: i.description, qty: levels.find((l) => l.part_code === i.part_code && l.location.toLowerCase() === shelf)?.qty ?? 0, bin: i.bin }))
+        .filter((l) => l.qty > 0 || String(l.bin ?? "").toLowerCase() === shelf).sort((a, b) => a.part_code.localeCompare(b.part_code)),
+    };
+  }
+  if (seg[1] === "count" && method === "POST") {
+    need("inventory.adjust");
+    const loc = String(body.location ?? "").trim();
+    if (!loc) fail(400, "Shelf is required.");
+    const differences: Row[] = [];
+    for (const r of body.lines as Row[]) {
+      const pc = String(r.part_code).trim().toUpperCase(), qty = Number(r.qty);
+      if (!(qty >= 0)) fail(400, `Counted quantity of ${pc} must be a number.`);
+      const l = level(pc, loc);
+      if (l.qty === qty) continue;
+      ensure(pc, "", loc);
+      differences.push({ part_code: pc, from: l.qty, to: qty });
+      log(pc, l.location, qty - l.qty, "adjust", "Counted", body.note);
+      l.qty = qty;
+    }
+    return { ok: true, counted: body.lines.length, changed: differences.length, differences };
   }
   if (seg[1] === "import" && method === "POST") {
     need("inventory.adjust");

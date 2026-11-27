@@ -1,9 +1,9 @@
 // Inventory: what is on the shelves, part by part and shelf by shelf.
 // The stock list (counts, low stock, search, export), a stock list import, and one page per part with
 // its shelves, what holds it, and every change ever made to its quantity. Rules: src/shared/inventory.ts.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toCsv } from "../../../src/shared/csv";
-import { ADJUST_REASONS, ISSUE_REASONS, ITEM_LABELS, MAX_IMPORT, MOVE_LABELS, readStockCsv, type MoveType } from "../../../src/shared/inventory";
+import { ADJUST_REASONS, ISSUE_REASONS, ITEM_LABELS, MAX_COUNT_LINES, MAX_IMPORT, MOVE_LABELS, readStockCsv, type MoveType } from "../../../src/shared/inventory";
 import { api, can, fmtTime, type Me } from "../api";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad } from "../components/ui";
 import { loc, t } from "../i18n";
@@ -15,8 +15,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 const n = (v: number | null | undefined) => (v == null ? "–" : v.toLocaleString(loc(), { maximumFractionDigits: 3 }));
 const money = (v: number | null | undefined) => (v == null ? "–" : v.toLocaleString(loc(), { style: "currency", currency: "USD" }));
 
-type View = "all" | "low" | "out" | "reserved";
-const VIEWS: Record<View, (i: Row) => boolean> = { all: (i) => i.active, low: (i) => i.low, out: (i) => i.out, reserved: (i) => i.reserved > 0 };
+type View = "all" | "low" | "out" | "reserved" | "reorder";
+const VIEWS: Record<View, (i: Row) => boolean> = { all: (i) => i.active, low: (i) => i.low, out: (i) => i.out, reserved: (i) => i.reserved > 0, reorder: (i) => i.to_order != null };
 
 export function Inventory({ me }: { me: Me }) {
   const { data, error, reload } = useLoad<{ items: Row[] }>(() => api("/inventory"));
@@ -32,14 +32,16 @@ export function Inventory({ me }: { me: Me }) {
   }, [all, view, q]);
   const value = prices ? all.reduce((s, i) => s + (i.value ?? 0), 0) : null;
 
+  const reorder = view === "reorder" && !q;
+  const orderCost = prices && reorder ? shown.reduce((s, i) => s + (i.unit_cost ?? 0) * i.to_order, 0) : null;
+
   function exportCsv() {
+    if (reorder) return download(`reorder-list-${today()}.csv`,
+      ["Part number", "Description", "Usual shelf", "On hand", "Held", "Available", "On the way", "Reorder at", "To order", ...(prices ? ["Cost each", "Cost"] : [])],
+      shown.map((i) => [i.part_code, i.description ?? "", i.bin ?? "", i.on_hand, i.reserved, i.available, i.incoming, i.reorder_point ?? "", i.to_order, ...(prices ? [i.unit_cost ?? "", i.unit_cost == null ? "" : Math.round(i.unit_cost * i.to_order * 100) / 100] : [])]));
     const head = ["Part number", "Description", "Shelves", "On hand", "Reserved", "Available", "On the way", "Reorder at", "Reorder quantity", ...(prices ? ["Cost each", "Value"] : [])];
     const rows = shown.map((i) => [i.part_code, i.description ?? "", i.shelves ?? "", i.on_hand, i.reserved, i.available, i.incoming, i.reorder_point ?? "", i.reorder_qty ?? "", ...(prices ? [i.unit_cost ?? "", i.value ?? ""] : [])]);
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([toCsv(head, rows)], { type: "text/csv" }));
-    a.download = `inventory-${today()}.csv`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    download(`inventory-${today()}.csv`, head, rows);
   }
 
   const tiles: { v: View; l: string; warn?: boolean }[] = [
@@ -47,16 +49,18 @@ export function Inventory({ me }: { me: Me }) {
     { v: "low", l: t("Low stock"), warn: true },
     { v: "out", l: t("Out of stock"), warn: true },
     { v: "reserved", l: t("Held for orders") },
+    { v: "reorder", l: t("To order"), warn: true },
   ];
   return (
     <>
       <PageHead title={t("Inventory")} sub={t("What is on the shelves, where it is, what is held for orders and what is running low.")} tip="inventory.head">
         {can(me, "inventory.adjust") && <button className="btn" onClick={() => navigate("/inventory/import")}>{t("Import a stock list")}</button>}
+        {can(me, "inventory.adjust") && <button className="btn" onClick={() => navigate("/inventory/count")}>{t("Count a shelf")}</button>}
         {can(me, "inventory.edit") && <button className="btn primary" onClick={() => setAdding(!adding)}>{t("Put into stock")}</button>}
       </PageHead>
       <ErrorNote error={error} />
       {adding && <div className="panel inv-add"><StockMove me={me} only="receive" onDone={() => { setAdding(false); reload(); }} /></div>}
-      <div className={`cp-tiles ${prices ? "five" : ""}`}>
+      <div className={`cp-tiles ${prices ? "six" : "five"}`}>
         {tiles.map((x) => (
           <button key={x.v} type="button" className={`panel cp-tile${view === x.v ? " on" : ""}${x.warn && counts[x.v] ? " warn" : ""}`} aria-pressed={view === x.v} onClick={() => setView(x.v)}>
             <span className="n">{data ? counts[x.v] : "–"}</span><span className="l">{x.l}</span>
@@ -70,8 +74,28 @@ export function Inventory({ me }: { me: Me }) {
       </div>
       <div className="panel tbl">
         {data && !all.length && <Empty>{can(me, "inventory.adjust") ? t("Nothing in stock yet. Press Import a stock list to bring in a spreadsheet, or Put into stock to add one part.") : t("Nothing in stock yet.")}</Empty>}
-        {data && !!all.length && !shown.length && <Empty>{t("No parts match.")}</Empty>}
-        {!!shown.length && (
+        {data && !!all.length && !shown.length && !reorder && <Empty>{t("No parts match.")}</Empty>}
+        {reorder && !!all.length && !shown.length && <Empty>{t("Nothing needs ordering.")}</Empty>}
+        {reorder && !!shown.length && (
+          <>
+            <p className="muted inv-note">{t("Parts whose free stock, with what is already on the way, has fallen to the reorder point, and parts that orders are waiting for. To order is the part's reorder quantity, or enough to get back above the reorder point.")}{orderCost ? ` ${t("Cost of this list: {amount}.", { amount: money(orderCost) })}` : ""}</p>
+            <table className="cp-table">
+              <thead><tr><th>{t("Part number")}</th><th>{t("Description")}</th><th className="num">{t("Available")}</th><th className="num">{t("On the way")}</th><th className="num">{t("Reorder at")}</th><th className="num">{t("To order")}</th>{prices && <th className="num">{t("Cost")}</th>}</tr></thead>
+              <tbody>
+                {shown.slice(0, 500).map((i) => (
+                  <tr key={i.part_code} className="click" onClick={() => navigate(`/inventory/${enc(i.part_code)}`)}>
+                    <td className="mono"><Link to={`/inventory/${enc(i.part_code)}`}>{i.part_code}</Link></td>
+                    <td>{i.description ?? "–"} {i.out && <span className="pill p-acc">{t("Out of stock")}</span>}</td>
+                    <td className="num">{n(i.available)}</td><td className="num">{i.incoming ? n(i.incoming) : "–"}</td><td className="num">{n(i.reorder_point)}</td>
+                    <td className="num"><strong>{n(i.to_order)}</strong></td>
+                    {prices && <td className="num">{i.unit_cost == null ? "–" : money(i.unit_cost * i.to_order)}</td>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+        {!reorder && !!shown.length && (
           <table className="cp-table">
             <thead><tr><th>{t("Part number")}</th><th>{t("Description")}</th><th>{t("Shelf")}</th><th className="num">{t("On hand")}</th><th className="num">{t("Held")}</th><th className="num">{t("Available")}</th><th className="num">{t("On the way")}</th><th className="num">{t("Reorder at")}</th>{prices && <th className="num">{t("Value")}</th>}</tr></thead>
             <tbody>
@@ -92,6 +116,14 @@ export function Inventory({ me }: { me: Me }) {
       </div>
     </>
   );
+}
+
+function download(name: string, head: string[], rows: unknown[][]) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([toCsv(head, rows as never)], { type: "text/csv" }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 /** Put in, take out, move or correct: one small form. `only` fixes what it does; `part` and `shelves` come from a part's page. */
@@ -306,6 +338,108 @@ export function InventoryImport({ me }: { me: Me }) {
           <button className="btn" onClick={() => navigate("/inventory")}>{t("Cancel")}</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Stock count, one shelf at a time: type what is on the shelf, and every part that differs is corrected as Counted. */
+export function InventoryCount({ me }: { me: Me }) {
+  const known = useLoad<{ shelves: string[] }>(() => api("/inventory/shelves"));
+  const [shelf, setShelf] = useState("");
+  const [open, setOpen] = useState<string | null>(null);
+  const [lines, setLines] = useState<Row[]>([]);
+  const [note, setNote] = useState("");
+  const [found, setFound] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [done, setDone] = useState<{ counted: number; changed: number; differences: Row[] } | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    setErr(null);
+    api<{ shelf: string; lines: Row[] }>(`/inventory/count?shelf=${enc(open)}`)
+      .then((r) => { if (live) setLines(r.lines.map((l) => ({ ...l, counted: "" }))); })
+      .catch((x) => { if (live) setErr((x as Error).message); });
+    return () => { live = false; };
+  }, [open]);
+
+  if (!can(me, "inventory.adjust")) return <ErrorNote error="Your role doesn't allow this." />;
+  const typed = lines.filter((l) => String(l.counted).trim() !== "");
+  const differs = typed.filter((l) => Number(l.counted) !== l.qty).length;
+  const set = (code: string, v: string) => setLines(lines.map((l) => (l.part_code === code ? { ...l, counted: v } : l)));
+
+  function addFound(e: React.FormEvent) {
+    e.preventDefault();
+    const code = found.trim().toUpperCase().replace(/\s+/g, "");
+    if (!code) return;
+    if (!lines.some((l) => l.part_code === code)) setLines([...lines, { part_code: code, description: null, qty: 0, counted: "", added: true }]);
+    setFound("");
+  }
+  async function save() {
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await api<{ counted: number; changed: number; differences: Row[] }>("/inventory/count", { body: { location: open, note, lines: typed.map((l) => ({ part_code: l.part_code, qty: l.counted })) } });
+      setDone(r);
+      toast(t("Count saved"));
+    } catch (x) {
+      setErr((x as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const again = () => { setDone(null); setOpen(null); setShelf(""); setLines([]); setNote(""); };
+
+  return (
+    <div className="stack">
+      <PageHead title={t("Count a shelf")} sub={t("Count one shelf at a time. Type what is really there, and the portal corrects every part that differs.")} />
+      {done ? (
+        <div className="panel stack">
+          <p><strong>{t("{a} parts counted on shelf {shelf}, {b} corrected.", { a: done.counted, shelf: open ?? "", b: done.changed })}</strong></p>
+          {!!done.differences.length && (
+            <table className="cp-table inv-count">
+              <thead><tr><th>{t("Part number")}</th><th className="num">{t("The portal had")}</th><th className="num">{t("Counted")}</th><th className="num">{t("Change")}</th></tr></thead>
+              <tbody>{done.differences.map((d) => <tr key={d.part_code}><td className="mono"><Link to={`/inventory/${enc(d.part_code)}`}>{d.part_code}</Link></td><td className="num">{n(d.from)}</td><td className="num">{n(d.to)}</td><td className="num">{d.to > d.from ? "+" : ""}{n(Math.round((d.to - d.from) * 1000) / 1000)}</td></tr>)}</tbody>
+            </table>
+          )}
+          <div className="row"><button className="btn primary" onClick={again}>{t("Count another shelf")}</button><button className="btn" onClick={() => navigate("/inventory")}>{t("Back to Inventory")}</button></div>
+        </div>
+      ) : !open ? (
+        <form className="panel stack" onSubmit={(e) => { e.preventDefault(); if (shelf.trim()) setOpen(shelf.trim()); }}>
+          <datalist id="inv-count-shelves">{(known.data?.shelves ?? []).map((s) => <option key={s} value={s} />)}</datalist>
+          <div className="field"><label htmlFor="inv-count-shelf">{t("Which shelf are you counting?")}</label><input id="inv-count-shelf" required autoFocus list="inv-count-shelves" value={shelf} onChange={(e) => setShelf(e.target.value)} placeholder={t("e.g. A3-2")} /></div>
+          {!!known.data?.shelves.length && <div className="row inv-shelf-picks">{known.data.shelves.slice(0, 60).map((s) => <button key={s} type="button" className="btn" onClick={() => setOpen(s)}>{s}</button>)}</div>}
+          <div className="row"><button className="btn primary" type="submit">{t("Start the count")}</button><button className="btn" type="button" onClick={() => navigate("/inventory")}>{t("Cancel")}</button></div>
+        </form>
+      ) : (
+        <div className="panel stack">
+          <h2>{t("Shelf {shelf}", { shelf: open })}</h2>
+          <p className="muted">{t("Type the number you counted beside each part. A part you leave empty is not changed. Type 0 for a part that is not there. Up to {n} parts at a time.", { n: MAX_COUNT_LINES })}</p>
+          {!lines.length && !err && <Empty>{t("The portal has nothing on this shelf. Add the parts you find below.")}</Empty>}
+          {!!lines.length && (
+            <div className="inv-scroll"><table className="cp-table inv-count">
+              <thead><tr><th>{t("Part number")}</th><th>{t("Description")}</th><th className="num">{t("The portal has")}</th><th className="num">{t("Counted")}</th></tr></thead>
+              <tbody>
+                {lines.map((l) => (
+                  <tr key={l.part_code} className={String(l.counted).trim() !== "" && Number(l.counted) !== l.qty ? "inv-differs" : ""}>
+                    <td className="mono">{l.part_code}</td><td>{l.description ?? (l.added ? t("Found on the shelf") : "–")}</td><td className="num">{n(l.qty)}</td>
+                    <td className="num"><input type="number" min={0} step="any" inputMode="decimal" value={l.counted} onChange={(e) => set(l.part_code, e.target.value)} aria-label={t("Counted, {part}", { part: l.part_code })} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table></div>
+          )}
+          <form className="row inv-found" onSubmit={addFound}>
+            <input className="mono" value={found} onChange={(e) => setFound(e.target.value)} placeholder={t("Part number found on this shelf")} aria-label={t("Part number found on this shelf")} />
+            <button className="btn" type="submit">{t("Add to the count")}</button>
+          </form>
+          <div className="field"><label htmlFor="inv-count-note">{t("Note")}</label><input id="inv-count-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("e.g. November count")} /></div>
+          <p><strong>{t("{a} counted, {b} differ from the portal.", { a: typed.length, b: differs })}</strong></p>
+          <ErrorNote error={err} />
+          <div className="row"><button className="btn primary" disabled={busy || !typed.length} onClick={save}>{t("Save the count")}</button><button className="btn" onClick={again}>{t("Pick another shelf")}</button></div>
+        </div>
+      )}
     </div>
   );
 }
