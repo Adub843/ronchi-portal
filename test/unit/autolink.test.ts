@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { autoLink, baseName, type PartRow, type Unit } from "../../web/catalog/autolink";
+import { listCodeOf } from "../../web/catalog/codes";
 
 // The pieces of GF063579 (anti-rotation) as Italy's STEP file names them, and its parts list.
 const units: Unit[] = [
@@ -159,5 +160,24 @@ describe("links the matcher must not make", () => {
     expect(link([u("a", "6204-2RS")], [r("CM000001", 1, "BEARING 6205-2RS")])("a")).toBeUndefined();
     expect(link([u("a", "flangia"), u("b", "p3")], [r("CD000001", 1, "FLANGE"), r("CD000002", 1, "COVER")])("b")).toEqual({ code: "CD000002", sure: false });
     expect(link([u("a", "tubo")], [r("CD000001", 2.5, "PIPE")])("a")).toEqual({ code: "CD000001", sure: true });
+  });
+});
+
+describe("reading a part number off a name in the 3D file", () => {
+  const codes = ["CD052968", "CM005152", "CM006026_1", "CD055542", "CM000147_1", "CM000147_2"];
+  it("ignores the revision and copy numbers after the number", () => {
+    expect(listCodeOf("CD052968_1_A.1.1.1.1.1", codes)).toBe("CD052968");
+    expect(listCodeOf("cm005152_1_b.1", codes)).toBe("CM005152");
+    expect(listCodeOf("CD055542.1", codes)).toBe("CD055542");
+    expect(listCodeOf("CM006026_1-2", codes)).toBe("CM006026_1");
+  });
+  it("accepts the number without the list's suffix only when one row has it", () => {
+    expect(listCodeOf("CM006026.3", codes)).toBe("CM006026_1");
+    expect(listCodeOf("CM000147", codes)).toBeNull();
+  });
+  it("does not read a longer number as a shorter one", () => {
+    expect(listCodeOf("CD0529681", codes)).toBeNull();
+    expect(listCodeOf("CD052968B", codes)).toBeNull();
+    expect(listCodeOf("SPESSORE", codes)).toBeNull();
   });
 });

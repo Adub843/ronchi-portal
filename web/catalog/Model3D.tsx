@@ -17,7 +17,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { codeOf } from "./codes";
+import { codeOf, listCodeOf } from "./codes";
 import { autoLink, baseName, type PartRow } from "./autolink";
 import { w, type Lang } from "./words";
 
@@ -517,6 +517,14 @@ class Engine {
     for (const id of this.auto.keys()) this.codes.set(id, null);
     this.auto.clear();
     this.guessed.clear();
+    // A name that starts with a row's part number is that row, whatever revision or copy number follows it.
+    const listCodes = parts.map((p) => p.code);
+    root.traverse((o) => {
+      const c = this.codes.get(o.uuid);
+      if (c && this.known.has(c)) return;
+      const byNumber = listCodeOf(typeof o.userData.name === "string" ? o.userData.name : o.name, listCodes);
+      if (byNumber) this.codes.set(o.uuid, byNumber);
+    });
     const have = new Set<string>();
     for (const c of this.codes.values()) if (c) have.add(c);
     const units = new Map<THREE.Object3D, { names: string[]; verts: number; size: number }>();
