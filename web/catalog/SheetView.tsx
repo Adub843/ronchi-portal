@@ -41,7 +41,8 @@ export function SheetView({
   tools?: ReactNode;      // buttons at the end of the title bar (favorite star, staff tools)
   subtitle?: string;      // shown at the end of the viewer's toolbar (the Italian sheet name)
 }) {
-  const [tab, setTab] = useState<"drawing" | "model">(sheet.drawing || !sheet.model ? "drawing" : "model");
+  // A list with a 3D model opens on it, as the Ronchi viewer does; the drawing is one click away.
+  const [tab, setTab] = useState<"drawing" | "model">(sheet.model ? "model" : "drawing");
   const [rowId, setRowId] = useState<string | null>(null);
   const [find, setFind] = useState("");
   const [sibs, setSibs] = useState(false);
