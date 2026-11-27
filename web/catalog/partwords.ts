@@ -181,4 +181,7 @@ export const PART_WORDS: Record<string, string[]> = {
   ventosa: ["suction cup", "vacuum cup", "sucker"], ventose: ["suction cup", "vacuum cup", "sucker"],
   vibratore: ["vibrator"], vibratori: ["vibrator"], vite: ["screw"], viti: ["screw"], volani: ["flywheel"],
   volano: ["flywheel"], volantini: ["handwheel", "hand wheel"], volantino: ["handwheel", "hand wheel"],
+  // Short forms seen in Italy's files.
+  or: ["o ring", "oring"], uor: ["o ring", "oring"], guar: ["seal", "gasket"], rond: ["washer"], bocc: ["bush", "bushing"],
+  dist: ["spacer"], racc: ["fitting", "coupling fitting"],
 };

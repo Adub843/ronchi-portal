@@ -181,3 +181,36 @@ describe("reading a part number off a name in the 3D file", () => {
     expect(listCodeOf("SPESSORE", codes)).toBeNull();
   });
 });
+
+describe("fasteners named by their standard", () => {
+  const rows: PartRow[] = [
+    { code: "CM001228", qty: 4, names: ["SCREW TCEI UNI 5931", "VITE TCEI UNI 5931"] },
+    { code: "CM000353", qty: 2, names: ["SCREW TE UNI 5739", "VITE TE UNI 5739"] },
+    { code: "CM000292", qty: 4, names: ["FLAT WASHER UNI 6592-69", "RONDELLA PIANA UNI 6592-69"] },
+    { code: "CM000300", qty: 4, names: ["WASHER GROWER UNI 1751", "RONDELLA GROWER UNI 1751"] },
+    { code: "CM000139_1", qty: 1, names: ["O-RING", ""] },
+  ];
+  const many = (p: string, name: string, n: number): Unit[] => Array.from({ length: n }, (_, i) => ({ id: `${p}${i}`, names: [name, name], sig: p }));
+  it("reads the ISO number as the UNI number of the same screw, washer or nut", () => {
+    const got = autoLink([...many("a", "VITE_UNI_EN_ISO_4762TF_M8x125x30", 4), ...many("b", "VITE_UNI_EN_ISO_4017_M8x40", 2), ...many("c", "RONDELLA_UNI_EN_ISO_7089_D8", 4), ...many("d", "ROSETTA_UNI_1751_D8", 4), ...many("f", "UOR_INT_4337", 1)], rows);
+    expect(got.get("a0")).toEqual({ code: "CM001228", sure: true });
+    expect(got.get("b1")).toEqual({ code: "CM000353", sure: true });
+    expect(got.get("c3")).toEqual({ code: "CM000292", sure: true });
+    expect(got.get("d0")).toEqual({ code: "CM000300", sure: true });
+    expect(got.get("f0")).toEqual({ code: "CM000139_1", sure: true });
+  });
+  it("links only the screws whose count fits when two sizes cite the row's standard, and only as a guess", () => {
+    const got = autoLink([...many("a", "VITE_UNI_EN_ISO_4762TF_M8x125x30", 4), ...many("e", "u5931_M6x14", 1)], rows);
+    expect(got.get("a0")).toEqual({ code: "CM001228", sure: false });
+    expect(got.has("e0")).toBe(false);
+  });
+  it("keeps a hex screw off the socket screw row", () => {
+    const got = autoLink(many("b", "VITE_UNI_EN_ISO_4017_M8x40", 4), [rows[0]!]);
+    expect(got.size).toBe(0);
+  });
+  it("holds to a size the row gives", () => {
+    const row: PartRow[] = [{ code: "CM000001", qty: 2, names: ["TCEI SCREW UNI 5931 M8 LENGTH 16"] }];
+    expect(autoLink(many("a", "VITE_UNI5931_M8x16", 2), row).get("a0")?.code).toBe("CM000001");
+    expect(autoLink(many("a", "VITE_UNI5931_M6x16", 2), row).size).toBe(0);
+  });
+});

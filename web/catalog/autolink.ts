@@ -66,6 +66,8 @@ function blank(name: string): boolean {
 function kind(text: string): { key?: string; words: string[]; firm: boolean } | null {
   const t: string[] = [];
   for (const w of text.split(" ")) { if (PREP.has(w)) break; t.push(w); }
+  // "anello OR 4262" and "guarnizione OR" are O-rings, not rings or gaskets.
+  if (t.some((w) => w === "or" || w === "uor")) return { key: "or", words: WORDS.or!, firm: true };
   for (const w of t) { const k = itKey(w); if (k) return { key: k, words: WORDS[k]!, firm: true }; }
   const found: string[] = [];
   for (let i = t.length - 1; i >= 0; i--) {
@@ -77,6 +79,29 @@ function kind(text: string): { key?: string; words: string[]; firm: boolean } | 
 
 const SPEC = (t: string) => t.length >= 2 && /\d/.test(t) && !itKey(t);
 
+// Fastener standards. The CAD file names a screw by its ISO number, the parts list by the UNI number of the
+// same thing ("VITE UNI EN ISO 4762 M8x30" is a "SCREW TCEI UNI 5931"). Each number maps to one name for the pair.
+const STD: Record<string, string> = {
+  "4762": "5931", "5931": "5931", "912": "5931",                                   // socket head cap screw (TCEI)
+  "4017": "5739", "5739": "5739", "4014": "5739", "5737": "5739", "933": "5739", "931": "5739",   // hex head screw (TE)
+  "10642": "5933", "5933": "5933", "7991": "5933",                                 // countersunk socket screw (TSEI)
+  "7380": "7380", "1207": "1207",
+  "4026": "5923", "4027": "5923", "4028": "5923", "4029": "5923", "5923": "5923", "5925": "5923", "5927": "5923", "5929": "5923",   // grub screws (STEI)
+  "7089": "6592", "7090": "6592", "6592": "6592", "125": "6592",                   // flat washer
+  "7093": "6593", "6593": "6593", "9021": "6593", "7091": "6593",                  // large or coarse flat washer
+  "1751": "1751", "7980": "1751", "127": "1751", "1750": "1751",                   // spring (Grower) washer
+  "4032": "5588", "5588": "5588", "934": "5588", "4033": "5588", "5587": "5588",   // hex nut
+  "5721": "5721", "1587": "5721",                                                  // cap nut
+  "7473": "7473", "7474": "7473", "10511": "7473", "7040": "7473", "985": "7473", "982": "7473",   // self-locking nut
+};
+const STD_KIND: Record<string, string> = { "5931": "screw", "5739": "screw", "5933": "screw", "7380": "screw", "1207": "screw", "5923": "screw", "6592": "washer", "6593": "washer", "1751": "washer", "5588": "nut", "5721": "nut", "7473": "nut" };
+const STD_AT = /(?:^| )(?:uni|iso|din|u) ?(?:en )?(?:iso )?(\d{3,5})/;
+/** The standard a cleaned name cites, as the one name its ISO, DIN and UNI numbers share. */
+function standard(text: string): string | null {
+  const m = STD_AT.exec(text);
+  return m ? STD[m[1]!] ?? `#${m[1]}` : null;
+}
+
 /** How well a piece's name says it is this row's part: 4 its full name is in the row's, 3 its name less a
  *  trailing number is, 2 the same kind of thing, 1 the same kind but the row's name could be read two ways, 0 not. */
 function score(raw: string, rowRaw: string): number {
@@ -86,7 +111,15 @@ function score(raw: string, rowRaw: string): number {
   const row = clean(lower(rowRaw.split(",")[0]!));
   const rowAll = ` ${clean(lower(rowRaw))} `;
   if (!row) return 0;
-  const uk = kind(base);
+  // Both cite a standard: the same one is this row (when any size the row gives agrees), another one is not.
+  const mine = clean(lower(raw));
+  const us = standard(mine), rs = standard(rowAll.trim());
+  if (us && rs) {
+    if (us !== rs) return 0;
+    const sizes = rowAll.trim().replace(STD_AT, " ").replace(/^ ?\d\d(?= |$)/, " ").split(" ").filter((t) => /\d/.test(t));
+    return sizes.every((t) => new RegExp(`(?:^|[ x])${t}(?:$|[ x])`).test(mine)) ? 3 : 0;
+  }
+  const uk = kind(base) ?? (us && STD_KIND[us] ? { words: [STD_KIND[us]!], firm: true } : null);
   const generic = !!uk && base.split(" ").every((t) => itKey(t) || EN.has(t) || PREP.has(t) || /^\d+$/.test(t));
   if (!generic) {
     for (const form of f) {
@@ -104,7 +137,7 @@ function score(raw: string, rowRaw: string): number {
   const same = uk.key && uk.key === rk.key;
   if (!same && !uk.words.some((w) => rk.words.includes(w)) && !(uk.key && rk.key && WORDS[uk.key]!.some((w) => WORDS[rk.key!]!.includes(w)))) return 0;
   // "vite M8x30" is not the row "SCREW M8X20": sizes in the piece's name must be in the row's when it has any.
-  const specs = f[0]!.split(" ").filter(SPEC);
+  const specs = f[0]!.split(" ").filter((t) => SPEC(t) && !(us && /^u?\d{3,5}[a-z]{0,2}$/.test(t)));
   if (specs.length && rowAll.trim().split(" ").some(SPEC) && !specs.every((s) => rowAll.includes(` ${s} `))) return 0;
   return same ? 2.5 : rk.firm ? 2 : 1;
 }
