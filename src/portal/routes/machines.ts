@@ -52,8 +52,19 @@ machines.get("/:id", async (c) => {
   const partsOrders = has(u, "partsorders.view")
     ? (await db.prepare("SELECT id, 'P-' || seq AS number, customer, status, customer_po, updated_at FROM parts_orders WHERE machine = ? AND removed_at IS NULL ORDER BY updated_at DESC LIMIT 100").bind(serial.toUpperCase()).all()).results
     : undefined;
-  return c.json({ machine: m, boards: boards.results, orders, jobs, notes, catalog, partsOrders });
+  // Past service projects kept in SharePoint, for people who may see jobs. Matched on the machine
+  // number without its type letters, because the old folder names often leave them off.
+  const service = has(u, "jobs.view")
+    ? (await db.prepare("SELECT id, customer, project_no, year, title, reports, sharepoint_url FROM service_history WHERE instr(machines, ?) > 0 ORDER BY year IS NULL, year DESC, project_no DESC LIMIT 200").bind(` ${machineKey(serial)} `).all()).results
+    : null;
+  return c.json({ machine: m, boards: boards.results, orders, jobs, notes, catalog, partsOrders, service });
 });
+
+/** A machine number without its type letters: 4005MB and #4005 are the same machine. */
+function machineKey(serial: string): string {
+  const s = serial.trim().toUpperCase();
+  return (/^RA\d{4}/.exec(s) ?? /^\d{3,4}/.exec(s) ?? [s])[0];
+}
 
 function fields(b: Record<string, unknown>) {
   return {
@@ -161,4 +172,40 @@ machines.post("/import", async (c) => {
   for (let i = 0; i < stmts.length; i += 50) await c.env.DB.batch(stmts.slice(i, i + 50));
   await audit(c.env.DB, { userId: u.id, action: "machine.import", targetType: "machine", detail: { added: adding.length, filled: summary.updating }, ip: c.get("ip") });
   return c.json({ ...summary, imported: adding.length });
+});
+
+/**
+ * Bring in past service projects from SharePoint: one row per project folder, with the machines it
+ * names. Sending the same folder again updates it, so a list can be sent twice safely.
+ */
+machines.post("/service-history/import", async (c) => {
+  requirePerm(c, "machines.add");
+  const u = requirePerm(c, "machines.edit");
+  const b = await body(c);
+  if (!Array.isArray(b.rows) || !b.rows.length) fail(400, "There is nothing to import.");
+  if (b.rows.length > 1000) fail(400, "Import up to 1000 service projects at a time.");
+  const t = now();
+  const put = c.env.DB.prepare(
+    `INSERT INTO service_history (id, customer, project_no, year, title, machines, reports, sharepoint_url, created_at) VALUES (?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(sharepoint_url) DO UPDATE SET customer = excluded.customer, project_no = excluded.project_no, year = excluded.year,
+       title = excluded.title, machines = excluded.machines, reports = excluded.reports`,
+  );
+  const stmts = (b.rows as unknown[]).map((raw, i) => {
+    if (!raw || typeof raw !== "object") fail(400, `Row ${i + 1} is not a service project.`);
+    const r = raw as Record<string, unknown>;
+    const url = mustStr(r.url, 1000, "SharePoint link");
+    if (!/^https:\/\/[a-z0-9-]+\.sharepoint\.com\//i.test(url)) fail(400, `Row ${i + 1}: the SharePoint link must start with https://<company>.sharepoint.com/`);
+    const year = typeof r.year === "number" && r.year >= 1990 && r.year <= 2100 ? Math.round(r.year) : null;
+    const reports = typeof r.reports === "number" && r.reports > 0 ? Math.min(Math.round(r.reports), 9999) : 0;
+    const keys = (Array.isArray(r.machines) ? r.machines : [])
+      .filter((x): x is string => typeof x === "string" && MACHINE_NUMBER.test(x.trim()))
+      .map(machineKey);
+    const machinesText = keys.length ? ` ${[...new Set(keys)].slice(0, 20).join(" ")} ` : "";
+    return put.bind(randomId(), mustStr(r.customer, 200, "Customer"), str(r.project_no, 40), year, mustStr(r.title, 300, "Title"), machinesText, reports, url, t);
+  });
+  const before = (await c.env.DB.prepare("SELECT COUNT(*) AS n FROM service_history").first<{ n: number }>())?.n ?? 0;
+  for (let i = 0; i < stmts.length; i += 50) await c.env.DB.batch(stmts.slice(i, i + 50));
+  const after = (await c.env.DB.prepare("SELECT COUNT(*) AS n FROM service_history").first<{ n: number }>())?.n ?? 0;
+  await audit(c.env.DB, { userId: u.id, action: "machine.service_history.import", targetType: "machine", detail: { sent: stmts.length, added: after - before }, ip: c.get("ip") });
+  return c.json({ added: after - before, updated: stmts.length - (after - before), total: after });
 });

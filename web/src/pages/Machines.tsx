@@ -141,6 +141,27 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
               ) : <Empty>{t("No jobs for this machine yet.")}</Empty>}
             </div>
           )}
+          {data.service && data.service.length > 0 && (
+            <div className="panel" style={{ gridColumn: "1 / -1" }}>
+              <h2>{t("Service history")}</h2>
+              <p className="muted">{t("Past service projects for this machine. Each one opens its folder in SharePoint.")}</p>
+              <div className="tbl">
+                <table>
+                  <tbody>
+                    {data.service.map((s: any) => (
+                      <tr key={s.id}>
+                        <td className="muted">{s.year ?? ""}</td>
+                        <td><a href={s.sharepoint_url} target="_blank" rel="noopener noreferrer">{s.project_no || s.title}</a></td>
+                        <td>{s.project_no ? s.title : ""}</td>
+                        <td className="muted">{s.customer}</td>
+                        <td className="muted">{s.reports ? t("{n} service reports", { n: s.reports }) : ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           {(data.notes || data.catalog) && (
             <div className="panel">
               {data.catalog && (
