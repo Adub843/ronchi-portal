@@ -296,3 +296,31 @@ describe("telling copies from look-alikes by size", () => {
     expect(Math.abs(of(box(10, 10, 5)) - of(a))).toBeGreaterThan(0.1);
   });
 });
+
+describe("links that were still open after the first pass", () => {
+  const link = (name: string, rows: PartRow[]) => autoLink([{ id: "a", names: [name, name], sig: "a" }], rows).get("a")?.code ?? null;
+  const row = (code: string, name: string, qty = 1): PartRow => ({ code, qty, names: [name, null] });
+  it("reads short words it knows, and words written without spaces", () => {
+    expect(link("OR.1", [row("A", "O-RING"), row("B", "PLATE")])).toBe("A");
+    expect(link("tee", [row("A", "TEE"), row("B", "PLATE")])).toBe("A");
+    expect(link("alberocentrale", [row("A", "SHAFT"), row("B", "PLATE")])).toBe("A");
+    expect(link("vitediregolazione", [row("A", "SCREW"), row("B", "PLATE")])).toBe("A");
+  });
+  it("matches a key to the row that gives its section", () => {
+    const rows = [row("K5", "TANG A5X5 UNI 6604-69"), row("K8", "TANG A8X7 UNI 6604-69")];
+    expect(link("linguetta_5x5x12", rows)).toBe("K5");
+    expect(link("linguetta_8x7x40", rows)).toBe("K8");
+    expect(link("linguetta_6x6x30", rows)).toBeNull();
+  });
+  it("does not hold a maker's model name against the row", () => {
+    expect(link("volantino_vds100ir_a", [row("H", "HANDWHEEL THENAR DSH100-12 COD. 32100F"), row("B", "PLATE")])).toBe("H");
+  });
+  it("knows makers' names and bearing numbers", () => {
+    const rows = [row("R", "RADIAL BALL BEARING"), row("X", "AXIAL BALL BEARING"), row("C", "FESTO CYLINDER"), row("N", "NUT SCREW"), row("S", "SUCTION CUP")];
+    expect(link("SKF_6006-2RS_30x55x13", rows)).toBe("R");
+    expect(link("SKF_51107_35x52x12", rows)).toBe("X");
+    expect(link("559241_DSNU-20-40-PPS", rows)).toBe("C");
+    expect(link("JFRM-3244TR20x8P4", rows)).toBe("N");
+    expect(link("VASB-30", rows)).toBe("S");
+  });
+});
