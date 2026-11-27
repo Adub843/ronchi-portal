@@ -1,7 +1,7 @@
 // DEMO ONLY. Machine sales in the preview, with made-up customers, machines and values.
 // Follows routes/machine-sales.ts closely (same shared rules), without a server.
 import { DEAL_FIELDS, LINE, MONEY_FIELDS, NUMBER_FIELDS, SELLING, SOLD, isOpen, isStage, stageNeeds, type Stage } from "../../../src/shared/machine-sales";
-import { readMilestones } from "../../../src/shared/machine-orders";
+import { paymentAmount, readMilestones } from "../../../src/shared/machine-orders";
 import { QUOTE_FIELDS, nextStatuses, quoteNumber, quoteTotals, readQuoteLines, type QuoteLine } from "../../../src/shared/machine-quotes";
 
 export class MachineSalesFail extends Error {
@@ -28,7 +28,7 @@ function seed(c: Ctx) {
   let seq = 1000;
   const d = (stage: Stage, inStage: number, f: Row): Row => {
     const row: Row = { id: c.newId(), seq: ++seq, stage, stage_at: ago(inStage), prev_stage: null, funded: 0, revision: 1, removed_at: null, created_at: ago(inStage + 20), updated_at: ago(Math.min(inStage, 3)), created_by_name: "Andrew Yang", updated_by_name: "Andrew Yang", ...f };
-    if (SOLD.has(stage)) row.won_at = ago(inStage + 30);
+    if (SOLD.has(stage)) { row.won_at = ago(inStage + 30); row.created_at = ago(inStage + 30 + 240); }
     history.push({ deal: row.id, at: row.created_at, action: "machine_deal.create", who: "Andrew Yang", changes: { customer: [null, row.customer], stage: [null, "lead"] } });
     return row;
   };
@@ -132,6 +132,20 @@ export function machineSalesRoute(method: string, seg: string[], body: any, c: C
     all.push(d);
     history.unshift({ deal: d.id, at: t, action: "machine_deal.create", who: c.me.name, changes: { customer: [null, d.customer], stage: [null, stage] } });
     return { id: d.id, number: num(d.seq) };
+  }
+  if (seg[1] === "forecast" && method === "GET") {
+    need("machinesales.prices");
+    return { payments: miles.filter((m) => m.kind === "payment" && !m.done).map((m) => { const x = live.find((y) => y.id === m.deal)!; return { id: m.id, label: m.label, due: m.due, invoice_no: m.invoice_no, deal_id: x.id, number: num(x.seq), customer: x.customer, title: x.title, amount: paymentAmount(m as never, x.value) }; }).sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999")) };
+  }
+  if (seg[1] === "import" && method === "POST") {
+    need("machinesales.add");
+    const t = nowIso();
+    for (const r of body.rows as Row[]) {
+      const f = fields(r);
+      const stage = r.stage ? stageOf(r.stage, f) : "lead";
+      all.push({ id: c.newId(), seq: Math.max(1000, ...all.map((x) => x.seq)) + 1, funded: 0, ...f, stage, stage_at: t, prev_stage: null, revision: 1, removed_at: null, created_at: t, updated_at: t, won_at: SOLD.has(stage) ? t : null, created_by_name: c.me.name, updated_by_name: c.me.name });
+    }
+    return { ok: true, deals: body.rows.length };
   }
   const d = live.find((x) => x.id === seg[1]);
   if (!d) return fail(404, "Not found.");

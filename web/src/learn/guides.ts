@@ -711,6 +711,26 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
+    id: "machine-forecast", area: "machine-sales", needs: ["machinesales.view", "machinesales.prices"],
+    title: T("Read the machine sales forecast", "Leer el pronóstico de ventas de máquinas", "Leggere la previsione vendite macchine"),
+    summary: T("What should close this quarter, what ships when, and the payments still to come.", "Qué debería cerrarse este trimestre, qué se envía y cuándo, y los pagos por recibir.", "Cosa dovrebbe chiudersi questo trimestre, cosa parte e quando, e i pagamenti ancora da ricevere."),
+    steps: [
+      T("Open Machine sales and press Forecast. Each deal is listed under Won, Commit, Best case or Pipeline for the quarter its PO is expected in.", "Abra Ventas de máquinas y pulse Pronóstico. Cada negocio aparece en Ganado, Compromiso, Mejor caso o En curso para el trimestre en que se espera su orden.", "Apri Vendite macchine e premi Previsione. Ogni trattativa è elencata sotto Vinto, Impegno, Caso migliore o In corso per il trimestre in cui è atteso l'ordine."),
+      T("The column follows the deal's chance to close: 75% or better is Commit, 40% to 74% is Best case. Change a deal's chance or expected PO month on its page to move it.", "La columna sigue la probabilidad de cierre del negocio: 75% o más es Compromiso, 40% a 74% es Mejor caso. Cambie la probabilidad o el mes esperado de la orden en su página para moverlo.", "La colonna segue la probabilità di chiusura: 75% o più è Impegno, dal 40% al 74% è Caso migliore. Cambia la probabilità o il mese d'ordine previsto nella pagina della trattativa per spostarla."),
+      T("Below are the orders by ship month, the payments still to come with anything overdue in red, and how the last 12 months went.", "Abajo están los pedidos por mes de envío, los pagos por recibir con lo vencido en rojo, y cómo fueron los últimos 12 meses.", "Sotto ci sono gli ordini per mese di spedizione, i pagamenti da ricevere con gli scaduti in rosso, e l'andamento degli ultimi 12 mesi."),
+    ],
+  },
+  {
+    id: "import-machine-deals", area: "machine-sales", needs: ["machinesales.view", "machinesales.add"],
+    title: T("Import a sales list", "Importar una lista de ventas", "Importare un elenco vendite"),
+    summary: T("Bring the deals you track in a spreadsheet into Machine sales in one go.", "Traiga de una vez a Ventas de máquinas los negocios que lleva en una hoja de cálculo.", "Porta in una volta in Vendite macchine le trattative che segui in un foglio di calcolo."),
+    steps: [
+      T("Save the spreadsheet as CSV with a Customer column. Deal name, Value, Stage, Expected PO month and Salesperson are read when they are there.", "Guarde la hoja de cálculo como CSV con una columna Customer. Deal name, Value, Stage, Expected PO month y Salesperson se leen cuando están.", "Salva il foglio di calcolo come CSV con una colonna Customer. Deal name, Value, Stage, Expected PO month e Salesperson vengono lette se presenti."),
+      T("Open Machine sales, press Import a sales list, choose the file and check the count and any lines that could not be read.", "Abra Ventas de máquinas, pulse Importar una lista de ventas, elija el archivo y revise la cantidad y las líneas que no se pudieron leer.", "Apri Vendite macchine, premi Importa un elenco vendite, scegli il file e controlla il conteggio e le righe non lette."),
+      T("Press Import. Each line becomes a new deal; nothing already in the portal is changed.", "Pulse Importar. Cada línea se convierte en un negocio nuevo; no se cambia nada de lo que ya está en el portal.", "Premi Importa. Ogni riga diventa una nuova trattativa; nulla di ciò che è già nel portale viene modificato."),
+    ],
+  },
+  {
     id: "remove-machine-deal", area: "machine-sales", needs: ["machinesales.view", "machinesales.remove"],
     title: T("Remove a machine deal", "Quitar un negocio de máquina", "Rimuovere una trattativa macchina"),
     summary: T("Take a deal added by mistake off the list.", "Quite de la lista un negocio agregado por error.", "Togli dall'elenco una trattativa aggiunta per errore."),

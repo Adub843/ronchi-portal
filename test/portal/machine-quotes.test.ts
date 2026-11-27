@@ -121,3 +121,36 @@ describe("machine orders", () => {
     expect((await deal(andrew, made.data.id)).machines.some((x: any) => x.serial === "4998ZY")).toBe(true);
   });
 });
+
+describe("machine forecast and import", () => {
+  it("imports a sales list as new deals and says which line is wrong", async () => {
+    const andrew = await person("sales");
+    const before = (await andrew.json("/api/machine-sales")).data.deals.length;
+    const bad = await andrew.json("/api/machine-sales/import", { body: { rows: [{ customer: "Import One", value: "$400,000", stage: "firm_quote", expected_po: "2027-03" }, { customer: "Import Two", stage: "won" }] } });
+    expect(bad.status).toBe(400);
+    expect(bad.data.error).toMatch(/^Line 3: .*PO/);
+    expect((await andrew.json("/api/machine-sales")).data.deals.length).toBe(before); // nothing half-imported
+    const ok = await andrew.json("/api/machine-sales/import", { body: { rows: [{ customer: "Import One", title: "Filler", value: "$400,000", stage: "firm_quote", expected_po: "2027-03", owner: "Andrew" }, { customer: "Import Two", stage: "won", customer_po: "PO-1" }, { customer: "Import Three" }] } });
+    expect(ok.data).toEqual({ ok: true, deals: 3 });
+    const deals = (await andrew.json("/api/machine-sales")).data.deals;
+    expect(deals.find((d: any) => d.customer === "Import One")).toMatchObject({ value: 400000, stage: "firm_quote", expected_po: "2027-03", title: "Filler" });
+    expect(deals.find((d: any) => d.customer === "Import Two").won_at).toBeTruthy();
+    expect(deals.find((d: any) => d.customer === "Import Three").stage).toBe("lead");
+    expect(new Set(deals.map((d: any) => d.number)).size).toBe(deals.length);
+    expect((await (await person("tech")).fetch("/api/machine-sales/import", { body: { rows: [{ customer: "X" }] } })).status).toBe(403);
+  });
+
+  it("lists the payments still to come, only for people who may see deal values", async () => {
+    const andrew = await person("sales");
+    const made = await andrew.json("/api/machine-sales", { body: { customer: "Forecast Pay Co", value: 200000, customer_po: "PO-5", stage: "build" } });
+    const d = (await andrew.json(`/api/machine-sales/${made.data.id}`)).data;
+    await andrew.fetch(`/api/machine-sales/${made.data.id}/milestones`, { method: "PUT", body: { revision: d.deal.revision, payments: [{ label: "Deposit", pct: 40, done: "2026-01-05" }, { label: "Before shipment", pct: 50, due: "2027-02-01" }] } });
+    const f = await andrew.json("/api/machine-sales/forecast");
+    expect(f.status).toBe(200);
+    const mine = f.data.payments.filter((p: any) => p.deal_id === made.data.id);
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({ label: "Before shipment", due: "2027-02-01", amount: 100000, customer: "Forecast Pay Co" });
+    expect((await (await person("billing")).fetch("/api/machine-sales/forecast")).status).toBe(200);
+    for (const role of ["tech", "service", "scheduling"]) expect((await (await person(role)).fetch("/api/machine-sales/forecast")).status, role).toBe(403);
+  });
+});

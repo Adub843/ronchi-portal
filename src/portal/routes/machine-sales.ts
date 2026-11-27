@@ -10,13 +10,15 @@
 // Quotes (src/shared/machine-quotes.ts): revisions Q1, Q2 ... on a deal. Opening or building one needs
 // machinesales.prices; without it a person only sees that a quote exists, its status and dates.
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { randomId } from "../../shared/crypto";
 import {
   DATE_FIELDS, DAY, DEAL_FIELDS, DEAL_LABELS, DEAL_MAX, LINE, MONEY_FIELDS, MONTH, NOTE_KINDS, NUMBER_FIELDS, SELLING, SOLD,
   isOpen, isStage, stageNeeds, type DealField, type Stage,
 } from "../../shared/machine-sales";
 import { QUOTE_FIELDS, QUOTE_KINDS, QUOTE_LABELS, QUOTE_MAX, nextStatuses, quoteNumber, quoteTotals, readQuoteLines, type QuoteField, type QuoteLine, type QuoteStatus } from "../../shared/machine-quotes";
-import { readMilestones, type Milestone } from "../../shared/machine-orders";
+import { MAX_DEAL_IMPORT } from "../../shared/machine-forecast";
+import { paymentAmount, readMilestones, type Milestone } from "../../shared/machine-orders";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
 import { body, fail, has, requirePerm } from "../lib/http";
@@ -101,6 +103,22 @@ machineSales.get("/", async (c) => {
        FROM machine_deals WHERE removed_at IS NULL ORDER BY updated_at DESC LIMIT 2000`,
   ).all<Row>();
   return c.json({ deals: results.map((d) => shape(d, prices)) });
+});
+
+/**
+ * What the Forecast tab needs besides the deal list: the payments not yet in, with what each is worth.
+ * Only for people who may see deal values. (Registered before "/:id" so "forecast" isn't read as a deal.)
+ */
+machineSales.get("/forecast", async (c) => {
+  const u = requirePerm(c, "machinesales.view");
+  if (!has(u, "machinesales.prices")) fail(403, "Your role doesn't allow this.");
+  const { results } = await c.env.DB.prepare(
+    `SELECT m.id, m.label, m.due, m.pct, m.amount, m.invoice_no, d.id AS deal_id, d.seq, d.customer, d.title, d.value
+       FROM machine_deal_milestones m JOIN machine_deals d ON d.id = m.deal_id
+      WHERE m.kind = 'payment' AND m.done IS NULL AND d.removed_at IS NULL AND d.stage NOT IN ('lost', 'on_hold')
+      ORDER BY m.due IS NULL, m.due LIMIT 500`,
+  ).all<Row>();
+  return c.json({ payments: results.map((m) => ({ id: m.id, label: m.label, due: m.due, invoice_no: m.invoice_no, deal_id: m.deal_id, number: number(m.seq), customer: m.customer, title: m.title, amount: paymentAmount(m as never, m.value) })) });
 });
 
 machineSales.get("/:id", async (c) => {
@@ -444,4 +462,44 @@ machineSales.put("/:id/milestones", async (c) => {
   if (!r?.meta.changes) fail(409, "Someone else changed this deal while you were editing. Reload to see their changes.");
   if (Object.keys(changes).length) await audit(db, { userId: u.id, action: "machine_deal.update", targetType: "machine_deal", targetId: id, detail: { changes }, ip: c.get("ip") });
   return c.json({ ok: true, revision: rev });
+});
+
+// ---------- Import ----------
+
+/** Bring in a sales list from a spreadsheet: one new deal per line. Nothing already in the portal is changed. */
+machineSales.post("/import", async (c) => {
+  const u = requirePerm(c, "machinesales.add");
+  const db = c.env.DB;
+  const b = await body(c);
+  if (!Array.isArray(b.rows) || !b.rows.length) fail(400, "There is nothing to import.");
+  if (b.rows.length > MAX_DEAL_IMPORT) fail(400, `Import up to ${MAX_DEAL_IMPORT} deals at a time.`);
+  const prices = has(u, "machinesales.prices");
+  const t = now();
+  const made: { row: Row; stage: Stage }[] = [];
+  for (const [i, raw] of (b.rows as unknown[]).entries()) {
+    const x = (raw && typeof raw === "object" ? raw : {}) as Row;
+    try {
+      const f = clean(x, prices);
+      if (!f.customer) fail(400, "Customer is required.");
+      made.push({ row: f, stage: x.stage === undefined || x.stage === "" ? "lead" : stageOf(x.stage, f) });
+    } catch (e) {
+      // Say which line of the spreadsheet is wrong (line 1 is the headings).
+      const why = e instanceof HTTPException && e.res ? ((await e.res.clone().json()) as { error?: string }).error : null;
+      fail(400, `Line ${i + 2}: ${why ?? "couldn't be read."}`);
+    }
+  }
+  let seq = (await db.prepare("SELECT COALESCE(MAX(seq), 1000) AS n FROM machine_deals").first<{ n: number }>())!.n;
+  const stmts: D1PreparedStatement[] = [];
+  for (const { row: f, stage } of made) {
+    const row: Row = { ...f, stage, stage_at: t, funded: f.funded ?? 0 };
+    if (SOLD.has(stage)) row.won_at = t;
+    if (stage === "paid") row.closed_at = t;
+    if (stage === "lost") row.lost_at = t;
+    const keys = Object.keys(row);
+    stmts.push(db.prepare(`INSERT INTO machine_deals (id, seq, ${keys.join(", ")}, created_by, updated_by, created_at, updated_at) VALUES (?, ?, ${keys.map(() => "?").join(", ")}, ?, ?, ?, ?)`)
+      .bind(randomId(), ++seq, ...keys.map((k) => row[k] ?? null), u.id, u.id, t, t));
+  }
+  for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50));
+  await audit(db, { userId: u.id, action: "machine_deal.import", targetType: "machine_deal", targetId: "import", detail: { deals: made.length }, ip: c.get("ip") });
+  return c.json({ ok: true, deals: made.length });
 });
