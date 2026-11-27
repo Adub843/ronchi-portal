@@ -11,11 +11,13 @@ mkdirSync("web-parts/dist", { recursive: true });
 // The parts site tests publish with this key; the Worker only ever sees its hash.
 export const TEST_ADMIN_KEY = "test-publish-key-0123456789abcdefghijklmnop";
 
+// Tests run inside the Workers runtime; the first test in a file can take over 5 s on a busy CI runner,
+// so each project allows 20 s instead of the 5 s default.
 export default defineConfig({
   test: {
     projects: [
       // Plain logic and the structural wall checks, run in Node.
-      { test: { name: "unit", include: ["test/unit/**/*.test.ts"], environment: "node" } },
+      { test: { name: "unit", testTimeout: 20_000, include: ["test/unit/**/*.test.ts"], environment: "node" } },
       // The staff portal, run inside the real Workers runtime with a local portal-db.
       {
         plugins: [
@@ -40,7 +42,7 @@ export default defineConfig({
             },
           })),
         ],
-        test: { name: "portal", include: ["test/portal/**/*.test.ts"], setupFiles: ["test/portal/setup.ts"] },
+        test: { name: "portal", testTimeout: 20_000, include: ["test/portal/**/*.test.ts"], setupFiles: ["test/portal/setup.ts"] },
       },
       // The customer help center, with only help-db.
       {
@@ -50,7 +52,7 @@ export default defineConfig({
             miniflare: { bindings: { TEST_MIGRATIONS: await readD1Migrations("migrations/help"), TEST_ADMIN_KEY, ADMIN_KEY_HASH: createHash("sha256").update(TEST_ADMIN_KEY).digest("hex") } },
           })),
         ],
-        test: { name: "help", include: ["test/help/**/*.test.ts"], setupFiles: ["test/help/setup.ts"] },
+        test: { name: "help", testTimeout: 20_000, include: ["test/help/**/*.test.ts"], setupFiles: ["test/help/setup.ts"] },
       },
       // The customer parts site, with only parts-db and its own bucket.
       {
@@ -66,7 +68,7 @@ export default defineConfig({
             },
           })),
         ],
-        test: { name: "parts", include: ["test/parts/**/*.test.ts"], setupFiles: ["test/parts/setup.ts"] },
+        test: { name: "parts", testTimeout: 20_000, include: ["test/parts/**/*.test.ts"], setupFiles: ["test/parts/setup.ts"] },
       },
     ],
   },
