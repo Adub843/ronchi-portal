@@ -3,9 +3,10 @@
 // per deal with its stage bar, what's due, facts and timeline. Stages and rules: src/shared/machine-sales.ts.
 import { useMemo, useState } from "react";
 import {
-  BOARD, DEAL_LABELS, FLAG_LABELS, LEAD_SOURCES, LINE, NOTE_KINDS, NOTE_LABELS, ORDERS, QUOTED, SELLING, STAGE_DAYS, STAGE_LABELS, STAGES,
+  BOARD, DEAL_LABELS, FLAG_LABELS, LEAD_SOURCES, LINE, NOTE_KINDS, NOTE_LABELS, ORDERS, QUOTED, SELLING, SOLD, STAGE_DAYS, STAGE_LABELS, STAGES,
   chanceOf, daysSince, flags, isOpen, stageNeeds, weighted, type DealField, type FlagId, type Stage,
 } from "../../../src/shared/machine-sales";
+import { USUAL_DATES, milestoneLate, paymentAmount, paymentTotals } from "../../../src/shared/machine-orders";
 import { QUOTE_KIND_LABELS, type QuoteKind } from "../../../src/shared/machine-quotes";
 import { api, can, fmtTime, type Me } from "../api";
 import { QuoteStatusPill } from "./MachineQuote";
@@ -124,7 +125,7 @@ export function MachineSales({ me, tab }: { me: Me; tab?: string }) {
           {!shown.length && <Empty>{t("No deals match.")}</Empty>}
           {!!shown.length && (
             <table className="cp-table">
-              <thead><tr><th>{t("Deal")}</th><th>{t("Customer")}</th><th>{t("Machine")}</th><th>{t("Stage")}</th>{prices && <th className="num">{t("Value")}</th>}<th>{view === "orders" ? t("Target ship date") : t("Expected PO month")}</th><th>{t("Salesperson")}</th><th>{t("Next step")}</th></tr></thead>
+              <thead><tr><th>{t("Deal")}</th><th>{t("Customer")}</th><th>{t("Machine")}</th><th>{t("Stage")}</th>{prices && <th className="num">{t("Value")}</th>}<th>{view === "orders" ? t("Target ship date") : t("Expected PO month")}</th>{view === "orders" && <th>{t("Next date or payment")}</th>}<th>{t("Salesperson")}</th><th>{t("Next step")}</th></tr></thead>
               <tbody>
                 {shown.map((d) => (
                   <tr key={d.id} className="click" onClick={() => navigate(`/machine-sales/${d.id}`)}>
@@ -134,6 +135,7 @@ export function MachineSales({ me, tab }: { me: Me; tab?: string }) {
                     <td><StagePill stage={d.stage} /> <Flags deal={d} /></td>
                     {prices && <td className="num">{money(d.value)}</td>}
                     <td>{view === "orders" ? day(d.target_ship) : month(d.expected_po)}</td>
+                    {view === "orders" && <td className={d.next_milestone && d.next_milestone < today() ? "mo-late" : ""}>{day(d.next_milestone)}</td>}
                     <td>{d.owner ?? "–"}</td>
                     <td>{d.stage === "on_hold" ? t("Reconnect on {d}", { d: day(d.hold_until) }) : d.stage === "lost" ? (d.lost_reason ?? "–") : d.next_step ? `${d.next_step}${d.next_step_date ? ` · ${day(d.next_step_date)}` : ""}` : "–"}</td>
                   </tr>
@@ -167,7 +169,7 @@ function Card({ deal: d, prices }: { deal: Row; prices: boolean }) {
 // ---------- One deal ----------
 
 export function MachineDealPage({ id, me }: { id: string; me: Me }) {
-  const { data, error, reload } = useLoad<{ deal: Row; notes: Row[]; history: Row[]; machines: Row[]; quotes?: Row[] }>(() => api(`/machine-sales/${enc(id)}`), [id]);
+  const { data, error, reload } = useLoad<{ deal: Row; notes: Row[]; history: Row[]; machines: Row[]; quotes?: Row[]; dates?: Row[]; payments?: Row[] }>(() => api(`/machine-sales/${enc(id)}`), [id]);
   const [editing, setEditing] = useState(false);
   const [move, setMove] = useState<Stage | null>(null);
   const [need, setNeed] = useState("");
@@ -185,8 +187,9 @@ export function MachineDealPage({ id, me }: { id: string; me: Me }) {
   async function patch(b: Record<string, unknown>, done?: string) {
     setBusy(true);
     try {
-      await api(`/machine-sales/${enc(id)}`, { method: "PATCH", body: { ...b, revision: d.revision } });
-      if (done) toast(done);
+      const r = await api<{ machine_added?: string | null }>(`/machine-sales/${enc(id)}`, { method: "PATCH", body: { ...b, revision: d.revision } });
+      if (r.machine_added) toast(t("Machine {n} was added to Machines.", { n: r.machine_added }));
+      else if (done) toast(done);
       setMove(null);
       setNeed("");
       reload();
@@ -258,7 +261,7 @@ export function MachineDealPage({ id, me }: { id: string; me: Me }) {
     ...data.history.filter((h) => h.action !== "machine_deal.note").map((h) => ({ at: h.at as string, who: h.who as string | null, kind: h.action === "machine_deal.create" ? "created" : h.action === "machine_deal.quote" ? "quote" : "changed", body: h.action === "machine_deal.quote" ? `${h.quote ?? ""}: ${t(QUOTE_EVENTS[h.status as string] ?? "Changed")}` : "", changes: h.changes as Row | null })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   const fact = (label: string, value: React.ReactNode) => <div className="ms-fact"><dt>{label}</dt><dd>{value || "–"}</dd></div>;
-  const histLabel = (k: string) => k === "stage" ? t("Stage") : k in DEAL_LABELS ? L(k as DealField) : k;
+  const histLabel = (k: string) => k === "stage" ? t("Stage") : k === "order_dates" ? t("Order dates") : k === "payments" ? t("Payments") : k === "machine_added" ? t("Added to Machines") : k in DEAL_LABELS ? L(k as DealField) : k;
   const histValue = (k: string, v: unknown) => v == null || v === "" ? "–" : k === "stage" ? S(String(v)) : k === "value" ? t("Changed") : k === "funded" ? (v ? t("Yes") : t("No")) : String(v);
 
   return (
@@ -324,6 +327,9 @@ export function MachineDealPage({ id, me }: { id: string; me: Me }) {
         </div>
 
         <div className="stack">
+          {(SOLD.has(d.stage) || !!data.dates?.length || !!data.payments?.length) && (
+            <OrderPlan key={d.revision} id={id} deal={d} dates={data.dates ?? []} payments={data.payments ?? []} edit={edit} prices={prices} onSaved={reload} />
+          )}
           <div className={`panel ms-due${fs.length ? " warn" : ""}`}>
             <h2>{t("What's due")}</h2>
             {d.next_step ? <p><strong>{d.next_step}</strong>{d.next_step_date ? ` · ${day(d.next_step_date)}` : ""}</p> : <p className="muted">{isOpen(d.stage) && d.stage !== "on_hold" ? t("No next step yet. Log a call or visit below and set one.") : t("Nothing due.")}</p>}
@@ -390,6 +396,106 @@ export function MachineDealPage({ id, me }: { id: string; me: Me }) {
         </div>
       </div>
     </>
+  );
+}
+
+// ---------- Order dates and payments (after the customer's PO) ----------
+
+type Mile = { id?: string; label: string; due: string; done: string; pct: string; amount: string; invoice_no: string };
+const toMile = (m: Row): Mile => ({ id: m.id, label: m.label ?? "", due: m.due ?? "", done: m.done ?? "", pct: m.pct == null ? "" : String(m.pct), amount: m.amount == null ? "" : String(m.amount), invoice_no: m.invoice_no ?? "" });
+const newMile = (label = ""): Mile => ({ label, due: "", done: "", pct: "", amount: "", invoice_no: "" });
+
+function OrderPlan({ id, deal: d, dates: d0, payments: p0, edit, prices, onSaved }: { id: string; deal: Row; dates: Row[]; payments: Row[]; edit: boolean; prices: boolean; onSaved: () => void }) {
+  const [dates, setDates] = useState<Mile[]>(() => d0.map(toMile));
+  const [pays, setPays] = useState<Mile[]>(() => p0.map(toMile));
+  const [dirty, setDirty] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const now = today();
+  const mayPay = edit && prices;
+  const change = (list: Mile[], setList: (l: Mile[]) => void, i: number, k: keyof Mile, v: string) => { setList(list.map((m, j) => (j === i ? { ...m, [k]: v } : m))); setDirty(true); };
+  const num = (v: string) => (v === "" ? null : Number(v.replace(/[$,%\s]/g, "")));
+  const totals = paymentTotals(pays.map((p) => ({ pct: num(p.pct), amount: num(p.amount), due: p.due || null, done: p.done || null })), d.value, now);
+
+  async function save() {
+    setBusy(true);
+    try {
+      const clean = (l: Mile[]) => l.filter((m) => m.label.trim()).map((m) => ({ label: m.label, due: m.due || null, done: m.done || null, pct: m.pct, amount: m.amount, invoice_no: m.invoice_no }));
+      await api(`/machine-sales/${enc(id)}/milestones`, { method: "PUT", body: { revision: d.revision, dates: clean(dates), ...(mayPay ? { payments: clean(pays) } : {}) } });
+      toast(t("Saved"));
+      onSaved();
+    } catch (x) {
+      toast((x as Error).message);
+      if ((x as { status?: number }).status === 409) onSaved();
+    } finally {
+      setBusy(false);
+    }
+  }
+  const state = (m: Mile) => m.done ? <span className="pill p-ok">{t("Done")}</span> : milestoneLate({ due: m.due || null, done: null }, now) ? <span className="pill p-acc">{t("Late")}</span> : null;
+
+  return (
+    <div className="panel mo">
+      <div className="row">
+        <h2>{t("Order dates and payments")}</h2>
+        <span className="spacer" />
+        {edit && dirty && <button type="button" className="btn primary" disabled={busy} onClick={save}>{t("Save")}</button>}
+      </div>
+      <h3>{t("Order dates")}</h3>
+      {!dates.length && <p className="muted">{t("No order dates yet.")}</p>}
+      {!!dates.length && (
+        <table className="mo-table">
+          <thead><tr><th>{t("What")}</th><th>{t("Planned")}</th><th>{t("Happened on")}</th><th /></tr></thead>
+          <tbody>
+            {dates.map((m, i) => edit ? (
+              <tr key={i}>
+                <td><input value={m.label} aria-label={t("What")} onChange={(e) => change(dates, setDates, i, "label", e.target.value)} /></td>
+                <td><input type="date" value={m.due} aria-label={t("Planned")} onChange={(e) => change(dates, setDates, i, "due", e.target.value)} /></td>
+                <td><input type="date" value={m.done} aria-label={t("Happened on")} onChange={(e) => change(dates, setDates, i, "done", e.target.value)} /></td>
+                <td>{state(m)} <button type="button" className="btn" aria-label={t("Remove line")} onClick={() => { setDates(dates.filter((_, j) => j !== i)); setDirty(true); }}>×</button></td>
+              </tr>
+            ) : (
+              <tr key={i}><td>{m.label}</td><td>{day(m.due)}</td><td>{day(m.done)}</td><td>{state(m)}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {edit && (
+        <p className="row mo-add">
+          {!dates.length && <button type="button" className="btn" onClick={() => { setDates(USUAL_DATES.map((l) => newMile(t(l)))); setDirty(true); }}>{t("Add the usual dates")}</button>}
+          <button type="button" className="btn" onClick={() => { setDates([...dates, newMile()]); setDirty(true); }}>{t("Add a date")}</button>
+        </p>
+      )}
+
+      <h3>{t("Payments")}</h3>
+      {!pays.length && <p className="muted">{t("No payments listed yet.")}</p>}
+      {!!pays.length && (
+        <table className="mo-table">
+          <thead><tr><th>{t("Payment")}</th>{prices && <><th className="num">%</th><th className="num">{t("Amount")}</th></>}<th>{t("Due")}</th>{prices && <th>{t("Invoice #")}</th>}<th>{t("Paid on")}</th><th /></tr></thead>
+          <tbody>
+            {pays.map((m, i) => mayPay ? (
+              <tr key={i}>
+                <td><input value={m.label} aria-label={t("Payment")} placeholder={t("For example: Deposit")} onChange={(e) => change(pays, setPays, i, "label", e.target.value)} /></td>
+                <td className="num"><input className="mq-n" inputMode="decimal" value={m.pct} aria-label="%" onChange={(e) => change(pays, setPays, i, "pct", e.target.value)} /></td>
+                <td className="num"><input className="mq-p" inputMode="decimal" value={m.amount} aria-label={t("Amount")} placeholder={m.pct && d.value != null ? money(paymentAmount({ pct: num(m.pct), amount: null }, d.value)) : ""} onChange={(e) => change(pays, setPays, i, "amount", e.target.value)} /></td>
+                <td><input type="date" value={m.due} aria-label={t("Due")} onChange={(e) => change(pays, setPays, i, "due", e.target.value)} /></td>
+                <td><input className="mq-p" value={m.invoice_no} aria-label={t("Invoice #")} onChange={(e) => change(pays, setPays, i, "invoice_no", e.target.value)} /></td>
+                <td><input type="date" value={m.done} aria-label={t("Paid on")} onChange={(e) => change(pays, setPays, i, "done", e.target.value)} /></td>
+                <td>{state(m)} <button type="button" className="btn" aria-label={t("Remove line")} onClick={() => { setPays(pays.filter((_, j) => j !== i)); setDirty(true); }}>×</button></td>
+              </tr>
+            ) : (
+              <tr key={i}><td>{m.label}</td>{prices && <><td className="num">{m.pct ? `${m.pct}%` : "–"}</td><td className="num">{money(paymentAmount({ pct: num(m.pct), amount: num(m.amount) }, d.value))}</td></>}<td>{day(m.due)}</td>{prices && <td>{m.invoice_no || "–"}</td>}<td>{day(m.done)}</td><td>{state(m)}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {mayPay && <p className="row mo-add"><button type="button" className="btn" onClick={() => { setPays([...pays, newMile()]); setDirty(true); }}>{t("Add a payment")}</button></p>}
+      {prices && !!pays.length && (
+        <p className="muted mo-sum">
+          {t("Paid {a} of {b}.", { a: money(totals.paid), b: money(totals.planned) })}
+          {totals.overdue ? <strong className="mo-late"> {t("{n} is overdue.", { n: money(totals.overdue) })}</strong> : null}
+          {totals.unplanned != null && Math.abs(totals.unplanned) >= 1 ? ` ${t("The payments differ from the deal's value by {n}.", { n: money(Math.abs(totals.unplanned)) })}` : ""}
+        </p>
+      )}
+    </div>
   );
 }
 

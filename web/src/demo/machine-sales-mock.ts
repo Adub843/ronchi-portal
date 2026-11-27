@@ -1,6 +1,7 @@
 // DEMO ONLY. Machine sales in the preview, with made-up customers, machines and values.
 // Follows routes/machine-sales.ts closely (same shared rules), without a server.
 import { DEAL_FIELDS, LINE, MONEY_FIELDS, NUMBER_FIELDS, SELLING, SOLD, isOpen, isStage, stageNeeds, type Stage } from "../../../src/shared/machine-sales";
+import { readMilestones } from "../../../src/shared/machine-orders";
 import { QUOTE_FIELDS, nextStatuses, quoteNumber, quoteTotals, readQuoteLines, type QuoteLine } from "../../../src/shared/machine-quotes";
 
 export class MachineSalesFail extends Error {
@@ -17,6 +18,7 @@ let deals: Row[] | null = null;
 let notes: Row[] = [];
 let history: Row[] = [];
 let quotes: Row[] = [];
+let miles: Row[] = [];
 const nowIso = () => new Date().toISOString();
 const day = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 const ym = (n: number) => { const d = new Date(); d.setMonth(d.getMonth() + n); return d.toISOString().slice(0, 7); };
@@ -45,6 +47,16 @@ function seed(c: Ctx) {
     { ...d("lost", 70, { customer: "Example Snacks", site: "Dallas, TX", title: "Dry seasoning filler", value: 350000, owner: "Andrew Yang", lost_reason: "Project cancelled", competitor: null }), prev_stage: "firm_quote", lost_at: ago(70) },
     { ...d("paid", 120, { customer: "Example Foods Inc.", site: "Atlanta, GA", title: "Capper, 8 heads", value: 510000, owner: "Andrew Yang", customer_po: "EF-80112", funded: 1, machine: "4222TP" }), closed_at: ago(120) },
   ];
+  const build = deals.find((x) => x.stage === "build")!;
+  miles = [
+    { id: c.newId(), deal: build.id, kind: "date", label: "Engineering approved", due: day(-40), done: day(-38) },
+    { id: c.newId(), deal: build.id, kind: "date", label: "Factory acceptance test (FAT)", due: day(45), done: null },
+    { id: c.newId(), deal: build.id, kind: "date", label: "Shipped", due: day(75), done: null },
+    { id: c.newId(), deal: build.id, kind: "date", label: "Installed and started up (SAT)", due: day(110), done: null },
+    { id: c.newId(), deal: build.id, kind: "payment", label: "Deposit with order", pct: 40, amount: null, due: day(-55), done: day(-50), invoice_no: "EX-1001" },
+    { id: c.newId(), deal: build.id, kind: "payment", label: "Before shipment", pct: 50, amount: null, due: day(60), done: null, invoice_no: null },
+    { id: c.newId(), deal: build.id, kind: "payment", label: "After start-up", pct: 10, amount: null, due: day(130), done: null, invoice_no: null },
+  ];
   const firm = deals.find((x) => x.stage === "firm_quote")!;
   const firmLines: QuoteLine[] = [
     { description: "EXACTA monoblock filler capper, 16 heads", detail: "For 500 ml and 1 L round bottles at 160 a minute. Change parts for both formats included.", origin: "italy", qty: 1, unit_price: 905000, optional: false },
@@ -65,7 +77,8 @@ function seed(c: Ctx) {
 
 const num = (seq: number) => `M-${seq}`;
 const shape = (d: Row, prices: boolean) => {
-  const out: Row = { ...d, number: num(d.seq), funded: !!d.funded, open: isOpen(d.stage) };
+  const next = miles.filter((m) => m.deal === d.id && !m.done && m.due).map((m) => m.due as string).sort()[0] ?? null;
+  const out: Row = { ...d, number: num(d.seq), funded: !!d.funded, open: isOpen(d.stage), next_milestone: next };
   if (!prices) for (const k of MONEY_FIELDS) delete out[k];
   return out;
 };
@@ -80,6 +93,7 @@ export function resetMachineSales() {
   notes = [];
   history = [];
   quotes = [];
+  miles = [];
 }
 
 export function machineSalesRoute(method: string, seg: string[], body: any, c: Ctx): any {
@@ -184,6 +198,21 @@ export function machineSalesRoute(method: string, seg: string[], body: any, c: C
     }
     return fail(404, "Not found.");
   }
+  if (seg[2] === "milestones" && method === "PUT") {
+    need("machinesales.edit");
+    if (body.revision !== d.revision) fail(409, "Someone else changed this deal while you were editing. Reload to see their changes.");
+    for (const kind of ["date", "payment"] as const) {
+      const raw = body[kind === "date" ? "dates" : "payments"];
+      if (raw === undefined) continue;
+      if (kind === "payment") need("machinesales.prices");
+      const r = readMilestones(raw, kind);
+      if (r.problem !== undefined) return fail(400, r.problem);
+      miles = [...miles.filter((m) => !(m.deal === d.id && m.kind === kind)), ...r.list.map((m) => ({ ...m, id: c.newId(), deal: d.id }))];
+    }
+    d.revision++;
+    d.updated_at = nowIso();
+    return { ok: true, revision: d.revision };
+  }
   if (seg[2] === "notes" && method === "POST") {
     need("machinesales.edit");
     if (!String(body.body ?? "").trim()) fail(400, "Write what happened.");
@@ -197,6 +226,8 @@ export function machineSalesRoute(method: string, seg: string[], body: any, c: C
       notes: notes.filter((n) => n.deal === d.id),
       history: history.filter((h) => h.deal === d.id),
       machines: c.perms.has("machines.view") ? c.machines(d.customer) : [],
+      dates: miles.filter((m) => m.deal === d.id && m.kind === "date").map((m) => ({ id: m.id, label: m.label, due: m.due, done: m.done })),
+      payments: miles.filter((m) => m.deal === d.id && m.kind === "payment").map((m) => (prices ? { id: m.id, label: m.label, due: m.due, done: m.done, pct: m.pct, amount: m.amount, invoice_no: m.invoice_no } : { id: m.id, label: m.label, due: m.due, done: m.done })),
       quotes: quotes.filter((x) => x.deal === d.id && !x.removed).sort((a, b) => b.rev - a.rev).map((x) => shapeQuote(x, d, prices)),
     };
   }
