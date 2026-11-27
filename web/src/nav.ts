@@ -19,6 +19,7 @@ export const NAV: NavItem[] = [
   { to: "/kb", label: "Knowledge base", group: "Service", perm: "kb.view" },
   { to: "/machines", label: "Machines", group: "Machines", perm: "machines.view" },
   { to: "/catalog", label: "Parts catalog", group: "Machines", perm: "catalog.view" },
+  { to: "/machine-sales", label: "Machine sales", group: "Sales", perm: "machinesales.view" },
   // Sales people and order people both use it, so either permission shows it.
   { to: "/change-parts", label: "Change parts", group: "Sales", perm: "orders.view|cpsales.view" },
   { to: "/parts-orders", label: "Parts orders", group: "Sales", perm: "partsorders.view" },

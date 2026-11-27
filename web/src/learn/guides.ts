@@ -92,6 +92,11 @@ export const AREAS: Area[] = [
     blurb: T("Every change-part job, from the first request to shipped: the sale, then the order.", "Cada trabajo de cambio de formato, de la primera solicitud al envío: la venta y luego el pedido.", "Ogni lavoro di cambio formato, dalla prima richiesta alla spedizione: la vendita, poi l'ordine."),
   },
   {
+    id: "machine-sales", paths: ["/machine-sales"],
+    title: T("Machine sales", "Ventas de máquinas", "Vendite macchine"),
+    blurb: T("New-machine deals, from the first call to a machine running on the customer's line.", "Negocios de máquinas nuevas, desde la primera llamada hasta la máquina funcionando en la línea del cliente.", "Trattative per macchine nuove, dalla prima chiamata alla macchina in funzione sulla linea del cliente."),
+  },
+  {
     id: "parts-orders", paths: ["/parts-orders"],
     title: T("Parts orders", "Pedidos de repuestos", "Ordini ricambi"),
     blurb: T("Spare parts sales, from the customer's first ask to the invoice.", "Ventas de repuestos, desde la primera consulta del cliente hasta la factura.", "Vendite di ricambi, dalla prima richiesta del cliente alla fattura."),
@@ -642,6 +647,59 @@ export const GUIDES: Guide[] = [
       T("In Excel, open the sheet and use File, Save As, CSV.", "En Excel, abra la hoja y use Archivo, Guardar como, CSV.", "In Excel apri il foglio e usa File, Salva con nome, CSV."),
       T("In Change parts press Import CSV and choose the file.", "En Cambio de formato pulse Importar CSV y elija el archivo.", "In Cambio formato premi Importa CSV e scegli il file."),
       T("Check what was found. Orders already here are skipped. Press Add to bring in the rest.", "Revise lo encontrado. Los pedidos que ya existen se omiten. Pulse Agregar para traer el resto.", "Controlla cosa è stato trovato. Gli ordini già presenti vengono saltati. Premi Aggiungi per importare il resto."),
+    ],
+  },
+
+  // ---------- Machine sales ----------
+  {
+    id: "view-machine-deals", area: "machine-sales", needs: ["machinesales.view"],
+    title: T("Follow machine deals", "Seguir los negocios de máquinas", "Seguire le trattative macchine"),
+    summary: T("See every new-machine deal and where it stands.", "Vea cada negocio de máquina nueva y en qué punto está.", "Vedi ogni trattativa per una macchina nuova e a che punto è."),
+    steps: [
+      T("Open Sales, then Machine sales. The board has one column for each stage of the sale, from Lead to Won.", "Abra Ventas y luego Ventas de máquinas. El tablero tiene una columna por cada etapa de la venta, de Prospecto a Ganado.", "Apri Vendite, poi Vendite macchine. La bacheca ha una colonna per ogni fase della vendita, da Contatto a Vinta."),
+      T("A card with a red edge has sat in its stage too long. A red label says what is missing, such as No next step.", "Una tarjeta con borde rojo lleva demasiado tiempo en su etapa. Una etiqueta roja dice qué falta, como Sin siguiente paso.", "Una scheda con il bordo rosso è ferma da troppo tempo nella sua fase. Un'etichetta rossa dice cosa manca, come Nessun prossimo passo."),
+      T("Press Orders for machines that are sold and being built, On hold for postponed deals, and Closed for finished or lost ones.", "Pulse Pedidos para las máquinas vendidas y en fabricación, En espera para los negocios pospuestos y Cerrados para los terminados o perdidos.", "Premi Ordini per le macchine vendute e in costruzione, In sospeso per le trattative rimandate e Chiuse per quelle concluse o perse."),
+      T("Open a deal to see its stage bar, what's due, its facts and its timeline.", "Abra un negocio para ver su barra de etapas, qué toca, sus datos y su cronología.", "Apri una trattativa per vedere la barra delle fasi, cosa c'è da fare, i dati e la cronologia."),
+    ],
+  },
+  {
+    id: "add-machine-deal", area: "machine-sales", needs: ["machinesales.view", "machinesales.add"],
+    title: T("Start a machine deal", "Iniciar un negocio de máquina", "Avviare una trattativa macchina"),
+    summary: T("Add a new lead or a deal already under way.", "Agregue un prospecto nuevo o un negocio ya en marcha.", "Aggiungi un nuovo contatto o una trattativa già avviata."),
+    steps: [
+      T("Open Machine sales and press New deal.", "Abra Ventas de máquinas y pulse Nuevo negocio.", "Apri Vendite macchine e premi Nuova trattativa."),
+      T("Type the customer, the machine, the expected PO month and the salesperson. Pick the stage it is at now.", "Escriba el cliente, la máquina, el mes esperado de la OC y el vendedor. Elija la etapa en la que está ahora.", "Scrivi il cliente, la macchina, il mese previsto dell'ordine e il venditore. Scegli la fase in cui si trova ora."),
+      T("Set a next step with a date, so the deal never sits without one. Press Add deal.", "Ponga un siguiente paso con fecha, para que el negocio nunca quede sin uno. Pulse Agregar negocio.", "Imposta un prossimo passo con una data, così la trattativa non resta mai senza. Premi Aggiungi trattativa."),
+    ],
+  },
+  {
+    id: "work-machine-deal", area: "machine-sales", needs: ["machinesales.view", "machinesales.edit"],
+    title: T("Move a deal along and log calls", "Avanzar un negocio y registrar llamadas", "Far avanzare una trattativa e registrare le chiamate"),
+    summary: T("Change the stage, log what happened and set the next step.", "Cambie la etapa, registre lo que pasó y ponga el siguiente paso.", "Cambia la fase, registra cos'è successo e imposta il prossimo passo."),
+    steps: [
+      T("Open the deal. Press a stage on the bar to move it there. Moving to Won asks for the customer's PO number.", "Abra el negocio. Pulse una etapa en la barra para moverlo allí. Pasar a Ganado pide el número de OC del cliente.", "Apri la trattativa. Premi una fase sulla barra per spostarla lì. Passare a Vinta chiede il numero d'ordine del cliente."),
+      T("After a call or visit, pick Call or Visit under Log a call, visit or note, write what happened, set the next step and its date, and press Log it.", "Después de una llamada o visita, elija Llamada o Visita en Registrar una llamada, visita o nota, escriba lo que pasó, ponga el siguiente paso y su fecha, y pulse Registrar.", "Dopo una chiamata o visita, scegli Chiamata o Visita in Registra una chiamata, visita o nota, scrivi cos'è successo, imposta il prossimo passo e la data, e premi Registra."),
+      T("Press Put on hold when a project is postponed and pick the date to reconnect. Press Mark lost and say why when the customer buys elsewhere.", "Pulse Poner en espera cuando un proyecto se pospone y elija la fecha para retomar el contacto. Pulse Marcar como perdido y diga por qué cuando el cliente compra en otro lado.", "Premi Metti in sospeso quando un progetto viene rimandato e scegli la data per ricontattare. Premi Segna come persa e indica perché quando il cliente compra altrove."),
+      T("Press Edit to change any other detail.", "Pulse Editar para cambiar cualquier otro dato.", "Premi Modifica per cambiare qualsiasi altro dato."),
+    ],
+  },
+  {
+    id: "remove-machine-deal", area: "machine-sales", needs: ["machinesales.view", "machinesales.remove"],
+    title: T("Remove a machine deal", "Quitar un negocio de máquina", "Rimuovere una trattativa macchina"),
+    summary: T("Take a deal added by mistake off the list.", "Quite de la lista un negocio agregado por error.", "Togli dall'elenco una trattativa aggiunta per errore."),
+    steps: [
+      T("Open the deal and press Remove, then press it again to confirm.", "Abra el negocio y pulse Quitar, luego púlselo otra vez para confirmar.", "Apri la trattativa e premi Rimuovi, poi premilo di nuovo per confermare."),
+      T("A deal the customer turned down is not removed: press Mark lost, so it stays in the record.", "Un negocio que el cliente rechazó no se quita: pulse Marcar como perdido, para que quede en el registro.", "Una trattativa rifiutata dal cliente non si rimuove: premi Segna come persa, così resta nel registro."),
+    ],
+  },
+  {
+    id: "machine-deal-values", area: "machine-sales", needs: ["machinesales.view", "machinesales.prices"],
+    title: T("See what the pipeline is worth", "Ver cuánto vale el embudo", "Vedere quanto vale la pipeline"),
+    summary: T("Deal values, open value and weighted value.", "Valores de los negocios, valor abierto y valor ponderado.", "Valori delle trattative, valore aperto e valore ponderato."),
+    steps: [
+      T("Open Machine sales. The boxes at the top show the open value and the weighted value of the deals being sold.", "Abra Ventas de máquinas. Los cuadros de arriba muestran el valor abierto y el valor ponderado de los negocios en venta.", "Apri Vendite macchine. I riquadri in alto mostrano il valore aperto e il valore ponderato delle trattative in corso."),
+      T("The weighted value counts each deal by its chance to close. Each stage has a usual chance, and you can type your own on the deal.", "El valor ponderado cuenta cada negocio según su probabilidad de cierre. Cada etapa tiene una probabilidad habitual, y usted puede escribir la suya en el negocio.", "Il valore ponderato conta ogni trattativa secondo la sua probabilità di chiusura. Ogni fase ha una probabilità abituale, e puoi scrivere la tua nella trattativa."),
+      T("People without this access see the same deals with no dollar amounts.", "Las personas sin este acceso ven los mismos negocios sin importes en dólares.", "Le persone senza questo accesso vedono le stesse trattative senza importi in dollari."),
     ],
   },
 

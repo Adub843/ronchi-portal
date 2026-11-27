@@ -25,6 +25,7 @@ export const SECTIONS = {
   customers: { label: "Customers and quote requests", perms: ["customers.manage", "customers.invite", "quotes.manage"] },
   cpSales: { label: "Change-part sales", perms: ["cpsales.view", "cpsales.edit"] },
   changeParts: { label: "Change parts", perms: ["orders.view", "orders.add", "orders.edit", "orders.remove", "orders.import", "orders.export"] },
+  machineSales: { label: "Machine sales", perms: ["machinesales.view", "machinesales.add", "machinesales.edit", "machinesales.remove", "machinesales.prices"] },
   partsOrders: { label: "Parts orders", perms: ["partsorders.view", "partsorders.add", "partsorders.edit", "partsorders.remove", "partsorders.prices", "partsorders.reports", "partsorders.export"] },
   knowledge: { label: "Knowledge base", perms: ["kb.view", "kb.write", "kb.edit_all", "kb.import", "kb.publish"] },
   software: { label: "Software downloads", perms: ["software.view", "software.manage"] },

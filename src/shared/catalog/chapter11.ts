@@ -302,9 +302,61 @@ function readListPage(page: PageText): ParsedSheet | null {
   return sheet;
 }
 
+// ---------- Oldest manuals: "TAV." pages with only part numbers and names ----------
+//
+// Manuals up to about machine 3750 (files named like 3697TP-11-15.pdf) print each assembly as a
+// drawing page and then a table page, both headed "TAV. GF010526/A - COMM. 3697 TP". The table
+// has no position and no quantity:
+//     CODE      SGABELLO        SUPPORT          (the assembly's own names sit on the CODE line)
+//     CD049672  ANELLO          RING
+//     CM002983  MOTORE SIEMENS  MOTOR SIEMENS    (a long name runs on to the lines below)
+// Rows come back with an empty position and no quantity. The drawing page has only the heading.
+
+const TAV_HEAD = /^TAV\.?\s*([A-Z0-9_.\- ]+?)(?:\/([A-Z0-9]{1,2}))?\s*-\s*COMM/i;
+
+function readTavPage(page: PageText): ParsedSheet | null {
+  const items = page.items.filter((t) => t.str.trim());
+  const word = (t: TextItem) => t.str.trim();
+  const head = items.find((t) => t.y < page.height * 0.2 && TAV_HEAD.test(word(t)));
+  if (!head) return null;
+  const codeHead = items.find((t) => t !== head && /^CODE$/i.test(word(t)));
+  if (!codeHead) return null; // the drawing page
+  const m = TAV_HEAD.exec(word(head))!;
+  const own = m[1]!.toUpperCase().replace(/\s+/g, "");
+  const warnings: string[] = [];
+  const sheet: ParsedSheet = { page: page.page, code: isPartCode(own) ? own : null, rev: m[2] ?? null, titleIt: "", titleEn: "", group: null, rows: [], balloons: [], warnings };
+  const lineH = Math.max(codeHead.h, 6);
+  const mid = (t: TextItem) => t.y + t.h / 2;
+  const text = (list: TextItem[]) => [...list].sort((a, b) => a.y - b.y || a.x - b.x).map((t) => t.str.trim()).join(" ").replace(/\s+/g, " ");
+  const body = items.filter((t) => t !== head && t !== codeHead && mid(t) > mid(codeHead) - lineH * 0.45 && t.y < page.height * 0.94);
+  // The second-language column starts at the right-hand name on the CODE line.
+  const headNames = body.filter((t) => Math.abs(mid(t) - mid(codeHead)) < lineH * 0.45).sort((a, b) => a.x - b.x);
+  const enX = headNames.length > 1 ? headNames[headNames.length - 1]!.x - 6 : page.width * 0.55;
+  const codes = body.filter((t) => Math.abs(t.x - codeHead.x) < 20 && isPartCode(word(t).toUpperCase().replace(/\s+/g, ""))).sort((a, b) => mid(a) - mid(b));
+  const firstRow = codes.length ? mid(codes[0]!) - lineH * 0.45 : Infinity;
+  const title = body.filter((t) => mid(t) < firstRow);
+  sheet.titleIt = text(title.filter((t) => t.x < enX));
+  sheet.titleEn = text(title.filter((t) => t.x >= enX));
+  const seen = new Set<string>();
+  codes.forEach((c, i) => {
+    const raw = word(c).toUpperCase().replace(/\s+/g, "");
+    if (seen.has(raw)) return;
+    seen.add(raw);
+    // A row owns its line and the lines under it, up to the next part number.
+    const from = mid(c) - lineH * 0.45;
+    const to = i + 1 < codes.length ? mid(codes[i + 1]!) - lineH * 0.45 : Infinity;
+    const cells = body.filter((t) => t !== c && !codes.includes(t) && mid(t) >= from && mid(t) < to);
+    sheet.rows.push({ pos: "", code: raw, rev: null, nameIt: text(cells.filter((t) => t.x < enX)), nameEn: text(cells.filter((t) => t.x >= enX)), qty: null, unit: null });
+  });
+  if (!sheet.rows.length) return null;
+  if (!sheet.code) warnings.push("The sheet's own part code was not found.");
+  listSheets.add(sheet);
+  return sheet;
+}
+
 /** Read one page of chapter 11. Pages without a parts table come back with no rows. */
 export function readPage(page: PageText): ParsedSheet {
-  const listed = readListPage(page);
+  const listed = readListPage(page) ?? readTavPage(page);
   if (listed) return listed;
   const tokens = words(page.items);
   const warnings: string[] = [];

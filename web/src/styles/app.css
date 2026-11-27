@@ -661,3 +661,40 @@ nav.side .menu-pop{min-width:200px}
   /* On a phone the bar sits at the bottom, so a heading opens as a sheet just above it. */
   nav.side .menu-pop{position:fixed;left:8px;right:8px;top:auto;bottom:calc(58px + env(safe-area-inset-bottom,0px));max-width:none}
 }
+
+/* Machine sales: pipeline board and deal page */
+.ms-tile{cursor:default}
+.ms-tile .n{font-size:22px}
+.ms-board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(210px,1fr);gap:10px;overflow-x:auto;padding-bottom:8px;scroll-snap-type:x proximity}
+.ms-col{scroll-snap-align:start;display:flex;flex-direction:column;gap:8px;min-width:0}
+.ms-col header{padding:2px 4px}
+.ms-col h2{font-size:13px;margin:0;text-transform:uppercase;letter-spacing:.04em}
+.ms-col header p{margin:2px 0 0;font-size:11px}
+.ms-none{font-size:12px;padding:0 4px}
+.ms-card{display:flex;flex-direction:column;gap:3px;padding:10px 12px;font-size:13px;color:var(--ink);text-decoration:none;border-left:3px solid transparent}
+.ms-card:hover{border-left-color:var(--steel)}
+.ms-card.stale{border-left-color:var(--accent)}
+.ms-meta{gap:8px;flex-wrap:wrap;font-size:12px}
+.ms-next{font-size:12px}
+.ms-flags{gap:4px;flex-wrap:wrap;display:inline-flex}
+.ms-bar{list-style:none;margin:0 0 10px;padding:0;display:flex;gap:3px;overflow-x:auto}
+.ms-bar li{flex:1 0 auto;min-width:74px;text-align:center;font-size:11px;border-radius:6px;background:var(--line);color:var(--muted)}
+.ms-bar li>*{display:block;width:100%;padding:7px 6px;font:inherit;color:inherit;background:none;border:0;white-space:nowrap}
+.ms-bar li button{cursor:pointer}
+.ms-bar li.done{background:var(--steel);color:var(--steel-ink)}
+.ms-bar li.now{background:var(--accent);color:#fff;font-weight:600}
+.ms-bar li.was{outline:2px dashed var(--accent);outline-offset:-2px}
+.ms-stage-line{flex-wrap:wrap;gap:8px;align-items:center;margin:0}
+.ms-need{flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.ms-need input{padding:8px 10px;font:inherit}
+.ms-page{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr) minmax(0,1fr);gap:12px;margin-top:12px;align-items:start}
+.ms-facts{margin:0;display:grid;gap:8px}
+.ms-fact dt{font-size:11px;color:var(--muted)}
+.ms-fact dd{margin:0}
+.ms-notes{white-space:pre-wrap;margin:8px 0 0}
+.ms-due.warn{border-left:3px solid var(--accent)}
+.ms-log textarea,.ms-nextrow input{font:inherit;padding:8px 10px;width:100%}
+.ms-nextrow{gap:8px;flex-wrap:wrap}
+.ms-nextrow input[type=text],.ms-nextrow input:not([type]){flex:1 1 180px;width:auto}
+.ms-nextrow input[type=date]{width:auto}
+@media (max-width:900px){.ms-page{grid-template-columns:1fr}.ms-board{grid-auto-columns:78%}}

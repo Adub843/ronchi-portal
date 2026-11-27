@@ -191,3 +191,40 @@ describe("older manuals with the table on its own page", () => {
     expect(readChapter11([PAGE]).sheets[0]!.drawingPage).toBeUndefined();
   });
 });
+
+describe("oldest manuals: TAV. pages with only part numbers and names", () => {
+  const head = (code: string, page: number) => [t(`TAV. ${code} - COMM. 3697 TP`, 290, 66), t(`${page}/194`, 523, 817)];
+  const drawing = (code: string, page: number): PageText => ({ page, width: 595, height: 842, items: head(code, page) });
+  const TABLE: PageText = {
+    page: 15, width: 595, height: 842,
+    items: [
+      ...head("GF011116/A", 15),
+      t("CODE", 65, 126), t("ALZA ABBASSA TAPPATORE", 146, 126), t("CAPPER LIFT-UP/DOWN", 343, 126),
+      t("MOTORIZZATO CON CARICO TAPPI", 146, 141), t("MOTORIZATION WITH CAPS", 343, 141),
+      t("LOADING", 343, 156),
+      t("CD001274", 65, 170), t("ALBERO", 145, 170), t("SHAFT", 342, 170),
+      t("CM002983", 65, 183), t("MOTORE SIEMENS 1LA7073-4AB92-", 145, 183), t("MOTOR SIEMENS 1LA7073-4AB92-", 342, 183),
+      t("B14 IP55 4 POLI NORME U.L.", 145, 195), t("B14 IP55 4 POLES RULES U.L.", 342, 195),
+      // pdf.js sometimes hands the cells of a line over out of order
+      t("FLANGE", 346, 207), t("CD049399", 65, 207), t("FLANGIA", 146, 207),
+    ],
+  };
+
+  it("reads the assembly from the heading, its names from the CODE line, and rows with no position or quantity", () => {
+    const s = readPage(TABLE);
+    expect(s).toMatchObject({ code: "GF011116", rev: "A", titleIt: "ALZA ABBASSA TAPPATORE MOTORIZZATO CON CARICO TAPPI", titleEn: "CAPPER LIFT-UP/DOWN MOTORIZATION WITH CAPS LOADING" });
+    expect(s.rows).toEqual([
+      { pos: "", code: "CD001274", rev: null, nameIt: "ALBERO", nameEn: "SHAFT", qty: null, unit: null },
+      { pos: "", code: "CM002983", rev: null, nameIt: "MOTORE SIEMENS 1LA7073-4AB92- B14 IP55 4 POLI NORME U.L.", nameEn: "MOTOR SIEMENS 1LA7073-4AB92- B14 IP55 4 POLES RULES U.L.", qty: null, unit: null },
+      { pos: "", code: "CD049399", rev: null, nameIt: "FLANGIA", nameEn: "FLANGE", qty: null, unit: null },
+    ]);
+    expect(s.warnings).toEqual([]);
+  });
+
+  it("pairs each table with the drawing page before it, and skips the drawing pages", () => {
+    const { sheets, skipped } = readChapter11([drawing("GF011116/A", 14), TABLE, drawing("GF020000/B", 16)]);
+    expect(sheets).toHaveLength(1);
+    expect(sheets[0]!.drawingPage).toBe(14);
+    expect(skipped).toEqual([14, 16]);
+  });
+});
