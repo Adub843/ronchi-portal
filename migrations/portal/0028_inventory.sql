@@ -34,8 +34,9 @@ CREATE TABLE stock_moves (
   reason      TEXT,
   note        TEXT,
   pair_id     TEXT,                             -- the two rows of one shelf-to-shelf move share this
-  source_type TEXT,                             -- what caused it, when another part of the portal did (shipment_line ...)
-  source_id   TEXT,
+  source_type TEXT,                             -- what caused it, when another part of the portal did: 'shipment'
+  source_id   TEXT,                             -- the shipment's id
+  source_line TEXT,                             -- the shipment line's id
   user_id     TEXT REFERENCES users(id)
 );
 CREATE INDEX stock_moves_part ON stock_moves(part_code, at);
