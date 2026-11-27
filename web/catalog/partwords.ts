@@ -186,4 +186,9 @@ export const PART_WORDS: Record<string, string[]> = {
   dist: ["spacer"], racc: ["fitting", "coupling fitting"],
   // From the PC check of every 3D list.
   indicatore: ["indicator"], sgancio: ["quick release"], paracolpo: ["bumper"], tubolare: ["tubular"], km: ["ring nut"],
+  // Makers' names for what they are, and words from the links that were still open after the first pass.
+  dsnu: ["cylinder"], dsbc: ["cylinder"], advu: ["cylinder"], advul: ["cylinder"], adn: ["cylinder"], dgtz: ["cylinder"],
+  skf: ["bearing"], "2rs": ["bearing"], jfrm: ["lead nut", "nut screw"], treclamp: ["clamp fastening", "tri clamp", "clamp"],
+  triclamp: ["clamp fastening", "tri clamp", "clamp"], smim: ["seal"], ucfc: ["rest", "support"], ucfl: ["rest", "support"],
+  ucp: ["rest", "support"], tee: ["tee"], vasb: ["suction cup"], pd: ["pulley"],
 };

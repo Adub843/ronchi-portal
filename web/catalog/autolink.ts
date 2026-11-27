@@ -23,7 +23,14 @@ export interface PartRow {
 export interface Link { code: string; sure: boolean }
 
 const EN = new Set(Object.values(WORDS).flat());
-const itKey = (t: string): string | undefined => (WORDS[t] ? t : WORDS[t.replace(/\d+$/, "")] ? t.replace(/\d+$/, "") : undefined);
+// Words long enough to be read at the front of a name written without spaces ("alberocentrale", "vitediregolazione").
+const FRONT = Object.keys(WORDS).filter((k) => k.length >= 6 || k === "vite").sort((a, b) => b.length - a.length);
+const itKey = (t: string): string | undefined => {
+  if (WORDS[t]) return t;
+  const bare = t.replace(/\d+$/, "");
+  if (WORDS[bare]) return bare;
+  return /^[a-z]{9,}$/.test(bare) ? FRONT.find((k) => bare.startsWith(k) && bare.length - k.length >= 3) : undefined;
+};
 // "support for bearing" is a support: what follows these words describes something else.
 const PREP = new Set(["for", "of", "with", "per", "di", "da", "con", "x"]);
 // Names CAD programs give to solid bodies after their last feature ("Raccordo1" is a fillet, not a fitting).
@@ -58,7 +65,9 @@ function forms(name: string): string[] {
 /** Names that say nothing about the part: "p3", "g1", "Part2", "Raccordo1". */
 function blank(name: string): boolean {
   const b = baseName(name).replace(/ /g, "");
-  return b.length < 4 || /^[a-z]?\d+$/.test(b) || FEATURE.test(name.trim());
+  if (FEATURE.test(name.trim()) || /^[a-z]?\d+$/.test(b)) return true;
+  // Short, but a word we know ("OR", "tee") says what it is.
+  return b.length < 4 && !WORDS[b];
 }
 
 /** What kind of thing a name says it is. Italian puts the thing first ("supporto anello" is a support),
@@ -77,7 +86,14 @@ function kind(text: string): { key?: string; words: string[]; firm: boolean } | 
   return found.length ? { words: [found[0]!], firm: new Set(found).size === 1 } : null;
 }
 
-const SPEC = (t: string) => t.length >= 2 && /\d/.test(t) && !itKey(t);
+// A size: "m8x30", "5x5x12", "d8", "4337". A maker's model name ("vds100ir") is not one.
+const SPEC = (t: string) => /^(?:m\d+(?:x\d+)*|\d+(?:x\d+)+|d\d+|\d{2,})$/.test(t);
+/** Whether a size in a piece's name is in the row's: the same, or the row gives its first dimensions ("5x5x12" under "A5X5"). */
+function sizeIn(size: string, rowTokens: string[]): boolean {
+  return rowTokens.some((t) => { const c = t.replace(/^[a-z]/, ""); return t === size || c === size || (/^\d+x\d+/.test(c) && size.startsWith(`${c}x`)); });
+}
+// Bearings by their number: 6xxx is a radial ball bearing, 51xxx to 53xxx an axial one.
+const wrongBearing = (unit: string, row: string) => (/(?:^| )6[0-4]\d{2}(?: |$)/.test(unit) && / axial | thrust /.test(row)) || (/(?:^| )5[1-3]\d{3}(?: |$)/.test(unit) && / radial /.test(row));
 
 // Fastener standards. The CAD file names a screw by its ISO number, the parts list by the UNI number of the
 // same thing ("VITE UNI EN ISO 4762 M8x30" is a "SCREW TCEI UNI 5931"). Each number maps to one name for the pair.
@@ -146,7 +162,9 @@ function score(raw: string, rowRaw: string): number {
   if (!same && !uk.words.some((w) => rk.words.includes(w)) && !(uk.key && rk.key && WORDS[uk.key]!.some((w) => WORDS[rk.key!]!.includes(w)))) return 0;
   // "vite M8x30" is not the row "SCREW M8X20": sizes in the piece's name must be in the row's when it has any.
   const specs = f[0]!.split(" ").filter((t) => SPEC(t) && !(us && /^u?\d{3,5}[a-z]{0,2}$/.test(t)));
-  if (specs.length && rowAll.trim().split(" ").some(SPEC) && !specs.every((s) => rowAll.includes(` ${s} `))) return 0;
+  const rowTokens = rowAll.trim().replace(STD_YEAR, " ").split(" ");
+  if (specs.length && rowTokens.some((t) => SPEC(t.replace(/^[a-z](?=\d+x)/, ""))) && !specs.every((x) => sizeIn(x, rowTokens))) return 0;
+  if (wrongBearing(` ${mine} `, rowAll)) return 0;
   return same ? 2.5 : rk.firm ? 2 : 1;
 }
 
@@ -169,9 +187,15 @@ export function autoLink(units: Unit[], rows: PartRow[]): Map<string, Link> {
   const cands = [...groups.values()].map((g) => {
     const s = rows.map((r) => Math.max(0, ...[...g.names].flatMap((u) => r.names.map((n) => (n ? score(u, n) : 0)))));
     const top = Math.max(0, ...s);
-    const idx = top ? rows.map((_, i) => i).filter((i) => s[i] === top) : [];
+    // Rows as good as the best stay in the running. A row that also carries the piece's Italian word (2.5) is
+    // preferred below, but does not shut out the rows that carry only the English one (2): a list often has the
+    // Italian name on some of its SCREW rows and not on others.
+    const tier = (x: number) => (x >= 2 && x < 3 ? 2 : x);
+    const best = rows.map((_, i) => i).filter((i) => s[i] === top);
+    // One row alone has the Italian word: that is the row ("lamiera" with PLATE/PIASTRA and SHEET/LAMIERA).
+    const idx = !top ? [] : best.length === 1 ? best : rows.map((_, i) => i).filter((i) => tier(s[i]!) === tier(top));
     for (const i of idx) claimed[i] = true;
-    return { g, top, rows: idx };
+    return { g, top, rows: idx, s };
   });
 
   // Pieces whose name points at one row go first, so a row two pieces could claim is left for the right one.
@@ -192,9 +216,11 @@ export function autoLink(units: Unit[], rows: PartRow[]): Map<string, Link> {
     else if (q === null || total <= q) for (const c of sole) put(c.g, c.g.ids, i, false);
     // Otherwise nothing tells which of them it is: no link.
   }
-  for (const { g, rows: cand } of cands.filter((c) => c.rows.length > 1)) {
+  // The larger sets of copies choose first, so four screws get the row that asks for four before two take half of it.
+  for (const { g, rows: cand, s } of cands.filter((c) => c.rows.length > 1).sort((a, b) => b.g.ids.length - a.g.ids.length)) {
     const room = (i: number) => count(i) === null || filled[i]! < count(i)!;
-    const pick = cand.filter(room).sort((a, b) => Number(count(b) === g.ids.length) - Number(count(a) === g.ids.length) || a - b);
+    const exact = (i: number) => Number(count(i) === g.ids.length && !filled[i]);
+    const pick = cand.filter(room).sort((a, b) => exact(b) - exact(a) || s[b]! - s[a]! || a - b);
     let left = [...g.ids];
     for (const i of pick) {
       if (!left.length) break;
@@ -222,4 +248,19 @@ export function autoLink(units: Unit[], rows: PartRow[]): Map<string, Link> {
   if (lastGroups.length === 1 && lastRows.length === 1 && isBlank(lastGroups[0]!) && rows[lastRows[0]!]!.qty === null && rows.length > 1)
     put(lastGroups[0]!, lastGroups[0]!.ids, lastRows[0]!, false);
   return out;
+}
+
+/**
+ * How far a piece's points lie from their middle. It tells two parts of the same name and point count apart
+ * (a 2 mm and a 5 mm spacer) and, unlike a bounding box, stays the same when a copy is turned or moved.
+ */
+export function spread(count: number, at: (i: number, axis: 0 | 1 | 2) => number): number {
+  if (!count) return 0;
+  const step = Math.max(1, Math.floor(count / 400));
+  let n = 0, cx = 0, cy = 0, cz = 0;
+  for (let i = 0; i < count; i += step) { cx += at(i, 0); cy += at(i, 1); cz += at(i, 2); n++; }
+  cx /= n; cy /= n; cz /= n;
+  let sum = 0;
+  for (let i = 0; i < count; i += step) sum += (at(i, 0) - cx) ** 2 + (at(i, 1) - cy) ** 2 + (at(i, 2) - cz) ** 2;
+  return Math.sqrt(sum / n);
 }

@@ -18,7 +18,7 @@ import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { codeOf, listCodeOf } from "./codes";
-import { autoLink, baseName, type PartRow } from "./autolink";
+import { autoLink, baseName, spread, type PartRow } from "./autolink";
 import { w, type Lang } from "./words";
 
 interface TreeNode {
@@ -542,7 +542,6 @@ class Engine {
     const have = new Set<string>();
     for (const c of this.codes.values()) if (c) have.add(c);
     const units = new Map<THREE.Object3D, { names: string[]; verts: number; size: number }>();
-    const dim = new THREE.Vector3();
     for (const m of this.meshes) {
       // Leave alone anything already under a part that is on the list.
       let listed = false;
@@ -553,9 +552,8 @@ class Engine {
       if (m !== u) e.names.push(m.name);
       e.verts += m.geometry.getAttribute("position")?.count ?? 0;
       // Its size too: two spacers of different thickness have the same name and the same number of points.
-      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
-      m.geometry.boundingBox!.getSize(dim);
-      e.size += dim.x + dim.y + dim.z;
+      const pos = m.geometry.getAttribute("position");
+      if (pos) e.size += spread(pos.count, (i, a) => pos.getComponent(i, a));
     }
     const rows = parts.filter((p) => !have.has(p.code));
     if (units.size && rows.length) {

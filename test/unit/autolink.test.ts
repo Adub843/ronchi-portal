@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { autoLink, baseName, type PartRow, type Unit } from "../../web/catalog/autolink";
+import { autoLink, baseName, spread, type PartRow, type Unit } from "../../web/catalog/autolink";
 import { listCodeOf } from "../../web/catalog/codes";
 
 // The pieces of GF063579 (anti-rotation) as Italy's STEP file names them, and its parts list.
@@ -283,5 +283,56 @@ describe("part numbers with the CAD file type glued on", () => {
     expect(listCodeOf("CD058040PRT", ["CD058040", "CD056980"])).toBe("CD058040");
     expect(listCodeOf("CD056980ipt", ["CD058040", "CD056980"])).toBe("CD056980");
     expect(listCodeOf("CD058040PRTX", ["CD058040"])).toBeNull();
+  });
+});
+
+describe("telling copies from look-alikes by size", () => {
+  const box = (x: number, y: number, z: number) => [[0, 0, 0], [x, 0, 0], [0, y, 0], [x, y, 0], [0, 0, z], [x, 0, z], [0, y, z], [x, y, z]];
+  const of = (p: number[][]) => spread(p.length, (i, a) => p[i]![a]!);
+  it("is the same for a copy that was turned and moved, and differs for another thickness", () => {
+    const a = box(10, 10, 2);
+    const turned = a.map(([x, y, z]) => [z! + 50, x! - 7, y! + 3]);
+    expect(of(turned)).toBeCloseTo(of(a), 6);
+    expect(Math.abs(of(box(10, 10, 5)) - of(a))).toBeGreaterThan(0.1);
+  });
+});
+
+describe("links that were still open after the first pass", () => {
+  const link = (name: string, rows: PartRow[]) => autoLink([{ id: "a", names: [name, name], sig: "a" }], rows).get("a")?.code ?? null;
+  const row = (code: string, name: string, qty = 1): PartRow => ({ code, qty, names: [name, null] });
+  it("reads short words it knows, and words written without spaces", () => {
+    expect(link("OR.1", [row("A", "O-RING"), row("B", "PLATE")])).toBe("A");
+    expect(link("tee", [row("A", "TEE"), row("B", "PLATE")])).toBe("A");
+    expect(link("alberocentrale", [row("A", "SHAFT"), row("B", "PLATE")])).toBe("A");
+    expect(link("vitediregolazione", [row("A", "SCREW"), row("B", "PLATE")])).toBe("A");
+  });
+  it("matches a key to the row that gives its section", () => {
+    const rows = [row("K5", "TANG A5X5 UNI 6604-69"), row("K8", "TANG A8X7 UNI 6604-69")];
+    expect(link("linguetta_5x5x12", rows)).toBe("K5");
+    expect(link("linguetta_8x7x40", rows)).toBe("K8");
+    expect(link("linguetta_6x6x30", rows)).toBeNull();
+  });
+  it("does not hold a maker's model name against the row", () => {
+    expect(link("volantino_vds100ir_a", [row("H", "HANDWHEEL THENAR DSH100-12 COD. 32100F"), row("B", "PLATE")])).toBe("H");
+  });
+  it("knows makers' names and bearing numbers", () => {
+    const rows = [row("R", "RADIAL BALL BEARING"), row("X", "AXIAL BALL BEARING"), row("C", "FESTO CYLINDER"), row("N", "NUT SCREW"), row("S", "SUCTION CUP")];
+    expect(link("SKF_6006-2RS_30x55x13", rows)).toBe("R");
+    expect(link("SKF_51107_35x52x12", rows)).toBe("X");
+    expect(link("559241_DSNU-20-40-PPS", rows)).toBe("C");
+    expect(link("JFRM-3244TR20x8P4", rows)).toBe("N");
+    expect(link("VASB-30", rows)).toBe("S");
+  });
+});
+
+describe("screw rows where only some carry the Italian name", () => {
+  it("shares the screws over all the SCREW rows by quantity", () => {
+    const names: [string, number][] = [["VITE_UNI_5933_M6x20211", 2], ["VITE_UNI_EN_ISO_4017_M10x3511", 2], ["VITE_UNI_EN_ISO_4017_M6x25111", 2], ["VITE_UNI_5933_M4x2011", 2], ["VITE_UNI_EN_ISO_4017_M8x3011", 4], ["VITE_UNI_EN_ISO_4762_M6x1x60111", 4]];
+    const units: Unit[] = names.flatMap(([n, c], i) => Array.from({ length: c }, (_, k) => ({ id: `${i}-${k}`, names: [n, n], sig: `s${i}` })));
+    const rows: PartRow[] = ([["A", 2, "VİDA"], ["B", 2, "VİDA"], ["C", 2, "VITE"], ["D", 2, "VİDA"], ["E", 4, "VITE"], ["F", 4, "ŚRUBA"], ["G", 4, "ВИНТ"]] as [string, number, string][]).map(([code, qty, it]) => ({ code, qty, names: ["SCREW", it] }));
+    const got = autoLink(units, rows);
+    expect(got.size).toBe(16);
+    expect(new Set([...got.values()].map((l) => l.code)).size).toBe(6);
+    expect([...got.values()].every((l) => !l.sure)).toBe(true);
   });
 });
