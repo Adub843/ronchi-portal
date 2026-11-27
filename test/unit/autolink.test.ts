@@ -324,3 +324,15 @@ describe("links that were still open after the first pass", () => {
     expect(link("VASB-30", rows)).toBe("S");
   });
 });
+
+describe("screw rows where only some carry the Italian name", () => {
+  it("shares the screws over all the SCREW rows by quantity", () => {
+    const names: [string, number][] = [["VITE_UNI_5933_M6x20211", 2], ["VITE_UNI_EN_ISO_4017_M10x3511", 2], ["VITE_UNI_EN_ISO_4017_M6x25111", 2], ["VITE_UNI_5933_M4x2011", 2], ["VITE_UNI_EN_ISO_4017_M8x3011", 4], ["VITE_UNI_EN_ISO_4762_M6x1x60111", 4]];
+    const units: Unit[] = names.flatMap(([n, c], i) => Array.from({ length: c }, (_, k) => ({ id: `${i}-${k}`, names: [n, n], sig: `s${i}` })));
+    const rows: PartRow[] = ([["A", 2, "VİDA"], ["B", 2, "VİDA"], ["C", 2, "VITE"], ["D", 2, "VİDA"], ["E", 4, "VITE"], ["F", 4, "ŚRUBA"], ["G", 4, "ВИНТ"]] as [string, number, string][]).map(([code, qty, it]) => ({ code, qty, names: ["SCREW", it] }));
+    const got = autoLink(units, rows);
+    expect(got.size).toBe(16);
+    expect(new Set([...got.values()].map((l) => l.code)).size).toBe(6);
+    expect([...got.values()].every((l) => !l.sure)).toBe(true);
+  });
+});

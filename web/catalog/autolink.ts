@@ -187,9 +187,15 @@ export function autoLink(units: Unit[], rows: PartRow[]): Map<string, Link> {
   const cands = [...groups.values()].map((g) => {
     const s = rows.map((r) => Math.max(0, ...[...g.names].flatMap((u) => r.names.map((n) => (n ? score(u, n) : 0)))));
     const top = Math.max(0, ...s);
-    const idx = top ? rows.map((_, i) => i).filter((i) => s[i] === top) : [];
+    // Rows as good as the best stay in the running. A row that also carries the piece's Italian word (2.5) is
+    // preferred below, but does not shut out the rows that carry only the English one (2): a list often has the
+    // Italian name on some of its SCREW rows and not on others.
+    const tier = (x: number) => (x >= 2 && x < 3 ? 2 : x);
+    const best = rows.map((_, i) => i).filter((i) => s[i] === top);
+    // One row alone has the Italian word: that is the row ("lamiera" with PLATE/PIASTRA and SHEET/LAMIERA).
+    const idx = !top ? [] : best.length === 1 ? best : rows.map((_, i) => i).filter((i) => tier(s[i]!) === tier(top));
     for (const i of idx) claimed[i] = true;
-    return { g, top, rows: idx };
+    return { g, top, rows: idx, s };
   });
 
   // Pieces whose name points at one row go first, so a row two pieces could claim is left for the right one.
@@ -210,9 +216,11 @@ export function autoLink(units: Unit[], rows: PartRow[]): Map<string, Link> {
     else if (q === null || total <= q) for (const c of sole) put(c.g, c.g.ids, i, false);
     // Otherwise nothing tells which of them it is: no link.
   }
-  for (const { g, rows: cand } of cands.filter((c) => c.rows.length > 1)) {
+  // The larger sets of copies choose first, so four screws get the row that asks for four before two take half of it.
+  for (const { g, rows: cand, s } of cands.filter((c) => c.rows.length > 1).sort((a, b) => b.g.ids.length - a.g.ids.length)) {
     const room = (i: number) => count(i) === null || filled[i]! < count(i)!;
-    const pick = cand.filter(room).sort((a, b) => Number(count(b) === g.ids.length) - Number(count(a) === g.ids.length) || a - b);
+    const exact = (i: number) => Number(count(i) === g.ids.length && !filled[i]);
+    const pick = cand.filter(room).sort((a, b) => exact(b) - exact(a) || s[b]! - s[a]! || a - b);
     let left = [...g.ids];
     for (const i of pick) {
       if (!left.length) break;
