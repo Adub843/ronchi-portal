@@ -519,20 +519,25 @@ class Engine {
     this.guessed.clear();
     const have = new Set<string>();
     for (const c of this.codes.values()) if (c) have.add(c);
-    const units = new Map<THREE.Object3D, { names: string[]; verts: number }>();
+    const units = new Map<THREE.Object3D, { names: string[]; verts: number; size: number }>();
+    const dim = new THREE.Vector3();
     for (const m of this.meshes) {
       // Leave alone anything already under a part that is on the list.
       let listed = false;
       for (let o: THREE.Object3D | null = m; o; o = o.parent) { const c = this.codes.get(o.uuid); if (c && this.known.has(c)) { listed = true; break; } }
       if (listed) continue;
       const u = this.unitOf(m);
-      const e = units.get(u) ?? units.set(u, { names: [u.name], verts: 0 }).get(u)!;
+      const e = units.get(u) ?? units.set(u, { names: [u.name], verts: 0, size: 0 }).get(u)!;
       if (m !== u) e.names.push(m.name);
       e.verts += m.geometry.getAttribute("position")?.count ?? 0;
+      // Its size too: two spacers of different thickness have the same name and the same number of points.
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      m.geometry.boundingBox!.getSize(dim);
+      e.size += dim.x + dim.y + dim.z;
     }
     const rows = parts.filter((p) => !have.has(p.code));
     if (units.size && rows.length) {
-      const list = [...units].map(([o, e]) => ({ id: o.uuid, names: e.names, sig: `${[...new Set(e.names.slice(1).map(baseName))].sort().join(",") || baseName(o.name)}|${e.verts}` }));
+      const list = [...units].map(([o, e]) => ({ id: o.uuid, names: e.names, sig: `${[...new Set(e.names.slice(1).map(baseName))].sort().join(",") || baseName(o.name)}|${e.verts}|${Number(e.size.toPrecision(3))}` }));
       for (const [id, l] of autoLink(list, rows)) {
         this.codes.set(id, l.code);
         this.auto.set(id, l.code);

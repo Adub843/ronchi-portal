@@ -52,7 +52,7 @@ export function SheetView({
   // What the 3D model holds, known once it has loaded: which parts it shows, and a small picture of each.
   const [found, setFound] = useState<{ codes: Set<string>; thumbs: Record<string, string> } | null>(null);
   const inModel = useMemo(() => found?.codes ?? new Set(Object.values(sheet.model?.meshMap ?? {})), [sheet.model, found]);
-  const parts = useMemo(() => rows.map((r) => ({ code: r.code, qty: r.qty, names: [r.name_en, r.name_it, r.maker_pn, r.maker] })), [rows]);
+  const parts = useMemo(() => rows.map((r) => ({ code: r.code, qty: r.qty, names: [r.name_en, r.name_it, r.maker_pn] })), [rows]);
   const q = version ? `?v=${encodeURIComponent(version)}` : "";
   const title = [sheet.code, sheet.title].filter(Boolean).join(" - ");
 

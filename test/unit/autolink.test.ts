@@ -65,4 +65,99 @@ describe("linking 3D pieces to parts list rows", () => {
   it("links nothing when nothing fits", () => {
     expect(autoLink([{ id: "a", names: ["solid1"], sig: "a" }, { id: "b", names: ["solid2"], sig: "b" }], [{ code: "CD000001", qty: 5, names: ["SCREW"] }, { code: "CD000002", qty: 7, names: ["NUT"] }]).size).toBe(0);
   });
+
+  it("does not let the infeed scroll or a ring nut claim the fastener rows", () => {
+    const got = autoLink(
+      [{ id: "sc", names: ["COCLEA"], sig: "sc" }, { id: "gh", names: ["GHIERA"], sig: "gh" }, { id: "v", names: ["VITE"], sig: "v" }, { id: "d", names: ["DADO"], sig: "d" }],
+      [{ code: "CD000001", qty: 1, names: ["SCREW"] }, { code: "CD000002", qty: 1, names: ["NUT"] }, { code: "CD000003", qty: 1, names: ["SCROLL"] }, { code: "CD000004", qty: 1, names: ["RING NUT"] }]);
+    expect(got.get("sc")).toEqual({ code: "CD000003", sure: true });
+    expect(got.get("gh")).toEqual({ code: "CD000004", sure: true });
+    expect(got.get("v")).toEqual({ code: "CD000001", sure: true });
+    expect(got.get("d")!.code).toBe("CD000002");
+  });
+
+  it("reads plurals", () => {
+    const got = autoLink([{ id: "a", names: ["RONDELLE"], sig: "a" }, { id: "b", names: ["Viti"], sig: "b" }],
+      [{ code: "CD000001", qty: 1, names: ["WASHER"] }, { code: "CD000002", qty: 1, names: ["SCREW"] }]);
+    expect(got.get("a")).toEqual({ code: "CD000001", sure: true });
+    expect(got.get("b")).toEqual({ code: "CD000002", sure: true });
+  });
+});
+
+const u = (id: string, name: string, sig = id): Unit => ({ id, names: [name, name], sig });
+const many = (p: string, name: string, n: number): Unit[] => Array.from({ length: n }, (_, i) => u(`${p}${i}`, name, p));
+const r = (code: string, qty: number | null, ...names: string[]): PartRow => ({ code, qty, names });
+const link = (us: Unit[], rs: PartRow[]) => { const m = autoLink(us, rs); return (id: string) => m.get(id); };
+
+describe("links the matcher must not make", () => {
+  it("a different size of the same maker part is not this row", () => {
+    expect(link([u("a", "GERMK-12")], [r("CM000014", 1, "GERMK-14 IGUS FORK")])("a")).toBeUndefined();
+    const g = link([u("a", "GERMK-12"), u("b", "GERMK-14")], [r("CM000012", 1, "GERMK-12 IGUS FORK"), r("CM000014", 1, "GERMK-14 IGUS FORK")]);
+    expect(g("a")?.code).toBe("CM000012");
+    expect(g("b")?.code).toBe("CM000014");
+  });
+  it("Italian names put the thing first: a ring support is not a ring", () => {
+    expect(link([u("a", "SUPPORTO ANELLO RM")], [r("CD000001", 1, "RING")])("a")).toBeUndefined();
+    expect(link([u("a", "SUPPORTO ANELLO RM")], [r("CD000001", 1, "RING"), r("CD000002", 1, "SUPPORT")])("a")).toEqual({ code: "CD000002", sure: true });
+  });
+  it("English names put the thing last: a bearing is not a bearing support", () => {
+    for (const [it, en] of [["cuscinetto", "BEARING SUPPORT"], ["molla", "SPRING PIN"], ["anello", "RING NUT"], ["dado", "RING NUT"], ["vite", "GRUB SCREW"], ["stelo", "TIE ROD"], ["anello", "O-RING 12"], ["cuscinetto", "SUPPORT FOR BEARING"]] as const)
+      expect(link([u("a", it)], [r("CD000001", 1, en)])("a"), `${it} / ${en}`).toBeUndefined();
+    expect(link([u("a", "ghiera")], [r("CD000001", 1, "RING NUT")])("a")).toEqual({ code: "CD000001", sure: true });
+    expect(link([u("a", "anello")], [r("CD000001", 1, "RING", "ANELLO SUPPORTO")])("a")?.code).toBe("CD000001");
+  });
+  it("a row name that reads two ways is only a guess", () => {
+    expect(link([u("a", "supporto")], [r("CD000001", 1, "BEARING SUPPORT")])("a")).toEqual({ code: "CD000001", sure: false });
+    expect(link([u("a", "vite")], [r("CD000001", 1, "SCREW, SOCKET HEAD CAP")])("a")).toEqual({ code: "CD000001", sure: true });
+  });
+  it("a feed scroll is not a screw", () => {
+    expect(link([u("a", "coclea")], [r("CD000001", 1, "SCREW M8X20")])("a")).toBeUndefined();
+    expect(link([u("a", "vite")], [r("CD000001", 1, "TIMING SCREW")])("a")).toBeUndefined();
+    expect(link([u("a", "coclea")], [r("CD000001", 1, "TIMING SCREW")])("a")?.code).toBe("CD000001");
+  });
+  it("count against quantity: more pieces than the row asks for is never sure", () => {
+    expect(link(many("w", "rondella", 10), [r("CD000001", 2, "WASHER")])("w0")?.sure).toBe(false);
+    // Two different washers, one row of four: only the four can be it.
+    const g = link([...many("a", "rondella", 4), ...many("b", "rondella", 6)], [r("CD000001", 4, "WASHER")]);
+    expect(g("a0")).toEqual({ code: "CD000001", sure: false });
+    expect(g("b0")).toBeUndefined();
+    // Two different screws, neither count fits: no telling.
+    const h = link([...many("a", "vite", 6), ...many("b", "vite", 10)], [r("CD000001", 4, "SCREW")]);
+    expect(h("a0")).toBeUndefined();
+    expect(h("b0")).toBeUndefined();
+  });
+  it("three plates, two plate rows: the third is not dumped on a full row", () => {
+    const g = link([u("a", "LAMIERA", "a"), u("b", "LAMIERA.1", "b"), u("c", "LAMIERA.2", "c")], [r("CD000001", 1, "PLATE"), r("CD000002", 1, "PLATE")]);
+    expect([g("a"), g("b"), g("c")].filter(Boolean).length).toBe(2);
+  });
+  it("the last piece and the last row are not linked when the count disagrees", () => {
+    expect(link([u("fl", "flangia"), ...many("s", "p7", 6)], [r("CD000001", 1, "FLANGE"), r("CD000002", 1, "MOTOR")])("s0")).toBeUndefined();
+    expect(link([u("fl", "flangia"), u("s", "p7")], [r("CD000001", 1, "FLANGE"), r("CD000002", 2.5, "HOSE")])("s")).toBeUndefined();
+    expect(link([u("fl", "flangia"), u("s", "ISO4762 M6x20")], [r("CD000001", 1, "FLANGE"), r("CD000002", null, "GREASE")])("s")).toBeUndefined();
+  });
+  it("quantity alone: screws the list doesn't have are not the bush", () => {
+    // Four unlisted screws with a real name, and a bush row of four whose piece isn't in the model.
+    expect(link([u("fl", "flangia"), ...many("s", "ISO4762 M6x20", 4)], [r("CD000001", 1, "FLANGE"), r("CM000001", 4, "BUSH")])("s0")).toBeUndefined();
+    // Four screws and four unnamed bushes: the count can't tell them apart.
+    expect(link([...many("s", "TCEI_M6", 4), ...many("p", "p3", 4)], [r("CM000001", 4, "BUSH"), r("CD000009", 1, "MOTOR")])("p0")).toBeUndefined();
+    // A row its named pieces couldn't settle isn't given to an unnamed piece by count.
+    expect(link([...many("a", "vite", 6), ...many("b", "vite", 10), ...many("p", "p3", 4)], [r("CD000001", 4, "SCREW")])("p0")).toBeUndefined();
+  });
+  it("the Italian name on the row beats a loose translation", () => {
+    expect(link([u("a", "lamiera")], [r("CD000001", null, "PLATE", "PIASTRA"), r("CD000002", null, "SHEET", "LAMIERA")])("a")).toEqual({ code: "CD000002", sure: true });
+  });
+  it("a solid body named after a fillet is not a fitting", () => {
+    expect(link([{ id: "a", names: ["p3", "Raccordo1"], sig: "a" }], [r("CD000001", 2, "FITTING"), r("CD000002", 3, "SCREW")])("a")).toBeUndefined();
+  });
+  it("sizes in the name must agree", () => {
+    expect(link([u("a", "vite M8x30")], [r("CD000001", 1, "SCREW M8X20")])("a")).toBeUndefined();
+    expect(link([u("a", "vite M8x30")], [r("CD000001", 1, "SCREW M8X20"), r("CD000002", 1, "SCREW M8X30")])("a")).toEqual({ code: "CD000002", sure: true });
+  });
+  it("still links what it should", () => {
+    expect(link([u("a", "6204-2RS")], [r("CM000001", 1, "BEARING 6204-2RS", "", "6204-2RS", "SKF")])("a")).toEqual({ code: "CM000001", sure: true });
+    expect(link([u("a", "M8x20")], [r("CM000001", 1, "SCREW M8X20")])("a")).toEqual({ code: "CM000001", sure: true });
+    expect(link([u("a", "6204-2RS")], [r("CM000001", 1, "BEARING 6205-2RS")])("a")).toBeUndefined();
+    expect(link([u("a", "flangia"), u("b", "p3")], [r("CD000001", 1, "FLANGE"), r("CD000002", 1, "COVER")])("b")).toEqual({ code: "CD000002", sure: false });
+    expect(link([u("a", "tubo")], [r("CD000001", 2.5, "PIPE")])("a")).toEqual({ code: "CD000001", sure: true });
+  });
 });
