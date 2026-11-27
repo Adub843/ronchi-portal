@@ -646,3 +646,18 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 /* Job page tabs: Job details and Work order */
 .print-only{display:none}
 @media print{.no-print{display:none!important}.print-only{display:block!important}}
+
+/* Top menu headings that open as drop-downs. The bar no longer scrolls sideways on a computer, so a drop-down is never cut off. */
+nav.side{overflow:visible}
+nav.side .navgroup{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;padding:7px 12px 7px 14px;border-radius:6px;font:600 14px var(--body);color:var(--muted);white-space:nowrap;cursor:pointer}
+nav.side .navgroup:hover,nav.side .navgroup[aria-expanded="true"]{color:var(--ink)}
+nav.side .navgroup.here{background:var(--solid);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.14)}
+nav.side .navgroup.here::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:1px}
+nav.side .navgroup svg{width:12px;height:12px;opacity:.7}
+nav.side .menu-pop{min-width:200px}
+@media (max-width:640px){
+  nav.side{overflow-x:auto}
+  nav.side .navgroup{padding:9px 10px;font-size:13px}
+  /* On a phone the bar sits at the bottom, so a heading opens as a sheet just above it. */
+  nav.side .menu-pop{position:fixed;left:8px;right:8px;top:auto;bottom:calc(58px + env(safe-area-inset-bottom,0px));max-width:none}
+}
