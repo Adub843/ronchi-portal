@@ -27,7 +27,7 @@ import { BillingWeek } from "./pages/Workbook";
 import { WorkbookPage } from "./pages/FieldServiceWorkbook";
 import { Learn } from "./pages/Learn";
 import { NewShipment, ShipmentPage, Shipping } from "./pages/Shipping";
-import { fromOldAddress, menuFor, pageAllowed } from "./nav";
+import { fromOldAddress, groupedMenu, menuFor, pageAllowed, type NavItem } from "./nav";
 import { roleLabel, useRoleNames } from "./roles";
 
 // Chrome and Edge offer to install the portal as an app (own window, icon on the desktop or home screen).
@@ -229,13 +229,31 @@ export function App() {
       <div className="wrap" key={lang}>
         <div className="shell">
           <nav className="side" aria-label={t("Main")}>
-            {items.map((n) => {
-              const count = n.count ? unread[n.count] : 0;
+            {groupedMenu(items).map((e) => {
+              const isHere = (n: NavItem) => (n.to === "/" ? path === "/" : section === n.to);
+              const badge = (count: number) => count > 0 && <span className="navcount" aria-label={t("{n} unread", { n: count })}>{count > 99 ? "99+" : count}</span>;
+              if ("page" in e) {
+                const n = e.page;
+                return (
+                  <Link key={n.to} to={n.to} current={isHere(n)} className={n.phone === false ? "desk-only" : undefined}>
+                    {t(n.label)}
+                    {badge(n.count ? unread[n.count] : 0)}
+                  </Link>
+                );
+              }
+              const total = e.pages.reduce((sum, n) => sum + (n.count ? unread[n.count] : 0), 0);
               return (
-                <Link key={n.to} to={n.to} current={n.to === "/" ? path === "/" : section === n.to} className={n.phone === false ? "desk-only" : undefined}>
-                  {t(n.label)}
-                  {count > 0 && <span className="navcount" aria-label={t("{n} unread", { n: count })}>{count > 99 ? "99+" : count}</span>}
-                </Link>
+                <Menu
+                  key={e.group}
+                  label={t(e.group)}
+                  align="left"
+                  className={`navgroup${e.pages.some(isHere) ? " here" : ""}${e.pages.every((n) => n.phone === false) ? " desk-only" : ""}`}
+                  trigger={<>{t(e.group)}{badge(total)}<Chevron /></>}
+                  items={e.pages.map((n) => {
+                    const count = n.count ? unread[n.count] : 0;
+                    return { label: t(n.label), hint: count > 0 ? t("{n} unread", { n: count }) : undefined, onSelect: () => navigate(n.to), role: "radio" as const, checked: isHere(n) };
+                  })}
+                />
               );
             })}
           </nav>
