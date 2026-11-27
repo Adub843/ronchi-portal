@@ -223,3 +223,18 @@ export function autoLink(units: Unit[], rows: PartRow[]): Map<string, Link> {
     put(lastGroups[0]!, lastGroups[0]!.ids, lastRows[0]!, false);
   return out;
 }
+
+/**
+ * How far a piece's points lie from their middle. It tells two parts of the same name and point count apart
+ * (a 2 mm and a 5 mm spacer) and, unlike a bounding box, stays the same when a copy is turned or moved.
+ */
+export function spread(count: number, at: (i: number, axis: 0 | 1 | 2) => number): number {
+  if (!count) return 0;
+  const step = Math.max(1, Math.floor(count / 400));
+  let n = 0, cx = 0, cy = 0, cz = 0;
+  for (let i = 0; i < count; i += step) { cx += at(i, 0); cy += at(i, 1); cz += at(i, 2); n++; }
+  cx /= n; cy /= n; cz /= n;
+  let sum = 0;
+  for (let i = 0; i < count; i += step) sum += (at(i, 0) - cx) ** 2 + (at(i, 1) - cy) ** 2 + (at(i, 2) - cz) ** 2;
+  return Math.sqrt(sum / n);
+}

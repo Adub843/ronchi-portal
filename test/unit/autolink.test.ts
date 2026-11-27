@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { autoLink, baseName, type PartRow, type Unit } from "../../web/catalog/autolink";
+import { autoLink, baseName, spread, type PartRow, type Unit } from "../../web/catalog/autolink";
 import { listCodeOf } from "../../web/catalog/codes";
 
 // The pieces of GF063579 (anti-rotation) as Italy's STEP file names them, and its parts list.
@@ -283,5 +283,16 @@ describe("part numbers with the CAD file type glued on", () => {
     expect(listCodeOf("CD058040PRT", ["CD058040", "CD056980"])).toBe("CD058040");
     expect(listCodeOf("CD056980ipt", ["CD058040", "CD056980"])).toBe("CD056980");
     expect(listCodeOf("CD058040PRTX", ["CD058040"])).toBeNull();
+  });
+});
+
+describe("telling copies from look-alikes by size", () => {
+  const box = (x: number, y: number, z: number) => [[0, 0, 0], [x, 0, 0], [0, y, 0], [x, y, 0], [0, 0, z], [x, 0, z], [0, y, z], [x, y, z]];
+  const of = (p: number[][]) => spread(p.length, (i, a) => p[i]![a]!);
+  it("is the same for a copy that was turned and moved, and differs for another thickness", () => {
+    const a = box(10, 10, 2);
+    const turned = a.map(([x, y, z]) => [z! + 50, x! - 7, y! + 3]);
+    expect(of(turned)).toBeCloseTo(of(a), 6);
+    expect(Math.abs(of(box(10, 10, 5)) - of(a))).toBeGreaterThan(0.1);
   });
 });
