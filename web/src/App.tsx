@@ -15,7 +15,7 @@ import { Welcome } from "./pages/Welcome";
 import { Home } from "./pages/Home";
 import { Boards, BoardPage, Chats } from "./pages/Boards";
 import { ChangePartPage, ChangeParts } from "./pages/ChangeParts";
-import { Inventory, InventoryImport, InventoryPart } from "./pages/Inventory";
+import { Inventory, InventoryCount, InventoryImport, InventoryPart } from "./pages/Inventory";
 import { MachineDealPage, MachineSales, NewMachineDeal } from "./pages/MachineSales";
 import { MachineDealsImport } from "./pages/MachineForecast";
 import { MachineQuotePage } from "./pages/MachineQuote";
@@ -140,6 +140,7 @@ export function App() {
   const inv = /^\/inventory(?:\/(.+))?$/.exec(path);
   if (inv && !inv[1]) page = <Inventory me={me} />;
   else if (inv && inv[1] === "import") page = <InventoryImport me={me} />;
+  else if (inv && inv[1] === "count") page = <InventoryCount me={me} />;
   else if (inv) page = <InventoryPart key={inv[1]} code={decodeURIComponent(inv[1]!)} me={me} />;
   else if (mq) page = <MachineQuotePage key={path} dealId={mq[1]!} quoteId={mq[2]!} me={me} />;
   else if (ms && ms[1] === "import") page = <MachineDealsImport me={me} />;

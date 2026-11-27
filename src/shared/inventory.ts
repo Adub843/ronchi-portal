@@ -44,6 +44,24 @@ export const isOut = (r: StockRow) => r.active !== false && r.active !== 0 && r.
 /** Low: a reorder point is set and what is free to use has fallen to it (and something is still on the shelf). */
 export const isLow = (r: StockRow) => r.active !== false && r.active !== 0 && r.reorder_point != null && available(r) <= r.reorder_point && !isOut(r);
 
+/**
+ * How many to order now, or null when nothing needs ordering.
+ *  - A part with a reorder point: when what is free to use plus what is already on the way has fallen
+ *    to the reorder point, order the reorder quantity, or enough to get back above the point if that is more.
+ *  - A part with no reorder point: only what confirmed orders hold beyond what is on the shelf and on the way.
+ */
+export function toOrder(r: StockRow & { incoming?: number; reorder_qty?: number | null }): number | null {
+  if (r.active === false || r.active === 0) return null;
+  const round = (n: number) => Math.round(n * 1000) / 1000;
+  const cover = round(available(r) + (r.incoming ?? 0));
+  if (r.reorder_point == null) return cover < 0 ? round(-cover) : null;
+  if (cover > r.reorder_point) return null;
+  return Math.max(r.reorder_qty ?? 0, round(r.reorder_point - cover), cover < r.reorder_point ? 0 : 1);
+}
+
+/** The most parts one shelf count can carry. */
+export const MAX_COUNT_LINES = 500;
+
 /** Spreadsheet column names people use, mapped to the import's fields. */
 export const IMPORT_COLUMNS: Record<string, "part_code" | "description" | "location" | "qty" | "reorder_point" | "reorder_qty" | "unit_cost"> = {
   "part": "part_code", "part number": "part_code", "part no": "part_code", "part #": "part_code", "code": "part_code", "part code": "part_code", "item": "part_code",

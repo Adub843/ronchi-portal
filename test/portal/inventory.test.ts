@@ -119,6 +119,53 @@ describe("inventory", () => {
     expect((await meagan.fetch("/api/inventory/import", { body: { rows: [] } })).status).toBe(400);
   });
 
+  it("says how many to order: the reorder quantity, or enough to get back above the reorder point", async () => {
+    const meagan = await person("scheduling");
+    await meagan.json("/api/inventory/import", { body: { rows: [
+      { part_code: "INV-R1", location: "R1", qty: 4, reorder_point: 10, reorder_qty: 20 }, // low: order the usual 20
+      { part_code: "INV-R2", location: "R1", qty: 0, reorder_point: 12 },                   // out, no usual quantity: 12 short
+      { part_code: "INV-R3", location: "R1", qty: 30, reorder_point: 10, reorder_qty: 20 },  // enough
+      { part_code: "INV-R4", location: "R1", qty: 5 },                                       // no reorder point, nothing waits
+      { part_code: "INV-R5", location: "R1", qty: 10, reorder_point: 10 },                   // at the point: at least one
+    ] } });
+    const list = (await meagan.json("/api/inventory")).data.items;
+    const q = (code: string) => list.find((i: any) => i.part_code === code).to_order;
+    expect([q("INV-R1"), q("INV-R2"), q("INV-R3"), q("INV-R4"), q("INV-R5")]).toEqual([20, 12, null, null, 1]);
+    // A part no longer kept in stock is never on the list.
+    await meagan.fetch("/api/inventory/part/INV-R1", { method: "PATCH", body: { active: false } });
+    expect((await item(meagan, "INV-R1")).item.to_order).toBe(null);
+  });
+
+  it("counts a shelf: what differs is corrected as Counted, what was not counted is left alone", async () => {
+    const meagan = await person("scheduling");
+    await meagan.json("/api/inventory/import", { body: { rows: [
+      { part_code: "INV-S1", location: "S1", qty: 10 }, { part_code: "INV-S2", location: "S1", qty: 5 }, { part_code: "INV-S3", location: "S1", qty: 7 },
+      { part_code: "INV-S1", location: "S2", qty: 3 },
+    ] } });
+    await move(meagan, { type: "move", part_code: "INV-S3", location: "S1", to_location: "S2", qty: 7 }); // usually on S1, none there now
+    const sheet = (await meagan.json("/api/inventory/count?shelf=s1")).data;
+    expect(sheet.lines.map((l: any) => [l.part_code, l.qty])).toEqual([["INV-S1", 10], ["INV-S2", 5], ["INV-S3", 0]]);
+    const r = await meagan.json("/api/inventory/count", { body: { location: "s1", note: "November count", lines: [
+      { part_code: "INV-S1", qty: 8 }, { part_code: "INV-S3", qty: 0 }, { part_code: "inv-s9", description: "Found on the shelf", qty: 2 },
+    ] } });
+    expect(r.data).toMatchObject({ counted: 3, changed: 2, differences: [{ part_code: "INV-S1", from: 10, to: 8 }, { part_code: "INV-S9", from: 0, to: 2 }] });
+    const s1 = await item(meagan, "INV-S1");
+    expect(s1.levels).toEqual([{ location: "S1", qty: 8 }, { location: "S2", qty: 3 }]);
+    expect(s1.moves[0]).toMatchObject({ type: "adjust", reason: "Counted", note: "November count", location: "S1", delta: -2 });
+    expect((await item(meagan, "INV-S2")).item.on_hand).toBe(5);
+    expect((await item(meagan, "INV-S9")).item).toMatchObject({ on_hand: 2, description: "Found on the shelf", bin: "S1" });
+    // Checks: something counted, no part twice, real numbers; and only people who may correct stock.
+    expect((await meagan.fetch("/api/inventory/count", { body: { location: "S1", lines: [] } })).status).toBe(400);
+    expect((await meagan.fetch("/api/inventory/count", { body: { location: "S1", lines: [{ part_code: "A", qty: 1 }, { part_code: "a", qty: 2 }] } })).status).toBe(400);
+    expect((await meagan.fetch("/api/inventory/count", { body: { location: "S1", lines: [{ part_code: "INV-S1", qty: -1 }] } })).status).toBe(400);
+    expect((await meagan.fetch("/api/inventory/count", { body: { lines: [{ part_code: "INV-S1", qty: 1 }] } })).status).toBe(400);
+    for (const role of ["service", "sales", "tech"]) {
+      const p = await person(role);
+      expect((await p.fetch("/api/inventory/count?shelf=S1")).status, role).toBe(403);
+      expect((await p.fetch("/api/inventory/count", { body: { location: "S1", lines: [{ part_code: "INV-S1", qty: 1 }] } })).status, role).toBe(403);
+    }
+  });
+
   it("closes to everyone but admins when the section is switched off", async () => {
     const admin = await person("admin");
     const cur = await admin.json("/api/settings");

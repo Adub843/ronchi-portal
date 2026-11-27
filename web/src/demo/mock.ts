@@ -458,7 +458,7 @@ function route(method: string, path: string, q: URLSearchParams, body: any): unk
   // --- parts catalog (the preview has no manuals or customer parts site, so it starts empty) ---
   if (seg[0] === "inventory") {
     try {
-      return inventoryRoute(method, seg, body, { me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id });
+      return inventoryRoute(method, seg, body, { shelf: q.get("shelf") ?? "", me: u, perms: effective(u.role, u.access, savedPerms(u.role)) as Set<string>, newId: id });
     } catch (e) {
       if (e instanceof InventoryFail) throw new Fail(e.status, e.message);
       throw e;
