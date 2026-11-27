@@ -17,6 +17,7 @@ import { Boards, BoardPage, Chats } from "./pages/Boards";
 import { ChangePartPage, ChangeParts } from "./pages/ChangeParts";
 import { Inventory, InventoryImport, InventoryPart } from "./pages/Inventory";
 import { MachineDealPage, MachineSales, NewMachineDeal } from "./pages/MachineSales";
+import { MachineDealsImport } from "./pages/MachineForecast";
 import { MachineQuotePage } from "./pages/MachineQuote";
 import { NewPartsOrder, PartsOrderPage, PartsOrders } from "./pages/PartsOrders";
 import { Machines, MachinePage } from "./pages/Machines";
@@ -141,8 +142,9 @@ export function App() {
   else if (inv && inv[1] === "import") page = <InventoryImport me={me} />;
   else if (inv) page = <InventoryPart key={inv[1]} code={decodeURIComponent(inv[1]!)} me={me} />;
   else if (mq) page = <MachineQuotePage key={path} dealId={mq[1]!} quoteId={mq[2]!} me={me} />;
+  else if (ms && ms[1] === "import") page = <MachineDealsImport me={me} />;
   else if (ms && ms[1] === "new") page = <NewMachineDeal me={me} />;
-  else if (ms && (!ms[1] || ["list", "orders", "hold", "closed"].includes(ms[1]))) page = <MachineSales key={path} me={me} tab={ms[1]} />;
+  else if (ms && (!ms[1] || ["list", "orders", "hold", "closed", "forecast"].includes(ms[1]))) page = <MachineSales key={path} me={me} tab={ms[1]} />;
   else if (ms) page = <MachineDealPage key={ms[1]} id={ms[1]!} me={me} />;
   else if (po && (po[1] === "new")) page = <NewPartsOrder me={me} />;
   else if (po && (!po[1] || po[1] === "to-order" || po[1] === "reports")) page = <PartsOrders key={path} me={me} tab={po[1]} />;

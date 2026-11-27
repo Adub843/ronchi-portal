@@ -9,6 +9,7 @@ import {
 import { USUAL_DATES, milestoneLate, paymentAmount, paymentTotals } from "../../../src/shared/machine-orders";
 import { QUOTE_KIND_LABELS, type QuoteKind } from "../../../src/shared/machine-quotes";
 import { api, can, fmtTime, type Me } from "../api";
+import { MachineForecast } from "./MachineForecast";
 import { QuoteStatusPill } from "./MachineQuote";
 import { Empty, ErrorNote, Link, PageHead, toast, useLoad } from "../components/ui";
 import { loc, t } from "../i18n";
@@ -50,13 +51,13 @@ function StagePill({ stage }: { stage: string }) {
   return <span className={`pill ${cls}`}>{S(stage)}</span>;
 }
 
-type View = "board" | "list" | "orders" | "hold" | "closed";
+type View = "board" | "list" | "orders" | "hold" | "closed" | "forecast";
 
 export function MachineSales({ me, tab }: { me: Me; tab?: string }) {
   const { data, error } = useLoad<{ deals: Row[] }>(() => api("/machine-sales"));
   const prices = can(me, "machinesales.prices");
   const [q, setQ] = useState("");
-  const view: View = (["list", "orders", "hold", "closed"] as const).find((v) => v === tab) ?? "board";
+  const view: View = (["list", "orders", "hold", "closed", "forecast"] as const).find((v) => v === tab && (v !== "forecast" || prices)) ?? "board";
   const all = data?.deals ?? [];
   const selling = all.filter((d) => SELLING.has(d.stage));
   const orders = all.filter((d) => ORDERS.has(d.stage));
@@ -78,6 +79,7 @@ export function MachineSales({ me, tab }: { me: Me; tab?: string }) {
     { id: "orders", label: t("Orders {n}", { n: orders.length }) },
     { id: "hold", label: t("On hold {n}", { n: held.length }) },
     { id: "closed", label: t("Closed {n}", { n: closed.length }) },
+    ...(prices ? [{ id: "forecast" as View, label: t("Forecast") }] : []), // dollar amounts throughout, so only for people who may see them
   ];
   const tiles = [
     { n: data ? String(selling.length) : "–", l: t("Deals being sold") },
@@ -90,6 +92,7 @@ export function MachineSales({ me, tab }: { me: Me; tab?: string }) {
   return (
     <>
       <PageHead title={t("Machine sales")} sub={t("Every new-machine deal, from the first call to a machine running on the customer's line.")} tip="machine-sales.head">
+        {can(me, "machinesales.add") && <button className="btn" onClick={() => navigate("/machine-sales/import")}>{t("Import a sales list")}</button>}
         {can(me, "machinesales.add") && <button className="btn primary" onClick={() => navigate("/machine-sales/new")}>{t("New deal")}</button>}
       </PageHead>
       <ErrorNote error={error} />
@@ -120,7 +123,8 @@ export function MachineSales({ me, tab }: { me: Me; tab?: string }) {
           })}
         </div>
       )}
-      {!!all.length && view !== "board" && (
+      {!!all.length && view === "forecast" && <MachineForecast deals={all} />}
+      {!!all.length && view !== "board" && view !== "forecast" && (
         <div className="panel tbl">
           {!shown.length && <Empty>{t("No deals match.")}</Empty>}
           {!!shown.length && (

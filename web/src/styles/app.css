@@ -708,6 +708,24 @@ nav.side .menu-pop{min-width:200px}
 .mo-add{gap:8px;margin:8px 0 0}
 .mo-late{color:var(--accent);font-weight:600}
 .mo-sum{margin:10px 0 0}
+.mf-head{align-items:center;flex-wrap:wrap;gap:8px}
+.po-tabs{max-width:calc(100% - 2px);min-width:0;box-sizing:border-box;flex:0 1 auto;overflow-x:auto}
+.po-tabs>button{flex:0 0 auto;white-space:nowrap}
+.mf-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:10px}
+.mf-col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.mf-col header{border-top:3px solid var(--line);padding-top:8px}
+.mf-col.mf-won header{border-top-color:var(--steel)}
+.mf-col.mf-commit header{border-top-color:var(--accent)}
+.mf-col h3,.mf-month h3{font-size:13px;margin:0;text-transform:uppercase;letter-spacing:.04em}
+.mf-col header strong{font-size:18px}
+.mf-col header p{margin:2px 0 0;font-size:12px}
+.mf-deal{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;color:var(--ink);text-decoration:none}
+.mf-deal:hover{border-color:var(--steel)}
+.mf-sum{margin:14px 0 4px}
+.mf-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.mf-month{margin-bottom:10px}
+@media (max-width:900px){.mf-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mf-two{grid-template-columns:1fr}}
+@media (max-width:520px){.mf-grid{grid-template-columns:1fr}}
 .ms-page>*{min-width:0}
 .ms-page>.stack>*{min-width:0;max-width:100%}
 .mo-table{max-width:100%}

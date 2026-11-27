@@ -75,7 +75,7 @@ export function readStockCsv(csv: string): { rows: Record<string, string>[]; pro
   return { rows, problems };
 }
 
-function parseCsv(text: string): string[][] {
+export function parseCsv(text: string): string[][] {
   const out: string[][] = [];
   let row: string[] = [], cell = "", quoted = false;
   const sep = (text.split(/\r?\n/, 1)[0] ?? "").split(";").length > (text.split(/\r?\n/, 1)[0] ?? "").split(",").length ? ";" : ",";

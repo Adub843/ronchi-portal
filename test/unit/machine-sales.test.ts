@@ -73,3 +73,48 @@ describe("machine quotes", () => {
     expect(nextStatuses("superseded")).toEqual([]);
   });
 });
+
+import { bucketOf, quarter, readDealsCsv, readMonth, yearReport } from "../../src/shared/machine-forecast";
+
+describe("machine forecast and import", () => {
+  it("finds the quarter and puts each deal in its column", () => {
+    expect(quarter("2026-11-27")).toEqual({ label: "Q4 2026", months: ["2026-10", "2026-11", "2026-12"] });
+    expect(quarter("2026-11-27", 1)).toEqual({ label: "Q1 2027", months: ["2027-01", "2027-02", "2027-03"] });
+    expect(quarter("2026-02-01", -1).label).toBe("Q4 2025");
+    const q = quarter("2026-11-27").months;
+    expect(bucketOf({ stage: "negotiation", expected_po: "2026-12" }, q)).toBe("commit");
+    expect(bucketOf({ stage: "firm_quote", expected_po: "2026-12" }, q)).toBe("best");
+    expect(bucketOf({ stage: "lead", expected_po: "2026-10" }, q)).toBe("pipeline");
+    expect(bucketOf({ stage: "lead", chance: 90, expected_po: "2026-10" }, q)).toBe("commit");
+    expect(bucketOf({ stage: "firm_quote", expected_po: "2027-02" }, q)).toBeNull();
+    expect(bucketOf({ stage: "firm_quote" }, q)).toBeNull();
+    expect(bucketOf({ stage: "build", won_at: "2026-10-05T10:00:00Z" }, q)).toBe("won");
+    expect(bucketOf({ stage: "build", won_at: "2026-03-05T10:00:00Z" }, q)).toBeNull();
+    expect(bucketOf({ stage: "lost", expected_po: "2026-12" }, q)).toBeNull();
+  });
+  it("reports the last 12 months", () => {
+    const r = yearReport([
+      { stage: "build", value: 500000, won_at: "2026-06-01T00:00:00Z", created_at: "2026-01-01T00:00:00Z" },
+      { stage: "paid", value: 300000, won_at: "2024-06-01T00:00:00Z", created_at: "2024-01-01T00:00:00Z" },
+      { stage: "lost", lost_at: "2026-09-01T00:00:00Z", lost_reason: "Price" },
+      { stage: "lost", lost_at: "2026-10-01T00:00:00Z", lost_reason: "Price" },
+      { stage: "lost", lost_at: "2026-10-02T00:00:00Z" },
+    ], "2026-11-27");
+    expect(r).toMatchObject({ won: 1, wonValue: 500000, lost: 3, winRate: 25, daysToWin: 151 });
+    expect(r.reasons).toEqual([["Price", 2], ["No reason given", 1]]);
+  });
+  it("reads a sales list from a spreadsheet", () => {
+    expect(readMonth("3/2027")).toBe("2027-03");
+    expect(readMonth("03/15/2027")).toBe("2027-03");
+    expect(readMonth("2027-3-9")).toBe("2027-03");
+    expect(readMonth("March 2027")).toBe("2027-03");
+    expect(readMonth("soon")).toBe("");
+    const r = readDealsCsv('Customer,Project,Amount,Status,Close date,Sales rep\n"Acme, Inc.",Filler,"$1,250,000",Firm quote,3/2027,Andrew\nBeta,Capper,,PO received,,\n,Nobody,,,,\nGamma,X,,Dreaming,,\nDelta,Y,lots,,,');
+    expect(r.rows).toEqual([
+      { customer: "Acme, Inc.", title: "Filler", value: "$1,250,000", stage: "firm_quote", expected_po: "2027-03", owner: "Andrew" },
+      { customer: "Beta", title: "Capper", value: "", stage: "won", expected_po: "", owner: "" },
+    ]);
+    expect(r.problems).toHaveLength(3);
+    expect(readDealsCsv("Name,Value\nA,1").problems).toEqual(["No Customer column was found."]);
+  });
+});
