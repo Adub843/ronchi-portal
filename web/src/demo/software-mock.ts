@@ -100,7 +100,7 @@ export function softwareRoute(method: string, seg: string[], body: any, ctx: { p
     need("software.view");
     const p = pkg(seg[1]!);
     const list = ready(p).sort((a, b) => a.folder.localeCompare(b.folder) || a.name.localeCompare(b.name));
-    return { package: shape(p), files: list.map((f) => ({ id: f.id, folder: f.folder, name: f.name, size: f.size, url: f.url, link: !!f.link })) };
+    return { package: shape(p), files: list.map((f) => ({ id: f.id, folder: f.folder, name: f.name, size: f.size, url: f.url, link: !!f.link, opens: !!(f as any).opens })) };
   }
   if (seg.length === 2 && method === "PATCH") {
     need("software.manage");

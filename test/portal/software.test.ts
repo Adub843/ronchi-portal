@@ -142,6 +142,25 @@ describe("software kept on SharePoint (Aaron, 2026-11-25: \"we dont have to stor
     expect((await admin.fetch(`/api/software/files/${byName["KEPServerEX 6.exe"]}`)).headers.get("location")).toBe(`${share}&download=1`);
   });
 
+  it("a whole folder can be kept as one line that opens in SharePoint, and links can carry their size and folder", async () => {
+    const admin = await person("admin");
+    const tech = await person("tech");
+    const id = (await admin.json("/api/software", { body: { name: "Studio 5000 from SharePoint" } })).data.id;
+    const add = await admin.json(`/api/software/${id}/links`, { body: { folder: "AB", links: [
+      { url: `${SP}/v32`, open: true, size: 5000000000 },
+      { url: `${SP}/v33/Studio%205000%20v33.iso`, size: 7000000000, folder: "v33" },
+    ] } });
+    expect(add.status, JSON.stringify(add.data)).toBe(200);
+    const files = (await tech.json(`/api/software/${id}`)).data.files;
+    expect(files.map((f: any) => [f.folder, f.name, f.size, f.opens])).toEqual([["AB", "v32", 5000000000, true], ["AB/v33", "Studio 5000 v33.iso", 7000000000, false]]);
+    const res = await tech.fetch(`/api/software/files/${files[0].id}`);
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(`${SP}/v32`);
+    // Without open: true a folder is still refused, and a folder can't climb out of the package.
+    expect((await admin.json(`/api/software/${id}/links`, { body: { links: [{ url: `${SP}/v32` }] } })).status).toBe(400);
+    expect((await admin.json(`/api/software/${id}/links`, { body: { links: [{ url: `${SP}/a.exe`, folder: "../x" }] } })).status).toBe(400);
+  });
+
   it("only Ronchi SharePoint file links, only for people who manage software", async () => {
     const admin = await person("admin");
     const tech = await person("tech");

@@ -66,7 +66,7 @@ software.get("/files/:id", async (c) => {
   // Kept on SharePoint. With the Microsoft connection set, the portal fetches it and passes it on.
   // Without it (or if Microsoft won't answer), send the person there: their own sign-in opens it.
   if (f.source_url) {
-    if (graphConfigured(c.env)) {
+    if (graphConfigured(c.env) && !sharePointTarget(f.source_url)?.folder) {
       const file = await sharePointDownload(c.env, f.source_url, c.req.header("range"));
       if (file) {
         const headers = attachmentHeaders(f.name);
@@ -77,6 +77,9 @@ software.get("/files/:id", async (c) => {
         return new Response(file.body, { status: file.status, headers });
       }
     }
+    // A whole folder kept as one line: open it in SharePoint, where it can be downloaded as a zip.
+    const whole = sharePointTarget(f.source_url);
+    if (whole?.folder) return new Response(null, { status: 302, headers: { Location: whole.url, "Cache-Control": "private, no-store" } });
     const link = sharePointLink(f.source_url);
     if (!link) fail(404, "Not found.");
     return new Response(null, { status: 302, headers: { Location: link.download, "Cache-Control": "private, no-store" } });
@@ -126,7 +129,7 @@ software.get("/:id", async (c) => {
     "SELECT id, folder, name, size, ready_at, source_url FROM software_files WHERE package_id = ? AND deleted_at IS NULL AND ready_at IS NOT NULL ORDER BY folder, name",
   ).bind(p.id).all<FileRow>();
   const size = results.reduce((n, f) => n + f.size, 0);
-  return c.json({ sharepoint: graphConfigured(c.env), package: shapePackage({ ...p, files: results.length, size }), files: results.map((f) => ({ id: f.id, folder: f.folder, name: f.name, size: f.size, link: !!f.source_url })) });
+  return c.json({ sharepoint: graphConfigured(c.env), package: shapePackage({ ...p, files: results.length, size }), files: results.map((f) => ({ id: f.id, folder: f.folder, name: f.name, size: f.size, link: !!f.source_url, opens: !!f.source_url && !!sharePointTarget(f.source_url)?.folder })) });
 });
 
 // ---------- Packages (software.manage) ----------
@@ -209,6 +212,18 @@ software.post("/:id/links", async (c) => {
     const url = typeof item === "string" ? item : String((item as { url?: unknown })?.url ?? "");
     const given = typeof item === "object" && item ? str((item as { name?: unknown }).name, 255) : null;
     const target = url.length <= 2000 ? sharePointTarget(url) : null;
+    // What the sender already knows about the file: its size, and a folder of its own under the chosen one.
+    const o = typeof item === "object" && item ? (item as { size?: unknown; folder?: unknown; open?: unknown }) : {};
+    const size = Number.isSafeInteger(o.size) && (o.size as number) > 0 ? (o.size as number) : 0;
+    const sub = o.folder === undefined ? folder : cleanFolder([folder, String(o.folder)].filter(Boolean).join("/"));
+    if (sub === null) fail(400, "That folder name can't be used.");
+    if (target?.folder && o.open === true) {
+      // A whole folder kept as one line that opens in SharePoint (an installer with thousands of small files).
+      const name = given ?? decodeURIComponent(target.url.split("/").pop() ?? "");
+      if (!name) fail(400, "Give that folder a name.");
+      rows.push({ url: url.trim(), name: softwareFileName(name), folder: sub, size });
+      continue;
+    }
     if (target?.folder) {
       // A whole folder: with the Microsoft connection, list it and add every file inside.
       if (!connected) fail(400, "That's a folder. Adding a whole folder needs the Microsoft connection (see Manage software). For now, link each file.");
@@ -229,7 +244,7 @@ software.post("/:id/links", async (c) => {
     if (!link) fail(400, `That isn't a link to one file on Ronchi's SharePoint: ${url.slice(0, 120)}`);
     const name = given ?? link.name;
     if (!name) fail(400, "Give a file name for each sharing link.");
-    rows.push({ url: url.trim(), name: softwareFileName(name), folder, size: 0 });
+    rows.push({ url: url.trim(), name: softwareFileName(name), folder: sub, size });
   }
   if (!rows.length) fail(400, "There were no files in that folder.");
   if (rows.length > 500) fail(400, "Up to 500 files at a time.");
