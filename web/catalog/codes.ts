@@ -16,3 +16,26 @@ export function codeOf(name: string, meshMap: Record<string, string>): string | 
   // Staff can map any other name to its code in the sheet's mesh map.
   return m ? m[1]!.toUpperCase() : null;
 }
+
+/**
+ * The list code a node name stands for, when the name only carries it with copy numbers glued on.
+ * three.js drops dots from node names, so Creo's "CD075732.1" arrives as "CD0757321" and codeOf
+ * can't read it. Only codes on this parts list are tried, so a squeezed name can't invent a code:
+ * the name must start with a list code (or, when only one row has it, the code before a row's
+ * "_36"-style suffix), followed by at most three glued digits and then nothing or a separator.
+ */
+export function listedCode(name: string, known: Iterable<string>): string | null {
+  const n = name.trim().toUpperCase();
+  const fits = (p: string) => n.startsWith(p) && /^\d{0,3}(?:PRT|IPT|IAM|ASM|PAR|SLDPRT|SLDASM)?(?:$|[^0-9A-Z])/.test(n.slice(p.length));
+  let best: string | null = null;
+  const bases = new Map<string, string[]>();
+  for (const k of known) {
+    const K = k.toUpperCase();
+    if (fits(K) && (!best || K.length > best.length)) best = k;
+    const base = /^(.+)_\d+$/.exec(K)?.[1];
+    if (base) (bases.get(base) ?? bases.set(base, []).get(base)!).push(k);
+  }
+  if (best) return best;
+  for (const [base, ks] of bases) if (ks.length === 1 && fits(base)) return ks[0]!;
+  return null;
+}

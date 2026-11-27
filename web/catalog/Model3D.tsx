@@ -17,7 +17,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { codeOf } from "./codes";
+import { codeOf, listedCode } from "./codes";
 import { autoLink, baseName, type PartRow } from "./autolink";
 import { w, type Lang } from "./words";
 
@@ -402,6 +402,7 @@ class Engine {
   sel: THREE.Object3D[] = [];               // what is selected: a listed part's nodes, or one piece picked in the model
   auto = new Map<string, string>();         // node uuid -> code, for pieces linked by name and quantity
   guessed = new Set<string>();              // codes whose link is a best guess
+  own = new Map<string, string | null>();   // node uuid -> its code from its own name, for nodes link() changed
   hoverMesh: THREE.Mesh | null = null;
   known = new Set<string>();
   hidden = new Set<string>();
@@ -514,9 +515,20 @@ class Engine {
   /** Link pieces the CAD file didn't name by part number to rows of the parts list, then rebuild the tree. */
   link(parts: PartRow[]): TreeNode {
     const root = this.root!;
-    for (const id of this.auto.keys()) this.codes.set(id, null);
+    for (const id of this.auto.keys()) this.codes.set(id, this.own.get(id) ?? null);
     this.auto.clear();
     this.guessed.clear();
+    // Names the 3D loader squeezed ("CD075732.1" arrives as "CD0757321"): read the list code in them.
+    const listCodes = new Set(parts.map((p) => p.code));
+    root.traverse((o) => {
+      const c = this.codes.get(o.uuid) ?? null;
+      if (!o.name || (c && listCodes.has(c))) return;
+      const l = listedCode(o.name, listCodes);
+      if (!l) return;
+      this.own.set(o.uuid, c);
+      this.codes.set(o.uuid, l);
+      this.auto.set(o.uuid, l);
+    });
     const have = new Set<string>();
     for (const c of this.codes.values()) if (c) have.add(c);
     const units = new Map<THREE.Object3D, { names: string[]; verts: number }>();
