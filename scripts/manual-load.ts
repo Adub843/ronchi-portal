@@ -124,9 +124,10 @@ for (const job of jobs) {
         sheets: sheets.map((s) => ({
           key: String(s.page),
           parentKey: parents.has(s.page) ? String(parents.get(s.page)) : null,
-          section: guessSection(s), grp: s.group, code: s.code, rev: s.rev,
-          title: s.titleEn || s.titleIt || s.code || `Page ${s.page}`, titleIt: s.titleIt, page: s.page,
-          rows: s.rows.map((row) => ({ ...row, hotspots: s.balloons.filter((b) => b.pos === row.pos).map(({ x, y, w, h }) => ({ x, y, w, h })) })),
+          // The portal refuses text over its limits, so a long title or name the reader joined is cut to fit.
+          section: guessSection(s), grp: cut(s.group, 200), code: s.code, rev: s.rev,
+          title: cut(s.titleEn || s.titleIt || s.code || `Page ${s.page}`, 300), titleIt: cut(s.titleIt, 300), page: s.page,
+          rows: s.rows.map((row) => ({ ...row, nameIt: cut((row as { nameIt?: string }).nameIt, 300), nameEn: cut((row as { nameEn?: string }).nameEn, 300), hotspots: s.balloons.filter((b) => b.pos === row.pos).map(({ x, y, w, h }) => ({ x, y, w, h })) })),
         })),
       }),
     });
@@ -149,3 +150,8 @@ for (const job of jobs) {
 await closeReader();
 console.log(`\n${done} machines ${dry ? "read" : "loaded"}, ${skipped} skipped, ${failed} failed.`);
 process.exit(failed ? 1 : 0);
+
+/** Text cut to the portal's limit, ending in "…" when something was left off. */
+function cut<T extends string | null | undefined>(text: T, max: number): T {
+  return (typeof text === "string" && text.trim().length > max ? `${text.trim().slice(0, max - 1)}…` : text) as T;
+}
