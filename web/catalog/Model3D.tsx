@@ -17,7 +17,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { codeOf } from "./codes";
+import { codeOf, listCodeOf } from "./codes";
 import { autoLink, baseName, type PartRow } from "./autolink";
 import { w, type Lang } from "./words";
 
@@ -74,6 +74,7 @@ export function Model3D({
   onLinked?: (found: { codes: Set<string>; thumbs: Record<string, string> }) => void; // the parts found in the model, with a small picture of each
 }) {
   const host = useRef<HTMLDivElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
   const engine = useRef<Engine | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error" | "nogl">("loading");
   const [tree, setTree] = useState<TreeNode | null>(null);
@@ -148,6 +149,9 @@ export function Model3D({
     if (selected) {
       free.current = false;
       engine.current?.selectCode(selected);
+      // Picking the row of a hidden part brings the part back, so the pick is never invisible.
+      const ids = engine.current?.selIds() ?? [];
+      if (ids.length) setHidden((h) => (ids.some((id) => h.has(id)) ? new Set([...h].filter((id) => !ids.includes(id))) : h));
       setPicked((p) => (p?.code === selected ? p : { id: "", name: selected, code: selected, guess: engine.current?.isGuess(selected) ?? false }));
     } else if (!free.current) {
       engine.current?.clearSel();
@@ -184,7 +188,7 @@ export function Model3D({
   const saveView = () => {
     const v = engine.current?.currentView();
     if (!v) return;
-    const next = [...views, { name: w(lang, "My view {n}", { n: views.length + 1 }), ...v }].slice(-20);
+    const next = [...views, { name: w(lang, "My view {n}", { n: Math.max(0, ...views.map((x) => Number(/(\d+)\s*$/.exec(x.name)?.[1] ?? 0))) + 1 }), ...v }].slice(-20);
     setViews(next);
     storeViews(viewKey, next);
   };
@@ -222,7 +226,9 @@ export function Model3D({
     : w(lang, "Drag to turn. Right-drag or two fingers to move. Scroll or pinch to zoom. Click a part to select it, double-click to zoom to it.");
 
   return (
-    <div className={`cv-stage${full ? " cv-full" : ""}`} onKeyDown={onKey}>
+    <div className={`cv-stage${full ? " cv-full" : ""}`} onKeyDown={onKey} tabIndex={-1} ref={stage}
+      // A button that disables itself (Hide, Unhide all) drops the focus to the page, and the keys with it: take it back.
+      onClick={() => requestAnimationFrame(() => { const at = document.activeElement as HTMLButtonElement | null; if (stage.current && (!at || at.disabled || !stage.current.contains(at))) stage.current.focus({ preventScroll: true }); })}>
       <div className="cv-tools" role="toolbar" aria-label="3D">
         {lead}
         {/* The same tools, in the same order, as the Ronchi Mario viewer; then ours. */}
@@ -290,6 +296,8 @@ export function Model3D({
             tree={tree}
             hidden={hidden}
             selected={selected}
+            pickedId={picked?.id || null}
+            leaves={(id) => engine.current?.leafIdsUnder(id) ?? [id]}
             onToggle={(id) => setHidden((h) => {
               const ids = engine.current?.leafIdsUnder(id) ?? [id];
               const n = new Set(h);
@@ -337,8 +345,9 @@ export function Model3D({
 
 interface Picked { id: string; name: string; code: string | null; guess: boolean }
 
-function ModelTree({ tree, hidden, selected, onToggle, onPick, lang }: {
-  tree: TreeNode; hidden: Set<string>; selected: string | null; onToggle: (id: string) => void; onPick: (n: TreeNode) => void; lang: Lang;
+function ModelTree({ tree, hidden, selected, pickedId, leaves, onToggle, onPick, lang }: {
+  tree: TreeNode; hidden: Set<string>; selected: string | null; pickedId: string | null; leaves: (id: string) => string[];
+  onToggle: (id: string) => void; onPick: (n: TreeNode) => void; lang: Lang;
 }) {
   const [open, setOpen] = useState<Set<string>>(() => new Set([tree.id]));
   const rows = useMemo(() => {
@@ -354,10 +363,13 @@ function ModelTree({ tree, hidden, selected, onToggle, onPick, lang }: {
   return (
     <div className="cv-tree" role="tree" aria-label={w(lang, "Model tree")}>
       {rows.map((n) => {
-        const leafHidden = hidden.has(n.id);
+        // Hidden when every piece under it is: the set holds pieces, not the groups above them.
+        const under = hidden.size ? leaves(n.id) : [];
+        const leafHidden = under.length > 0 && under.every((id) => hidden.has(id));
+        const on = (!!n.code && n.code === selected) || (!!pickedId && n.id === pickedId);
         return (
-          <div key={n.id} role="treeitem" aria-selected={!!n.code && n.code === selected} aria-expanded={n.children.length ? open.has(n.id) : undefined}
-            className={`cv-node${n.code && n.code === selected ? " on" : ""}`} style={{ paddingLeft: 6 + n.depth * 12 }}>
+          <div key={n.id} role="treeitem" aria-selected={on} aria-expanded={n.children.length ? open.has(n.id) : undefined}
+            className={`cv-node${on ? " on" : ""}`} style={{ paddingLeft: 6 + n.depth * 12 }}>
             {n.children.length ? (
               <button type="button" className="cv-tw" aria-label={n.name} onClick={() => setOpen((o) => { const x = new Set(o); x.has(n.id) ? x.delete(n.id) : x.add(n.id); return x; })}>
                 {open.has(n.id) ? "▾" : "▸"}
@@ -408,7 +420,7 @@ class Engine {
   xray = false;
   mode: Mode = "turn";
   // Selected parts are bright green, as in the Ronchi viewer.
-  hl = new THREE.MeshStandardMaterial({ color: 0x62d600, emissive: 0x2c6a00, metalness: 0.1, roughness: 0.5 });
+  hl = new THREE.MeshStandardMaterial({ color: 0x62d600, emissive: 0x2c6a00, metalness: 0.1, roughness: 0.5, toneMapped: false });
   gizmo: TransformControls;
   pivot = new THREE.Object3D();
   pivotStart = new THREE.Vector3();
@@ -493,7 +505,9 @@ class Engine {
     this.box.getBoundingSphere(this.sphere);
     const meshMap = map();
     root.traverse((o) => {
-      this.codes.set(o.uuid, codeOf(o.name, meshMap));
+      // Read the number off the name as the CAD file has it: the loader renames copies "X_1", "X_2", which can be another row's number.
+      const raw = typeof o.userData.name === "string" ? o.userData.name : o.name;
+      this.codes.set(o.uuid, meshMap[o.name] ?? codeOf(raw, meshMap));
       if ((o as THREE.Mesh).isMesh) {
         const m = o as THREE.Mesh;
         this.meshes.push(m);
@@ -517,22 +531,35 @@ class Engine {
     for (const id of this.auto.keys()) this.codes.set(id, null);
     this.auto.clear();
     this.guessed.clear();
+    // A name that starts with a row's part number is that row, whatever revision or copy number follows it.
+    const listCodes = parts.map((p) => p.code);
+    root.traverse((o) => {
+      const c = this.codes.get(o.uuid);
+      if (c && this.known.has(c)) return;
+      const byNumber = listCodeOf(typeof o.userData.name === "string" ? o.userData.name : o.name, listCodes);
+      if (byNumber) this.codes.set(o.uuid, byNumber);
+    });
     const have = new Set<string>();
     for (const c of this.codes.values()) if (c) have.add(c);
-    const units = new Map<THREE.Object3D, { names: string[]; verts: number }>();
+    const units = new Map<THREE.Object3D, { names: string[]; verts: number; size: number }>();
+    const dim = new THREE.Vector3();
     for (const m of this.meshes) {
       // Leave alone anything already under a part that is on the list.
       let listed = false;
       for (let o: THREE.Object3D | null = m; o; o = o.parent) { const c = this.codes.get(o.uuid); if (c && this.known.has(c)) { listed = true; break; } }
       if (listed) continue;
       const u = this.unitOf(m);
-      const e = units.get(u) ?? units.set(u, { names: [u.name], verts: 0 }).get(u)!;
+      const e = units.get(u) ?? units.set(u, { names: [u.name], verts: 0, size: 0 }).get(u)!;
       if (m !== u) e.names.push(m.name);
       e.verts += m.geometry.getAttribute("position")?.count ?? 0;
+      // Its size too: two spacers of different thickness have the same name and the same number of points.
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      m.geometry.boundingBox!.getSize(dim);
+      e.size += dim.x + dim.y + dim.z;
     }
     const rows = parts.filter((p) => !have.has(p.code));
     if (units.size && rows.length) {
-      const list = [...units].map(([o, e]) => ({ id: o.uuid, names: e.names, sig: `${[...new Set(e.names.slice(1).map(baseName))].sort().join(",") || baseName(o.name)}|${e.verts}` }));
+      const list = [...units].map(([o, e]) => ({ id: o.uuid, names: e.names, sig: `${[...new Set(e.names.slice(1).map(baseName))].sort().join(",") || baseName(o.name)}|${e.verts}|${Number(e.size.toPrecision(3))}` }));
       for (const [id, l] of autoLink(list, rows)) {
         this.codes.set(id, l.code);
         this.auto.set(id, l.code);
@@ -774,14 +801,20 @@ class Engine {
     this.explodeK = f;
     this.place();
   }
+  // A part inside a sub-assembly is not one of the exploded pieces, so place() will not put it back: do it here.
+  private home(obj: THREE.Object3D) {
+    const o = this.offsets.get(obj);
+    if (o && !this.pieceSet.has(obj)) obj.position.copy(o.orig);
+    this.offsets.delete(obj);
+  }
   restoreSel() {
-    for (const n of this.sel) this.offsets.delete(n);
+    for (const n of this.sel) this.home(n);
     this.on.moved(this.offsets.size);
     this.place();
     this.placeGizmo();
   }
   restoreAll() {
-    this.offsets.clear();
+    for (const obj of [...this.offsets.keys()]) this.home(obj);
     this.on.moved(0);
     this.place();
     this.placeGizmo();

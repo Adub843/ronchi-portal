@@ -49,7 +49,14 @@ export function PartsList({
 
   useEffect(() => {
     if (!selected) return;
-    list.current?.querySelector(`[data-row="${CSS.escape(selected)}"]`)?.scrollIntoView({ block: "nearest" });
+    // Scroll the list only, and only when it scrolls by itself. On a phone the list runs down the page, and
+    // scrolling the page to the row would take the model off the screen and move rows under the finger.
+    const box = list.current;
+    const row = box?.querySelector(`[data-row="${CSS.escape(selected)}"]`);
+    if (!box || !row || box.scrollHeight <= box.clientHeight + 1) return;
+    const b = box.getBoundingClientRect(), r = row.getBoundingClientRect();
+    if (r.top < b.top) box.scrollTop -= b.top - r.top;
+    else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom;
   }, [selected]);
 
   const qtyText = (r: Row) => `${r.qty ?? "–"}${r.unit === "m" ? ` ${w(lang, "m")}` : ""}`;
