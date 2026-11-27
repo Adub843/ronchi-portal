@@ -6,12 +6,16 @@
 // value. Values are never sent to someone without .prices, and their saves keep the value already there.
 // Every change goes to the audit log (never with the value in it) and shows as the deal's history.
 // A save sends the revision it started from; a stale one is refused.
+//
+// Quotes (src/shared/machine-quotes.ts): revisions Q1, Q2 ... on a deal. Opening or building one needs
+// machinesales.prices; without it a person only sees that a quote exists, its status and dates.
 import { Hono } from "hono";
 import { randomId } from "../../shared/crypto";
 import {
-  DATE_FIELDS, DAY, DEAL_FIELDS, DEAL_LABELS, DEAL_MAX, MONEY_FIELDS, MONTH, NOTE_KINDS, NUMBER_FIELDS, SOLD,
+  DATE_FIELDS, DAY, DEAL_FIELDS, DEAL_LABELS, DEAL_MAX, LINE, MONEY_FIELDS, MONTH, NOTE_KINDS, NUMBER_FIELDS, SELLING, SOLD,
   isOpen, isStage, stageNeeds, type DealField, type Stage,
 } from "../../shared/machine-sales";
+import { QUOTE_FIELDS, QUOTE_KINDS, QUOTE_LABELS, QUOTE_MAX, nextStatuses, quoteNumber, quoteTotals, readQuoteLines, type QuoteField, type QuoteLine, type QuoteStatus } from "../../shared/machine-quotes";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
 import { body, fail, has, requirePerm } from "../lib/http";
@@ -68,13 +72,22 @@ const shape = (d: Row, prices: boolean) => {
   return prices ? row : hide(row);
 };
 
-function historyChanges(detail: string | null): Row | null {
-  if (!detail) return null;
+function historyDetail(detail: string | null): Row {
+  if (!detail) return {};
   try {
-    return (JSON.parse(detail) as Row).changes ?? null;
+    return JSON.parse(detail) as Row;
   } catch {
-    return null;
+    return {};
   }
+}
+
+/** A quote row as sent to the app. Lines, terms and the total only for people who may see values. */
+function shapeQuote(q: Row, dealSeq: number, prices: boolean): Row {
+  const base = { id: q.id, rev: q.rev, number: quoteNumber(number(dealSeq), q.rev), kind: q.kind, status: q.status, valid_until: q.valid_until, sent_at: q.sent_at, decided_at: q.decided_at, updated_at: q.updated_at };
+  if (!prices) return base;
+  let lines: QuoteLine[] = [];
+  try { lines = JSON.parse(q.lines) as QuoteLine[]; } catch { /* keep empty */ }
+  return { ...base, lead_time: q.lead_time, payment_terms: q.payment_terms, delivery_terms: q.delivery_terms, warranty: q.warranty, notes: q.notes, discount_pct: q.discount_pct, lines, totals: quoteTotals(lines, q.discount_pct), revision: q.revision };
 }
 
 const LIST_COLS = "id, seq, customer, site, title, machine_type, value, chance, expected_po, owner, funded, next_step, next_step_date, hold_until, customer_po, target_ship, machine, lost_reason, stage, prev_stage, stage_at, won_at, lost_at, closed_at, created_at, updated_at";
@@ -95,17 +108,19 @@ machineSales.get("/:id", async (c) => {
       WHERE d.id = ? AND d.removed_at IS NULL`,
   ).bind(id).first<Row>();
   if (!d) fail(404, "Not found.");
-  const [notes, hist, machines] = await c.env.DB.batch([
+  const [notes, hist, machines, quotes] = await c.env.DB.batch([
     c.env.DB.prepare("SELECT n.id, n.kind, n.body, n.created_at AS at, u.name AS who FROM machine_deal_notes n LEFT JOIN users u ON u.id = n.created_by WHERE n.deal_id = ? ORDER BY n.created_at DESC LIMIT 300").bind(id),
     c.env.DB.prepare("SELECT a.at, a.action, a.detail, u.name AS who FROM audit_log a LEFT JOIN users u ON u.id = a.user_id WHERE a.target_type = 'machine_deal' AND a.target_id = ? ORDER BY a.at DESC LIMIT 200").bind(id),
     // The customer's machines already in the field, for people who may see Machines.
     c.env.DB.prepare("SELECT id, serial, model, site FROM machines WHERE customer = ? COLLATE NOCASE ORDER BY serial LIMIT 100").bind(has(u, "machines.view") ? d.customer : ""),
+    c.env.DB.prepare("SELECT * FROM machine_quotes WHERE deal_id = ? AND removed_at IS NULL ORDER BY rev DESC").bind(id),
   ]);
   return c.json({
     deal: shape(d, has(u, "machinesales.prices")),
     notes: notes!.results,
-    history: (hist!.results as Row[]).map((h) => ({ at: h.at, action: h.action, who: h.who, changes: historyChanges(h.detail) })),
+    history: (hist!.results as Row[]).map((h) => { const x = historyDetail(h.detail); return { at: h.at, action: h.action, who: h.who, changes: x.changes ?? null, quote: x.quote ?? null, status: x.status ?? null }; }),
     machines: machines!.results,
+    quotes: (quotes!.results as Row[]).map((q) => shapeQuote(q, d.seq, has(u, "machinesales.prices"))),
   });
 });
 
@@ -212,5 +227,159 @@ machineSales.delete("/:id", async (c) => {
   const r = await c.env.DB.prepare("UPDATE machine_deals SET removed_at = ?, updated_by = ? WHERE id = ? AND removed_at IS NULL").bind(now(), u.id, id).run();
   if (!r.meta.changes) fail(404, "Not found.");
   await audit(c.env.DB, { userId: u.id, action: "machine_deal.remove", targetType: "machine_deal", targetId: id, ip: c.get("ip") });
+  return c.json({ ok: true });
+});
+
+// ---------- Quotes ----------
+
+/** The quote fields present in `b`, checked and tidied. */
+function cleanQuote(b: Row): Partial<Record<QuoteField, string | number | null>> {
+  const out: Partial<Record<QuoteField, string | number | null>> = {};
+  for (const f of QUOTE_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(b, f)) continue;
+    const what = QUOTE_LABELS[f];
+    if (f === "discount_pct") { out[f] = num(b[f], what, 100); continue; }
+    const v = text(b[f], QUOTE_MAX[f], what);
+    if (f === "kind") { if (!(QUOTE_KINDS as readonly unknown[]).includes(v)) fail(400, "Pick budget or firm."); out[f] = v; continue; }
+    if (v && f === "valid_until" && !DAY.test(v)) fail(400, `${what} must be a date.`);
+    out[f] = v;
+  }
+  return out;
+}
+
+/** Both permissions a person needs to build quotes: change deals and see values. */
+function quoteWriter(c: Parameters<typeof requirePerm>[0]) {
+  const u = requirePerm(c, "machinesales.edit");
+  if (!has(u, "machinesales.prices")) fail(403, "Your role doesn't allow this.");
+  return u;
+}
+
+async function dealAndQuote(db: D1Database, id: string, qid?: string): Promise<{ deal: Row; quote: Row | null }> {
+  const deal = await db.prepare("SELECT * FROM machine_deals WHERE id = ? AND removed_at IS NULL").bind(id).first<Row>();
+  if (!deal) fail(404, "Not found.");
+  if (!qid) return { deal, quote: null };
+  const quote = await db.prepare("SELECT * FROM machine_quotes WHERE id = ? AND deal_id = ? AND removed_at IS NULL").bind(qid, id).first<Row>();
+  if (!quote) fail(404, "Not found.");
+  return { deal, quote };
+}
+
+machineSales.get("/:id/quotes/:qid", async (c) => {
+  const u = requirePerm(c, "machinesales.view");
+  if (!has(u, "machinesales.prices")) fail(403, "Your role doesn't allow this.");
+  const { deal, quote } = await dealAndQuote(c.env.DB, c.req.param("id"), c.req.param("qid"));
+  return c.json({ deal: shape(deal, true), quote: shapeQuote(quote!, deal.seq, true) });
+});
+
+/** A new draft: empty, or a copy of an earlier revision (copy_from) to change. */
+machineSales.post("/:id/quotes", async (c) => {
+  const u = quoteWriter(c);
+  const db = c.env.DB;
+  const id = c.req.param("id");
+  const b = await body(c);
+  const { deal } = await dealAndQuote(db, id);
+  const from = typeof b.copy_from === "string" ? (await dealAndQuote(db, id, b.copy_from)).quote : null;
+  const f = cleanQuote(b);
+  const kind = f.kind ?? from?.kind ?? (deal.stage === "lead" || deal.stage === "qualified" || deal.stage === "specs" || deal.stage === "budget_quote" ? "budget" : "firm");
+  const qid = randomId();
+  const t = now();
+  let rev = 0;
+  for (let attempt = 0; ; attempt++) {
+    rev = (await db.prepare("SELECT COALESCE(MAX(rev), 0) + 1 AS n FROM machine_quotes WHERE deal_id = ?").bind(id).first<{ n: number }>())!.n;
+    try {
+      await db.prepare(
+        `INSERT INTO machine_quotes (id, deal_id, rev, kind, status, valid_until, lead_time, payment_terms, delivery_terms, warranty, notes, discount_pct, lines, total, created_by, updated_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(qid, id, rev, kind, from?.valid_until ?? null, from?.lead_time ?? null, from?.payment_terms ?? null, from?.delivery_terms ?? null, from?.warranty ?? null, from?.notes ?? null, from?.discount_pct ?? null, from?.lines ?? "[]", from?.total ?? null, u.id, u.id, t, t).run();
+      break;
+    } catch (e) {
+      if (!/UNIQUE/i.test(String(e)) || attempt >= 3) throw e;
+    }
+  }
+  const qn = quoteNumber(number(deal.seq), rev);
+  await audit(db, { userId: u.id, action: "machine_deal.quote", targetType: "machine_deal", targetId: id, detail: { quote: qn, status: "draft" }, ip: c.get("ip") });
+  return c.json({ id: qid, number: qn });
+});
+
+/** Save a draft: terms and lines. A quote that was sent is not edited; make a new revision. */
+machineSales.patch("/:id/quotes/:qid", async (c) => {
+  const u = quoteWriter(c);
+  const db = c.env.DB;
+  const b = await body(c);
+  const { quote } = await dealAndQuote(db, c.req.param("id"), c.req.param("qid"));
+  const q = quote!;
+  if (q.status !== "draft") fail(400, "This quote was already sent. Make a new revision to change it.");
+  if (typeof b.revision !== "number" || b.revision !== q.revision) fail(409, "Someone else changed this quote while you were editing. Reload to see their changes.");
+  const set: Row = cleanQuote(b);
+  let lines: QuoteLine[] | null = null;
+  if (b.lines !== undefined) {
+    const r = readQuoteLines(b.lines);
+    if (r.problem !== undefined) fail(400, r.problem);
+    lines = r.lines;
+    set.lines = JSON.stringify(lines);
+  }
+  if (lines || "discount_pct" in set) {
+    const ls = lines ?? (JSON.parse(q.lines) as QuoteLine[]);
+    set.total = quoteTotals(ls, "discount_pct" in set ? (set.discount_pct as number | null) : q.discount_pct).total;
+  }
+  const keys = Object.keys(set);
+  if (!keys.length) return c.json({ ok: true, revision: q.revision });
+  const r = await db.prepare(`UPDATE machine_quotes SET ${keys.map((k) => `${k} = ?, `).join("")}revision = revision + 1, updated_by = ?, updated_at = ? WHERE id = ? AND revision = ?`)
+    .bind(...keys.map((k) => set[k] ?? null), u.id, now(), q.id, q.revision).run();
+  if (!r.meta.changes) fail(409, "Someone else changed this quote while you were editing. Reload to see their changes.");
+  return c.json({ ok: true, revision: q.revision + 1 });
+});
+
+/**
+ * Send a draft, or record the customer's answer. Sending replaces the quote that was out before,
+ * sets the deal's value to this quote's total, and moves a deal that is still being sold forward to
+ * the matching quote stage (never backward).
+ */
+machineSales.post("/:id/quotes/:qid/status", async (c) => {
+  const u = quoteWriter(c);
+  const db = c.env.DB;
+  const id = c.req.param("id");
+  const b = await body(c);
+  const { deal, quote } = await dealAndQuote(db, id, c.req.param("qid"));
+  const q = quote!;
+  const to = b.status as QuoteStatus;
+  if (!nextStatuses(q.status).includes(to)) fail(400, "That isn't the next step for this quote.");
+  if (typeof b.revision !== "number" || b.revision !== q.revision) fail(409, "Someone else changed this quote while you were editing. Reload to see their changes.");
+  const t = now();
+  const qn = quoteNumber(number(deal.seq), q.rev);
+  const stmts: D1PreparedStatement[] = [];
+  if (to === "sent" && q.status === "draft") {
+    const lines = JSON.parse(q.lines) as QuoteLine[];
+    const totals = quoteTotals(lines, q.discount_pct);
+    if (!lines.length) fail(400, "Add at least one line before sending the quote.");
+    if (!totals.priced) fail(400, "Every line that isn't an option needs a price before the quote is sent.");
+    const stage = q.kind === "budget" ? "budget_quote" : "firm_quote";
+    const forward = SELLING.has(deal.stage) && LINE.indexOf(stage) > LINE.indexOf(deal.stage);
+    stmts.push(
+      db.prepare("UPDATE machine_quotes SET status = 'sent', sent_at = ?, total = ?, revision = revision + 1, updated_by = ?, updated_at = ? WHERE id = ? AND revision = ?").bind(t, totals.total, u.id, t, q.id, q.revision),
+      db.prepare("UPDATE machine_quotes SET status = 'superseded', revision = revision + 1, updated_at = ? WHERE deal_id = ? AND id <> ? AND status = 'sent' AND removed_at IS NULL").bind(t, id, q.id),
+      forward
+        ? db.prepare("UPDATE machine_deals SET value = ?, stage = ?, stage_at = ?, revision = revision + 1, updated_by = ?, updated_at = ? WHERE id = ?").bind(totals.total, stage, t, u.id, t, id)
+        : db.prepare("UPDATE machine_deals SET value = ?, revision = revision + 1, updated_by = ?, updated_at = ? WHERE id = ?").bind(totals.total, u.id, t, id),
+    );
+    const [r] = await db.batch(stmts);
+    if (!r?.meta.changes) fail(409, "Someone else changed this quote while you were editing. Reload to see their changes.");
+    await audit(db, { userId: u.id, action: "machine_deal.quote", targetType: "machine_deal", targetId: id, detail: { quote: qn, status: "sent", changes: { value: [null, "changed"], ...(forward ? { stage: [deal.stage, stage] } : {}) } }, ip: c.get("ip") });
+    return c.json({ ok: true });
+  }
+  const r = await db.prepare("UPDATE machine_quotes SET status = ?, decided_at = ?, revision = revision + 1, updated_by = ?, updated_at = ? WHERE id = ? AND revision = ?")
+    .bind(to, to === "sent" ? null : t, u.id, t, q.id, q.revision).run();
+  if (!r.meta.changes) fail(409, "Someone else changed this quote while you were editing. Reload to see their changes.");
+  await db.prepare("UPDATE machine_deals SET updated_at = ?, updated_by = ? WHERE id = ?").bind(t, u.id, id).run();
+  await audit(db, { userId: u.id, action: "machine_deal.quote", targetType: "machine_deal", targetId: id, detail: { quote: qn, status: to }, ip: c.get("ip") });
+  return c.json({ ok: true });
+});
+
+/** Throw a draft away. A quote that was sent stays in the record. */
+machineSales.delete("/:id/quotes/:qid", async (c) => {
+  const u = quoteWriter(c);
+  const { deal, quote } = await dealAndQuote(c.env.DB, c.req.param("id"), c.req.param("qid"));
+  if (quote!.status !== "draft") fail(400, "A quote that was sent stays in the record.");
+  await c.env.DB.prepare("UPDATE machine_quotes SET removed_at = ?, updated_by = ? WHERE id = ?").bind(now(), u.id, quote!.id).run();
+  await audit(c.env.DB, { userId: u.id, action: "machine_deal.quote", targetType: "machine_deal", targetId: deal.id, detail: { quote: quoteNumber(number(deal.seq), quote!.rev), status: "removed" }, ip: c.get("ip") });
   return c.json({ ok: true });
 });

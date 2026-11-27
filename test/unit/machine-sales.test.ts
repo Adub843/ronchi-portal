@@ -46,3 +46,30 @@ describe("machine sales rules", () => {
     expect(stageNeeds("negotiation")).toBeNull();
   });
 });
+
+import { nextStatuses, quoteTotals, readQuoteLines } from "../../src/shared/machine-quotes";
+
+describe("machine quotes", () => {
+  it("adds up the lines, leaves options out of the total, and takes the discount off", () => {
+    const t = quoteTotals([
+      { qty: 1, unit_price: 800000, optional: false, origin: "italy" },
+      { qty: 2, unit_price: 50000, optional: false, origin: "us" },
+      { qty: 1, unit_price: 30000, optional: true, origin: "italy" },
+    ], 5);
+    expect(t).toMatchObject({ subtotal: 900000, discount: 45000, total: 855000, options: 30000, italy: 800000, us: 100000, priced: true });
+    expect(quoteTotals([{ qty: 1, unit_price: null, optional: false, origin: "italy" }]).priced).toBe(false);
+    expect(quoteTotals([]).priced).toBe(false);
+  });
+  it("checks the lines people type", () => {
+    expect(readQuoteLines([{ description: " Filler ", qty: "2", unit_price: "$1,200.50" }]).lines).toEqual([{ description: "Filler", detail: null, origin: "italy", qty: 2, unit_price: 1200.5, optional: false }]);
+    expect(readQuoteLines([{ description: "" }]).problem).toBeTruthy();
+    expect(readQuoteLines([{ description: "X", qty: 0 }]).problem).toBeTruthy();
+    expect(readQuoteLines([{ description: "X", unit_price: "lots" }]).problem).toBeTruthy();
+    expect(readQuoteLines("no").problem).toBeTruthy();
+  });
+  it("a sent quote is answered, not edited", () => {
+    expect(nextStatuses("draft")).toEqual(["sent"]);
+    expect(nextStatuses("sent")).toEqual(["accepted", "declined"]);
+    expect(nextStatuses("superseded")).toEqual([]);
+  });
+});

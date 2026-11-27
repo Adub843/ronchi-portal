@@ -697,7 +697,24 @@ nav.side .menu-pop{min-width:200px}
 .ms-nextrow{gap:8px;flex-wrap:wrap}
 .ms-nextrow input[type=text],.ms-nextrow input:not([type]){flex:1 1 180px;width:auto}
 .ms-nextrow input[type=date]{width:auto}
-@media (max-width:900px){.ms-page{grid-template-columns:1fr}.ms-board{grid-auto-columns:78%}}
+.ms-quotes li{margin-bottom:8px}
+.mq-status{gap:10px;flex-wrap:wrap;align-items:center}
+.mq-lines input,.mq-lines textarea,.mq-lines select,.mq-terms input,.mq-terms textarea,.mq-terms select,.mq-totals input{font:inherit;padding:7px 9px}
+.mq-lines td:first-child input,.mq-lines td:first-child textarea{width:100%;min-width:220px;display:block}
+.mq-lines td:first-child textarea{margin-top:4px;font-size:13px}
+.mq-lines td{vertical-align:top}
+.mq-n{width:70px;text-align:right}
+.mq-p{width:120px;text-align:right}
+.mq-totals{margin:12px;display:grid;gap:6px;justify-content:end;text-align:right}
+.mq-totals>div{display:flex;gap:16px;justify-content:flex-end;align-items:center}
+.mq-totals dt{color:var(--muted);font-size:13px}
+.mq-totals dd{margin:0;min-width:120px}
+.mq-totals .big dd{font-size:20px;font-weight:700}
+.mq-terms{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.mq-terms label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.mq-terms label>span{color:var(--ink);font-size:15px}
+.mq-terms .wide{grid-column:1/-1}
+@media (max-width:900px){.ms-page{grid-template-columns:1fr}.ms-board{grid-auto-columns:78%}.mq-terms{grid-template-columns:1fr}.mq-lines{display:block;overflow-x:auto}}
 
 /* Inventory */
 .inv-grid{margin:12px 0;align-items:start}
