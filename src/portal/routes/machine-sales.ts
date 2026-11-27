@@ -16,6 +16,7 @@ import {
   isOpen, isStage, stageNeeds, type DealField, type Stage,
 } from "../../shared/machine-sales";
 import { QUOTE_FIELDS, QUOTE_KINDS, QUOTE_LABELS, QUOTE_MAX, nextStatuses, quoteNumber, quoteTotals, readQuoteLines, type QuoteField, type QuoteLine, type QuoteStatus } from "../../shared/machine-quotes";
+import { readMilestones, type Milestone } from "../../shared/machine-orders";
 import type { AppEnv } from "../env";
 import { audit, now } from "../lib/db";
 import { body, fail, has, requirePerm } from "../lib/http";
@@ -95,7 +96,10 @@ const LIST_COLS = "id, seq, customer, site, title, machine_type, value, chance, 
 machineSales.get("/", async (c) => {
   const u = requirePerm(c, "machinesales.view");
   const prices = has(u, "machinesales.prices");
-  const { results } = await c.env.DB.prepare(`SELECT ${LIST_COLS} FROM machine_deals WHERE removed_at IS NULL ORDER BY updated_at DESC LIMIT 2000`).all<Row>();
+  const { results } = await c.env.DB.prepare(
+    `SELECT ${LIST_COLS}, (SELECT MIN(m.due) FROM machine_deal_milestones m WHERE m.deal_id = machine_deals.id AND m.done IS NULL AND m.due IS NOT NULL) AS next_milestone
+       FROM machine_deals WHERE removed_at IS NULL ORDER BY updated_at DESC LIMIT 2000`,
+  ).all<Row>();
   return c.json({ deals: results.map((d) => shape(d, prices)) });
 });
 
@@ -108,15 +112,22 @@ machineSales.get("/:id", async (c) => {
       WHERE d.id = ? AND d.removed_at IS NULL`,
   ).bind(id).first<Row>();
   if (!d) fail(404, "Not found.");
-  const [notes, hist, machines, quotes] = await c.env.DB.batch([
+  const [notes, hist, machines, quotes, miles] = await c.env.DB.batch([
     c.env.DB.prepare("SELECT n.id, n.kind, n.body, n.created_at AS at, u.name AS who FROM machine_deal_notes n LEFT JOIN users u ON u.id = n.created_by WHERE n.deal_id = ? ORDER BY n.created_at DESC LIMIT 300").bind(id),
     c.env.DB.prepare("SELECT a.at, a.action, a.detail, u.name AS who FROM audit_log a LEFT JOIN users u ON u.id = a.user_id WHERE a.target_type = 'machine_deal' AND a.target_id = ? ORDER BY a.at DESC LIMIT 200").bind(id),
     // The customer's machines already in the field, for people who may see Machines.
     c.env.DB.prepare("SELECT id, serial, model, site FROM machines WHERE customer = ? COLLATE NOCASE ORDER BY serial LIMIT 100").bind(has(u, "machines.view") ? d.customer : ""),
     c.env.DB.prepare("SELECT * FROM machine_quotes WHERE deal_id = ? AND removed_at IS NULL ORDER BY rev DESC").bind(id),
+    c.env.DB.prepare("SELECT id, kind, label, due, done, pct, amount, invoice_no FROM machine_deal_milestones WHERE deal_id = ? ORDER BY kind, line_no").bind(id),
   ]);
+  const prices = has(u, "machinesales.prices");
+  const ms = miles!.results as Row[];
+  const next = ms.filter((m) => !m.done && m.due).map((m) => m.due as string).sort()[0] ?? null;
   return c.json({
-    deal: shape(d, has(u, "machinesales.prices")),
+    deal: { ...shape(d, prices), next_milestone: next },
+    dates: ms.filter((m) => m.kind === "date").map((m) => ({ id: m.id, label: m.label, due: m.due, done: m.done })),
+    // Without See deal values a payment shows its name, when it is due and whether it came in: no amounts.
+    payments: ms.filter((m) => m.kind === "payment").map((m) => (prices ? { id: m.id, label: m.label, due: m.due, done: m.done, pct: m.pct, amount: m.amount, invoice_no: m.invoice_no } : { id: m.id, label: m.label, due: m.due, done: m.done })),
     notes: notes!.results,
     history: (hist!.results as Row[]).map((h) => { const x = historyDetail(h.detail); return { at: h.at, action: h.action, who: h.who, changes: x.changes ?? null, quote: x.quote ?? null, status: x.status ?? null }; }),
     machines: machines!.results,
@@ -197,8 +208,17 @@ machineSales.patch("/:id", async (c) => {
   const r = await c.env.DB.prepare(`UPDATE machine_deals SET ${keys.map((k) => `${k} = ?, `).join("")}revision = ?, updated_by = ?, updated_at = ? WHERE id = ? AND revision = ?`)
     .bind(...keys.map((k) => set[k] ?? null), rev, u.id, t, id, before.revision).run();
   if (!r.meta.changes) stale();
+  // Final payment: the machine joins the Machines list, if its number is on the deal and it isn't there yet.
+  let machineAdded = false;
+  const serial = String(set.machine ?? before.machine ?? "").trim();
+  if (set.stage === "paid" && serial) {
+    const m = await c.env.DB.prepare("INSERT INTO machines (id, serial, model, customer, site, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (serial) DO NOTHING")
+      .bind(randomId(), serial, set.machine_type ?? before.machine_type ?? null, set.customer ?? before.customer, set.site ?? before.site ?? null, t, t).run();
+    machineAdded = !!m.meta.changes;
+    if (machineAdded) diff.machine_added = [null, serial];
+  }
   await audit(c.env.DB, { userId: u.id, action: "machine_deal.update", targetType: "machine_deal", targetId: id, detail: { changes: diff }, ip: c.get("ip") });
-  return c.json({ ok: true, revision: rev });
+  return c.json({ ok: true, revision: rev, machine_added: machineAdded ? serial : null });
 });
 
 /** Log a call, visit, email, meeting or note on a deal. Optionally sets the next step in the same go. */
@@ -382,4 +402,46 @@ machineSales.delete("/:id/quotes/:qid", async (c) => {
   await c.env.DB.prepare("UPDATE machine_quotes SET removed_at = ?, updated_by = ? WHERE id = ?").bind(now(), u.id, quote!.id).run();
   await audit(c.env.DB, { userId: u.id, action: "machine_deal.quote", targetType: "machine_deal", targetId: deal.id, detail: { quote: quoteNumber(number(deal.seq), quote!.rev), status: "removed" }, ip: c.get("ip") });
   return c.json({ ok: true });
+});
+
+// ---------- Order dates and payments ----------
+
+/**
+ * Save a sold deal's order dates and/or its payments. Each list sent replaces the one saved.
+ * Payments need See deal values as well; someone without it can still keep the dates.
+ */
+machineSales.put("/:id/milestones", async (c) => {
+  const u = requirePerm(c, "machinesales.edit");
+  const db = c.env.DB;
+  const id = c.req.param("id");
+  const b = await body(c);
+  const { deal } = await dealAndQuote(db, id);
+  if (typeof b.revision !== "number" || b.revision !== deal.revision) fail(409, "Someone else changed this deal while you were editing. Reload to see their changes.");
+  const lists: ["date" | "payment", Milestone[]][] = [];
+  const changes: Record<string, [unknown, unknown]> = {};
+  for (const kind of ["date", "payment"] as const) {
+    const raw = b[kind === "date" ? "dates" : "payments"];
+    if (raw === undefined) continue;
+    if (kind === "payment" && !has(u, "machinesales.prices")) fail(403, "Your role doesn't allow this.");
+    const r = readMilestones(raw, kind);
+    if (r.problem !== undefined) fail(400, r.problem);
+    lists.push([kind, r.list]);
+    const had = (await db.prepare("SELECT label, done FROM machine_deal_milestones WHERE deal_id = ? AND kind = ? ORDER BY line_no").bind(id, kind).all<{ label: string; done: string | null }>()).results;
+    const say = (ls: { label: string; done: string | null }[]) => ls.map((m) => `${m.label}${m.done ? ` (${m.done})` : ""}`).join("; ") || null;
+    if (say(had) !== say(r.list)) changes[kind === "date" ? "order_dates" : "payments"] = [say(had), say(r.list)]; // names and days only: never amounts
+  }
+  if (!lists.length) fail(400, "Send the order dates or the payments.");
+  const t = now();
+  const rev = deal.revision + 1;
+  const guard = "(SELECT revision FROM machine_deals WHERE id = ?) = ?";
+  const stmts: D1PreparedStatement[] = [db.prepare("UPDATE machine_deals SET revision = ?, updated_by = ?, updated_at = ? WHERE id = ? AND revision = ?").bind(rev, u.id, t, id, deal.revision)];
+  for (const [kind, list] of lists) {
+    stmts.push(db.prepare(`DELETE FROM machine_deal_milestones WHERE deal_id = ? AND kind = ? AND ${guard}`).bind(id, kind, id, rev));
+    list.forEach((m, i) => stmts.push(db.prepare(`INSERT INTO machine_deal_milestones (id, deal_id, kind, line_no, label, due, done, pct, amount, invoice_no) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${guard}`)
+      .bind(randomId(), id, m.kind, i + 1, m.label, m.due, m.done, m.pct, m.amount, m.invoice_no, id, rev)));
+  }
+  const [r] = await db.batch(stmts);
+  if (!r?.meta.changes) fail(409, "Someone else changed this deal while you were editing. Reload to see their changes.");
+  if (Object.keys(changes).length) await audit(db, { userId: u.id, action: "machine_deal.update", targetType: "machine_deal", targetId: id, detail: { changes }, ip: c.get("ip") });
+  return c.json({ ok: true, revision: rev });
 });

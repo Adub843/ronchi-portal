@@ -78,3 +78,46 @@ describe("machine quotes", () => {
     expect((await deal(andrew, id)).quotes).toEqual([]);
   });
 });
+
+describe("machine orders", () => {
+  it("keeps order dates and payments on a sold deal, flags what is late, and hides amounts", async () => {
+    const andrew = await person("sales");
+    const made = await andrew.json("/api/machine-sales", { body: { customer: "Order Test Pharma", site: "Raleigh, NC", machine_type: "EXACTA filler", value: 1000000, customer_po: "PO-9", stage: "won", machine: "4999zz" } });
+    const id = made.data.id;
+    let d = await deal(andrew, id);
+    expect(d.dates).toEqual([]);
+    const put = (p: any, body: Record<string, unknown>) => p.fetch(`/api/machine-sales/${id}/milestones`, { method: "PUT", body });
+    expect((await put(andrew, { revision: d.deal.revision, dates: [{ label: "FAT", due: "2020-01-10" }, { label: "Shipped", due: "2099-01-01" }], payments: [{ label: "Deposit", pct: 40, due: "2020-01-01", done: "2020-01-03", invoice_no: "INV-1" }, { label: "Before shipment", pct: 50, due: "2020-02-01" }, { label: "After start-up", amount: 100000 }] })).status).toBe(200);
+    expect((await put(andrew, { revision: d.deal.revision, dates: [] })).status).toBe(409);
+    d = await deal(andrew, id);
+    expect(d.dates.map((m: any) => m.label)).toEqual(["FAT", "Shipped"]);
+    expect(d.payments).toHaveLength(3);
+    expect(d.payments[0]).toMatchObject({ label: "Deposit", pct: 40, done: "2020-01-03", invoice_no: "INV-1" });
+    expect(d.deal.next_milestone).toBe("2020-01-10");
+    const listed = (await andrew.json("/api/machine-sales")).data.deals.find((x: any) => x.id === id);
+    expect(listed.next_milestone).toBe("2020-01-10");
+    expect((await put(andrew, { revision: d.deal.revision, payments: [{ label: "", pct: 10 }] })).status).toBe(400);
+    expect((await put(andrew, { revision: d.deal.revision, payments: [{ label: "X", pct: 140 }] })).status).toBe(400);
+    expect((await put(andrew, { revision: d.deal.revision, dates: [{ label: "X", due: "soon" }] })).status).toBe(400);
+    // Someone without deal values sees names and days only, and can't change anything.
+    const tech = await person("tech");
+    const seen = await deal(tech, id);
+    expect(seen.payments[0]).toEqual({ id: seen.payments[0].id, label: "Deposit", due: "2020-01-01", done: "2020-01-03" });
+    expect(JSON.stringify(seen.payments)).not.toMatch(/pct|amount|INV-1/);
+    expect((await put(tech, { revision: d.deal.revision, dates: [] })).status).toBe(403);
+    expect(JSON.stringify(seen.history)).not.toMatch(/100000|1000000/);
+  });
+
+  it("adds the machine to Machines when the final payment arrives", async () => {
+    const andrew = await person("sales");
+    const made = await andrew.json("/api/machine-sales", { body: { customer: "Final Payment Foods", site: "Atlanta, GA", machine_type: "SIRIO capper", customer_po: "PO-77", stage: "install", machine: "4998zy" } });
+    const d = await deal(andrew, made.data.id);
+    const r = await andrew.fetch(`/api/machine-sales/${made.data.id}`, { method: "PATCH", body: { revision: d.deal.revision, stage: "paid" } });
+    expect(r.status).toBe(200);
+    expect((await r.json() as any).machine_added).toBe("4998ZY");
+    const machines = (await andrew.json("/api/machines")).data.machines ?? (await andrew.json("/api/machines")).data;
+    const m = (Array.isArray(machines) ? machines : []).find((x: any) => x.serial === "4998ZY");
+    expect(m).toMatchObject({ customer: "Final Payment Foods", site: "Atlanta, GA", model: "SIRIO capper" });
+    expect((await deal(andrew, made.data.id)).machines.some((x: any) => x.serial === "4998ZY")).toBe(true);
+  });
+});

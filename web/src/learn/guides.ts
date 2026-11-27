@@ -700,6 +700,17 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
+    id: "machine-order-dates", area: "machine-sales", needs: ["machinesales.view", "machinesales.edit"],
+    title: T("Follow a machine order after the PO", "Seguir un pedido de máquina después de la orden de compra", "Seguire un ordine macchina dopo l'ordine d'acquisto"),
+    summary: T("Order dates, payments, and the machine joining the Machines list.", "Fechas del pedido, pagos y la máquina que entra en la lista de Máquinas.", "Date dell'ordine, pagamenti e la macchina che entra nell'elenco Macchine."),
+    steps: [
+      T("Open a sold deal. Under Order dates and payments press Add the usual dates, set the planned day for each, and press Save.", "Abra un negocio vendido. En Fechas del pedido y pagos pulse Agregar las fechas habituales, ponga el día planificado de cada una y pulse Guardar.", "Apri una trattativa venduta. In Date dell'ordine e pagamenti premi Aggiungi le date consuete, imposta il giorno previsto di ciascuna e premi Salva."),
+      T("When a step happens, fill in Happened on. A date whose day has passed shows Late, and the deal is flagged on the Orders tab.", "Cuando ocurra un paso, complete Ocurrió el. Una fecha cuyo día pasó aparece como Tarde y el negocio queda marcado en la pestaña Pedidos.", "Quando un passo avviene, compila Avvenuto il. Una data passata risulta In ritardo e la trattativa viene segnalata nella scheda Ordini."),
+      T("People who may see deal values also list the payments: a name, a percent of the order or an amount, the due day, the invoice number and the day it was paid.", "Quienes pueden ver los valores de los negocios también anotan los pagos: un nombre, un porcentaje del pedido o un importe, el día de vencimiento, el número de factura y el día en que se pagó.", "Chi può vedere i valori delle trattative elenca anche i pagamenti: un nome, una percentuale dell'ordine o un importo, la scadenza, il numero di fattura e il giorno del pagamento."),
+      T("Moving the deal to Final payment received adds its machine number to the Machines list, with the customer and site.", "Al pasar el negocio a Pago final recibido, su número de máquina se agrega a la lista de Máquinas, con el cliente y el sitio.", "Portando la trattativa a Pagamento finale ricevuto, il numero di macchina viene aggiunto all'elenco Macchine, con cliente e sito."),
+    ],
+  },
+  {
     id: "remove-machine-deal", area: "machine-sales", needs: ["machinesales.view", "machinesales.remove"],
     title: T("Remove a machine deal", "Quitar un negocio de máquina", "Rimuovere una trattativa macchina"),
     summary: T("Take a deal added by mistake off the list.", "Quite de la lista un negocio agregado por error.", "Togli dall'elenco una trattativa aggiunta per errore."),

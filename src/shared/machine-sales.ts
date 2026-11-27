@@ -145,6 +145,8 @@ export interface DealFacts {
   expected_po: string | null;
   chance?: number | null;
   value?: number | null;
+  /** The earliest order date or payment that hasn't happened yet (sold deals). */
+  next_milestone?: string | null;
 }
 
 /** Whole days since an ISO time, by the calendar. */
@@ -154,13 +156,14 @@ export function daysSince(iso: string | null | undefined, today: string): number
   return Number.isFinite(d) && d > 0 ? d : 0;
 }
 
-export type FlagId = "stale" | "no_next" | "next_due" | "po_passed" | "reconnect";
+export type FlagId = "stale" | "no_next" | "next_due" | "po_passed" | "reconnect" | "milestone_due";
 export const FLAG_LABELS: Record<FlagId, string> = {
   stale: "Left too long",
   no_next: "No next step",
   next_due: "Next step overdue",
   po_passed: "Expected PO month has passed",
   reconnect: "Time to reconnect",
+  milestone_due: "Order date or payment overdue",
 };
 
 /**
@@ -177,6 +180,7 @@ export function flags(d: DealFacts, today: string): FlagId[] {
   if (!d.next_step) out.push("no_next");
   else if (d.next_step_date && d.next_step_date < today) out.push("next_due");
   if (SELLING.has(s) && d.expected_po && d.expected_po < today.slice(0, 7)) out.push("po_passed");
+  if (d.next_milestone && d.next_milestone < today) out.push("milestone_due");
   return out;
 }
 

@@ -698,6 +698,19 @@ nav.side .menu-pop{min-width:200px}
 .ms-nextrow input[type=text],.ms-nextrow input:not([type]){flex:1 1 180px;width:auto}
 .ms-nextrow input[type=date]{width:auto}
 .ms-quotes li{margin-bottom:8px}
+.mo h3{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:14px 0 6px}
+.mo-table{width:100%;border-collapse:collapse;font-size:14px;display:block;overflow-x:auto}
+.mo-table th{text-align:left;font-size:11px;color:var(--muted);font-weight:600;padding:2px 6px 4px 0}
+.mo-table td{padding:3px 6px 3px 0;vertical-align:middle;white-space:nowrap}
+.mo-table input{font:inherit;padding:6px 8px}
+.mo-table td:first-child input{min-width:230px;width:100%}
+.mo-table input[type=date]{width:150px}
+.mo-add{gap:8px;margin:8px 0 0}
+.mo-late{color:var(--accent);font-weight:600}
+.mo-sum{margin:10px 0 0}
+.ms-page>*{min-width:0}
+.ms-page>.stack>*{min-width:0;max-width:100%}
+.mo-table{max-width:100%}
 .mq-status{gap:10px;flex-wrap:wrap;align-items:center}
 .mq-lines input,.mq-lines textarea,.mq-lines select,.mq-terms input,.mq-terms textarea,.mq-terms select,.mq-totals input{font:inherit;padding:7px 9px}
 .mq-lines td:first-child input,.mq-lines td:first-child textarea{width:100%;min-width:220px;display:block}
