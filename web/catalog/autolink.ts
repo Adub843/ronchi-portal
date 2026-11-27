@@ -96,6 +96,7 @@ const STD: Record<string, string> = {
 };
 const STD_KIND: Record<string, string> = { "5931": "screw", "5739": "screw", "5933": "screw", "7380": "screw", "1207": "screw", "5923": "screw", "6592": "washer", "6593": "washer", "1751": "washer", "5588": "nut", "5721": "nut", "7473": "nut" };
 const STD_AT = /(?:^| )(?:uni|iso|din|u) ?(?:en )?(?:iso )?(\d{3,5})/;
+const STD_YEAR = new RegExp(`${STD_AT.source}(?: \\d\\d(?= |$))?`);   // "UNI 6592-69": the 69 is the year
 /** The standard a cleaned name cites, as the one name its ISO, DIN and UNI numbers share. */
 function standard(text: string): string | null {
   const m = STD_AT.exec(text);
@@ -116,7 +117,7 @@ function score(raw: string, rowRaw: string): number {
   const us = standard(mine), rs = standard(rowAll.trim());
   if (us && rs) {
     if (us !== rs) return 0;
-    const sizes = rowAll.trim().replace(STD_AT, " ").replace(/^ ?\d\d(?= |$)/, " ").split(" ").filter((t) => /\d/.test(t));
+    const sizes = rowAll.trim().replace(STD_YEAR, " ").split(" ").filter((t) => /\d/.test(t));
     return sizes.every((t) => new RegExp(`(?:^|[ x])${t}(?:$|[ x])`).test(mine)) ? 3 : 0;
   }
   const uk = kind(base) ?? (us && STD_KIND[us] ? { words: [STD_KIND[us]!], firm: true } : null);
