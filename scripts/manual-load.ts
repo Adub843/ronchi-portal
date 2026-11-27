@@ -36,8 +36,12 @@ if (!jobs.length) { console.error("Give a machine number and its chapter 11 PDF,
 
 const auth = { authorization: `Bearer ${readFileSync(join(homedir(), ".ronchi", "catalog-loader-key"), "utf8").trim()}` };
 interface Machine { serial: string; sheets: { id: string; source?: string }[] }
-const machines = ((await (await fetch(`${PORTAL}/api/catalog-loader/machines`, { headers: auth })).json()) as { machines: Machine[] }).machines;
-const known = new Map(machines.map((m) => [m.serial.toUpperCase(), m]));
+// Asked again before every machine: a long list can run beside another one, and a machine that
+// run has filled since this one started must be skipped, not loaded a second time.
+const portalMachines = async () => {
+  const machines = ((await (await send(`${PORTAL}/api/catalog-loader/machines`, { headers: auth })).json()) as { machines: Machine[] }).machines;
+  return new Map(machines.map((m) => [m.serial.toUpperCase(), m]));
+};
 
 // Same as web/src/catalog/pdf.ts pageText(), without the browser.
 async function pageText(doc: pdfjs.PDFDocumentProxy, n: number): Promise<PageText> {
@@ -78,7 +82,7 @@ const note = (serial: string, what: string, detail: Record<string, unknown> = {}
 let done = 0, skipped = 0, failed = 0;
 for (const job of jobs) {
   const serial = job.serial.toUpperCase();
-  const m = known.get(serial);
+  const m = (await portalMachines()).get(serial);
   if (!m) { skipped++; note(serial, "skipped: the portal has no machine with this number"); continue; }
   if (m.sheets.length && !replace) { skipped++; note(serial, `skipped: already has ${m.sheets.length} parts lists`); continue; }
   try {
