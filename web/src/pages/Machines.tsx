@@ -154,7 +154,7 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
                         <td><a href={s.sharepoint_url} target="_blank" rel="noopener noreferrer">{s.project_no || s.title}</a></td>
                         <td>{s.project_no ? s.title : ""}</td>
                         <td className="muted">{s.customer}</td>
-                        <td className="muted">{s.reports ? t("{n} service reports", { n: s.reports }) : ""}</td>
+                        <td className="muted">{s.reports === 1 ? t("1 service report") : s.reports ? t("{n} service reports", { n: s.reports }) : ""}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -18,7 +18,7 @@ machines.get("/", async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT id, serial, model, customer, site, updated_at FROM machines
       WHERE ? = '' OR serial LIKE ? ESCAPE '\\' OR model LIKE ? ESCAPE '\\' OR customer LIKE ? ESCAPE '\\' OR site LIKE ? ESCAPE '\\'
-      ORDER BY serial LIMIT 500`,
+      ORDER BY serial LIMIT 5000`,
   ).bind(q, like, like, like, like).all();
   return c.json({ machines: results });
 });
