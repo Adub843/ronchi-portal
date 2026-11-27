@@ -13,9 +13,9 @@ import { navigate } from "../router";
 import { cleanFolder, fmtBytes, groupByFolder, type SoftwareFile } from "../../../src/shared/software";
 
 interface Pkg { id: string; name: string; description: string; legacy: boolean; files: number; size: number }
-type FileRow = SoftwareFile & { url?: string; link?: boolean };
+type FileRow = SoftwareFile & { url?: string; link?: boolean; opens?: boolean };
 /** A file's size, or "SharePoint" for a file that is only a link (its size isn't known). */
-const sizeOf = (f: { size: number; link?: boolean }) => (f.link && !f.size ? t("on SharePoint") : fmtBytes(f.size));
+const sizeOf = (f: { size: number; link?: boolean; opens?: boolean }) => (f.opens ? `${f.size ? `${fmtBytes(f.size)} · ` : ""}${t("opens in SharePoint")}` : f.link && !f.size ? t("on SharePoint") : fmtBytes(f.size));
 
 const nFiles = (n: number) => (n === 1 ? t("1 file") : t("{n} files", { n }));
 const fileHref = (f: FileRow) => f.url ?? `/api/software/files/${encodeURIComponent(f.id)}`;
@@ -74,7 +74,7 @@ const canPickFolder = () => typeof (window as any).showDirectoryPicker === "func
 export function SoftwarePicker({ pkg, onClose }: { pkg: Pkg; onClose: () => void }) {
   const { data, error } = useLoad<{ package: Pkg; files: FileRow[]; sharepoint?: boolean }>(() => api(`/software/${encodeURIComponent(pkg.id)}`), [pkg.id]);
   // With the Microsoft connection set, SharePoint files come through the portal like stored ones.
-  const viaPortal = (f: FileRow) => !f.link || !!data?.sharepoint;
+  const viaPortal = (f: FileRow) => !f.opens && (!f.link || !!data?.sharepoint);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [openLines, setOpenLines] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -128,7 +128,8 @@ export function SoftwarePicker({ pkg, onClose }: { pkg: Pkg; onClose: () => void
       setProgress({ ...p });
       try {
         // Without the Microsoft connection, SharePoint files go through the browser and the person's own sign-in.
-        if (root && viaPortal(f)) await saveInto(root, f, (n) => { p.bytes += n; setProgress({ ...p }); });
+        if (f.opens) { window.open(fileHref(f), "_blank", "noopener"); p.bytes += f.size; await new Promise((r) => setTimeout(r, 600)); }
+        else if (root && viaPortal(f)) await saveInto(root, f, (n) => { p.bytes += n; setProgress({ ...p }); });
         else { await clickDownload(f); p.bytes += f.size; }
       } catch {
         p.failed.push(p.current);
@@ -178,7 +179,7 @@ export function SoftwarePicker({ pkg, onClose }: { pkg: Pkg; onClose: () => void
                             <span className="sw-ic" aria-hidden="true">{l.folder ? "📁" : "📄"}</span>
                             <span className="sw-name">{l.label}</span>
                           </label>
-                          <span className="muted mono sw-size">{l.folder ? `${nFiles(l.files.length)} · ` : ""}{l.size || !l.files.some((f) => f.link) ? fmtBytes(l.size) : t("on SharePoint")}</span>
+                          <span className="muted mono sw-size">{!l.folder ? sizeOf(l.files[0]!) : <>{`${nFiles(l.files.length)} · `}{l.size || !l.files.some((f) => f.link) ? fmtBytes(l.size) : t("on SharePoint")}</>}</span>
                           {l.folder && (
                             <button className="linkish small" aria-expanded={expanded} onClick={() => setOpenLines((o) => { const n = new Set(o); expanded ? n.delete(l.key) : n.add(l.key); return n; })}>
                               {expanded ? t("Hide files") : t("Show files")}
