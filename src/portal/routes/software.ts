@@ -248,14 +248,20 @@ software.post("/:id/links", async (c) => {
   }
   if (!rows.length) fail(400, "There were no files in that folder.");
   if (rows.length > 500) fail(400, "Up to 500 files at a time.");
+  // A link the package already lists (same folder and name) is left alone, so sending a list twice adds nothing.
+  const { results: have } = await c.env.DB.prepare("SELECT folder, name FROM software_files WHERE package_id = ? AND deleted_at IS NULL").bind(p.id).all<{ folder: string; name: string }>();
+  const seen = new Set(have.map((f) => `${f.folder}\n${f.name}`));
+  const fresh = rows.filter((r) => { const k = `${r.folder}\n${r.name}`; if (seen.has(k)) return false; seen.add(k); return true; });
+  const skipped = rows.length - fresh.length;
+  if (!fresh.length) return c.json({ added: 0, skipped });
   const at = now();
-  await c.env.DB.batch(rows.map((r) =>
+  await c.env.DB.batch(fresh.map((r) =>
     c.env.DB.prepare("INSERT INTO software_files (id, package_id, folder, name, size, source_url, ready_at, uploaded_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)")
       .bind(randomId(), p.id, r.folder, r.name, r.size, r.url, at, u.id, at),
   ));
   await c.env.DB.prepare("UPDATE software_packages SET updated_at = ? WHERE id = ?").bind(at, p.id).run();
-  await audit(c.env.DB, { userId: u.id, action: "software.links.add", targetType: "software_package", targetId: p.id, detail: { count: rows.length, folder }, ip: c.get("ip") });
-  return c.json({ added: rows.length });
+  await audit(c.env.DB, { userId: u.id, action: "software.links.add", targetType: "software_package", targetId: p.id, detail: { count: fresh.length, folder }, ip: c.get("ip") });
+  return c.json({ added: fresh.length, skipped });
 });
 
 /** One piece of a file, as the raw request body. */
