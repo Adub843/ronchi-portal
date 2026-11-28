@@ -58,6 +58,7 @@ const W = {
   "Drag a box around the area to zoom to.": ["Arrastre un recuadro alrededor de la zona que quiere ver de cerca.", "Trascina un riquadro intorno alla zona da ingrandire."],
   "Drag an arrow to move the selected part along it, or drag the part itself. Restore puts it back.": ["Arrastre una flecha para mover la pieza seleccionada en esa dirección, o arrastre la pieza. Restaurar la devuelve a su sitio.", "Trascina una freccia per spostare il pezzo selezionato in quella direzione, oppure trascina il pezzo. Ripristina lo rimette a posto."],
   "Drawing of the same assembly from the manual of machine {serial}.": ["Dibujo del mismo conjunto, del manual de la máquina {serial}.", "Disegno dello stesso gruppo, dal manuale della macchina {serial}."],
+  "Quantities from the same assembly on machine {serial}. This machine's manual does not print them.": ["Cantidades del mismo conjunto en la máquina {serial}. El manual de esta máquina no las indica.", "Quantità dello stesso gruppo sulla macchina {serial}. Il manuale di questa macchina non le riporta."],
   "Matched to this row by name and quantity. Staff can correct it.": ["Asociada a esta fila por nombre y cantidad. El personal puede corregirla.", "Associato a questa riga per nome e quantità. Il personale può correggerlo."],
   "Home": ["Inicio", "Home"],
   "Home: starting view, everything shown and in place": ["Inicio: vista inicial, todo visible y en su sitio", "Home: vista iniziale, tutto visibile e al suo posto"],

@@ -159,6 +159,33 @@ describe("parts catalog (staff)", () => {
     expect((await svc.json(`/api/catalog/sheets/${withDrawing}`)).data.sheet.drawing).toEqual({ w: 100, h: 80 });
   });
 
+  it("fills quantity and position from the same assembly on another machine when an old manual prints neither", async () => {
+    const svc = await person("service");
+    const admin = await person("admin");
+    const a = await machine(admin);
+    const full = (await svc.json(`/api/catalog/machines/${a.id}/import`, { body: { fileName: "a.pdf", sheets: [{ key: "p5", page: 5, title: "Valve clamp", code: "MB000880", rows: [
+      { pos: "1", code: "MB000881", qty: 1, nameEn: "Spring" },
+      { pos: "2", code: "MB000882", qty: 4, nameEn: "Screw" },
+      { pos: "3", code: "MB000883", qty: 1, nameEn: "Seal" },
+      { pos: "4", code: "MB000883", qty: 2, nameEn: "Seal" },
+    ] }] } })).data.sheets[0].id;
+    const b = await machine(admin);
+    const old = (await svc.json(`/api/catalog/machines/${b.id}/import`, { body: { fileName: "b.pdf", sheets: [{ key: "p5", page: 5, title: "Valve clamp", code: "MB000880", rows: [
+      { pos: "", code: "MB000881", nameEn: "Spring" },
+      { pos: "", code: "MB000882", nameEn: "Screw" },
+      { pos: "", code: "MB000883", nameEn: "Seal" },
+      { pos: "", code: "MB000899", nameEn: "Lid" },
+    ] }] } })).data.sheets[0].id;
+    const got = (await svc.json(`/api/catalog/sheets/${old}`)).data;
+    expect(got.sheet.quantitiesFrom).toBe(a.serial);
+    // A part on two rows of the other list, or not on it at all, stays without a quantity.
+    expect(got.rows.map((r: any) => [r.code, r.pos, r.qty])).toEqual([["MB000881", "1", 1], ["MB000882", "2", 4], ["MB000883", "", null], ["MB000899", "", null]]);
+    // The list that has its own quantities is left alone.
+    const own = (await svc.json(`/api/catalog/sheets/${full}`)).data;
+    expect(own.sheet.quantitiesFrom).toBeNull();
+    expect(own.rows.map((r: any) => r.qty)).toEqual([1, 4, 1, 2]);
+  });
+
   it("publishes to the customer parts site, without customer names, and customers then see it", async () => {
     const svc = await person("service");
     const m = await machine(await person("admin"), { customer: "Acme Bottling", site: "Springfield plant" });
