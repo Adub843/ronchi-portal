@@ -17,6 +17,7 @@ export interface Sheet {
   code: string | null;
   title: string;
   drawing: { w: number; h: number; from?: string } | null;   // from: the machine whose manual the drawing comes from, when it isn't this one's
+  quantitiesFrom?: string | null;   // the machine whose list lent the quantities, when this machine's manual prints none
   model: { size: number; meshMap: Record<string, string> } | null;
   prev: string | null;
   next: string | null;
@@ -156,6 +157,7 @@ export function SheetView({
             />
           )}
           {sheet.drawing?.from && <p className="cv-hint cv-from">{w(lang, "Drawing of the same assembly from the manual of machine {serial}.", { serial: sheet.drawing.from })}</p>}
+          {sheet.quantitiesFrom && <p className="cv-hint cv-from">{w(lang, "Quantities from the same assembly on machine {serial}. This machine's manual does not print them.", { serial: sheet.quantitiesFrom })}</p>}
           {!sheet.drawing && !sheet.model && <p className="cv-msg cv-empty">{w(lang, "No drawing for this parts list yet. The list on the right is complete.")}</p>}
           {sheet.prev && <button type="button" className="mv-side-arrow left" onClick={() => onOpenSheet(sheet.prev!)} aria-label={w(lang, "Previous sheet")} title={w(lang, "Previous sheet")}>{IC.prev}</button>}
           {sheet.next && <button type="button" className="mv-side-arrow right" onClick={() => onOpenSheet(sheet.next!)} aria-label={w(lang, "Next sheet")} title={w(lang, "Next sheet")}>{IC.next}</button>}

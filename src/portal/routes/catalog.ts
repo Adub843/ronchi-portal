@@ -60,6 +60,24 @@ async function drawingDonor(db: Db, s: Pick<SheetRec, "id" | "code" | "rev" | "i
   ).bind(s.code, s.id, s.rev ?? null).first<{ id: string; image_w: number; image_h: number; serial: string }>();
 }
 
+/**
+ * The oldest manuals print a parts table with no quantity and no position. Borrow them from the same
+ * assembly on another machine: only for a part number that sits on exactly one row of that list.
+ */
+async function quantityDonor(db: Db, s: Pick<SheetRec, "id" | "code" | "rev">) {
+  if (!s.code) return null;
+  const donor = await db.prepare(
+    `SELECT c.id, m.serial FROM catalog_sheets c JOIN machines m ON m.id = c.machine_id
+      WHERE c.code = ? AND c.id <> ? AND EXISTS (SELECT 1 FROM catalog_rows r WHERE r.sheet_id = c.id AND r.qty IS NOT NULL)
+      ORDER BY (c.rev IS ?) DESC, c.updated_at DESC LIMIT 1`,
+  ).bind(s.code, s.id, s.rev ?? null).first<{ id: string; serial: string }>();
+  if (!donor) return null;
+  const { results } = await db.prepare("SELECT pos, code, qty, unit FROM catalog_rows WHERE sheet_id = ?").bind(donor.id).all<{ pos: string; code: string; qty: number | null; unit: string | null }>();
+  const byCode = new Map<string, { pos: string; qty: number | null; unit: string | null } | null>();
+  for (const r of results) byCode.set(r.code, byCode.has(r.code) ? null : r);
+  return { serial: donor.serial, byCode };
+}
+
 /** Run statements in batches. D1 runs each batch as one transaction. */
 async function runAll(db: Db, stmts: D1PreparedStatement[]) {
   for (let i = 0; i < stmts.length; i += 500) await db.batch(stmts.slice(i, i + 500));
@@ -280,6 +298,7 @@ catalog.get("/sheets/:id", async (c) => {
     const { results } = await db.prepare("SELECT pos, code, hotspots FROM catalog_rows WHERE sheet_id = ? AND hotspots IS NOT NULL").bind(donor.id).all<{ pos: string; code: string; hotspots: string }>();
     for (const r of results) spots.set(`${r.pos}\n${r.code}`, r.hotspots);
   }
+  const amounts = rows.length && rows.every((r: any) => r.qty === null) ? await quantityDonor(db, s) : null;
   const ids = (await db.prepare("SELECT id FROM catalog_sheets WHERE machine_id = ? ORDER BY sort").bind(s.machine_id).all<{ id: string }>()).results.map((r) => r.id);
   const at = ids.indexOf(s.id);
   const path: { id: string; title: string; code: string | null }[] = [];
@@ -295,6 +314,7 @@ catalog.get("/sheets/:id", async (c) => {
     sheet: {
       id: s.id, serial: m.serial, section: s.section, group: s.grp, code: s.code, rev: s.rev, title: s.title, titleIt: s.title_it,
       source: s.source, page: s.page,
+      quantitiesFrom: amounts?.serial ?? null,
       drawing: s.image_w ? { w: s.image_w, h: s.image_h } : donor ? { w: donor.image_w, h: donor.image_h, from: donor.serial } : null,
       model: s.model_size ? { size: s.model_size, meshMap: s.mesh_map ? JSON.parse(s.mesh_map) : {} } : null,
       prev: at > 0 ? ids[at - 1] : null,
@@ -303,8 +323,10 @@ catalog.get("/sheets/:id", async (c) => {
     },
     rows: rows.map((r: any) => {
       const own = r.hotspots ? JSON.parse(r.hotspots) : [];
-      const lent = !own.length ? spots.get(`${r.pos}\n${r.code}`) : undefined;
-      return { ...r, hotspots: lent ? JSON.parse(lent) : own, wear: !!r.wear };
+      const amount = r.qty === null ? amounts?.byCode.get(r.code) : null;
+      const filled = amount && amount.qty !== null ? { qty: amount.qty, unit: amount.unit, pos: r.pos || amount.pos } : {};
+      const lent = !own.length ? spots.get(`${filled.pos ?? r.pos}\n${r.code}`) : undefined;
+      return { ...r, ...filled, hotspots: lent ? JSON.parse(lent) : own, wear: !!r.wear };
     }),
     canEdit: has(u, "catalog.edit"),
   });
