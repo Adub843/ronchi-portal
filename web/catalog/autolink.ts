@@ -191,9 +191,11 @@ export function autoLink(units: Unit[], rows: PartRow[]): Map<string, Link> {
     // preferred below, but does not shut out the rows that carry only the English one (2): a list often has the
     // Italian name on some of its SCREW rows and not on others.
     const tier = (x: number) => (x >= 2 && x < 3 ? 2 : x);
-    const best = rows.map((_, i) => i).filter((i) => s[i] === top);
-    // One row alone has the Italian word: that is the row ("lamiera" with PLATE/PIASTRA and SHEET/LAMIERA).
-    const idx = !top ? [] : best.length === 1 ? best : rows.map((_, i) => i).filter((i) => tier(s[i]!) === tier(top));
+    // ...unless that row's own Italian name is another part word: "lamiera" belongs on SHEET/LAMIERA, not on
+    // PLATE/PIASTRA. A row whose other name is no word we know (VİDA, ŚRUBA, or none) stays in.
+    const mine = [...g.names].map((u) => kind(baseName(u))?.key).find(Boolean);
+    const other = (i: number) => top === 2.5 && s[i]! < 2.5 && rows[i]!.names.some((n) => { const k = n ? kind(clean(lower(n)))?.key : undefined; return !!k && k !== mine; });
+    const idx = !top ? [] : rows.map((_, i) => i).filter((i) => tier(s[i]!) === tier(top) && !other(i));
     for (const i of idx) claimed[i] = true;
     return { g, top, rows: idx, s };
   });
