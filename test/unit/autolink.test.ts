@@ -336,3 +336,15 @@ describe("screw rows where only some carry the Italian name", () => {
     expect([...got.values()].every((l) => !l.sure)).toBe(true);
   });
 });
+
+describe("one SCREW row with the Italian name among rows in other languages", () => {
+  it("still shares the screws over every SCREW row (4017TP CA092137)", () => {
+    const names: [string, number][] = [["VITE_UNI_EN_ISO_4762TF_M8x125x201", 2], ["VITE_UNI_EN_ISO_4017_M6x2515111", 4], ["VITE_UNI_5933_M6x201", 2], ["VITE_UNI_5933_M4x2011", 2]];
+    const units: Unit[] = names.flatMap(([n, c], i) => Array.from({ length: c }, (_, k) => ({ id: `${i}-${k}`, names: [n, n], sig: `s${i}` })));
+    const rows: PartRow[] = ([["CM008468", 2, "VİDA"], ["CM008469", 2, "VİDA"], ["CM008483", 2, "VITE"], ["CM007479", 4, "ŚRUBA"]] as [string, number, string][]).map(([code, qty, it]) => ({ code, qty, names: ["SCREW", it, null] }));
+    const got = autoLink(units, rows);
+    expect(got.size).toBe(10);
+    expect(new Set([...got.values()].map((l) => l.code)).size).toBe(4);
+    expect(got.get("1-0")!.code).toBe("CM007479");
+  });
+});
